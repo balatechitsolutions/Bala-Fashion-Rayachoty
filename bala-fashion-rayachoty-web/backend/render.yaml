@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: bala-fashion-api
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health/
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: bala-fashion-api.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://bala-fashion-rayachoty.vercel.app
+      - key: SUPABASE_URL
+        value: https://iikogznarstzoovxpzfg.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_VNOU_pgtqgvCjzKDNK8EFg_cZLTYRsF
+      - key: DATABASE_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: DELIVERY_FEE
+        value: "0"
