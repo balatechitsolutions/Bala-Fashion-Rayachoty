@@ -144,4 +144,4 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 @media(max-width:380px) { .category-grid { gap:9px; } .category-tile-label { font-size:11px; padding:10px 8px; } }
 
 .image-failed { position:relative !important; background:#eee4d8 !important; }
-.photo.image-failed::after, .modal-photo.image-failed::after, .cart-item.image-failed::after { content:"BF"; position:absolute; inset:0; display:grid; place-items:center; color:#702b38; font-family:'Playfair Display',serif; font-size:30px; pointer-events:none; }
+.photo.image-failed::after, .modal-photo.image-failed::after { content:"BF"; position:absolute; inset:0; display:grid; place-items:center; color:#702b38; font-family:'Playfair Display',serif; font-size:30px; pointer-events:none; }
