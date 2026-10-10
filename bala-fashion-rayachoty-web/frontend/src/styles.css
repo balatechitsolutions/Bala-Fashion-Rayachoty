@@ -142,3 +142,6 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 @media(max-width:1000px) { .category-showcase { padding-inline:5%; } .category-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media(max-width:760px) { .category-showcase { padding:0 4% 48px; } .category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .category-tile-label { padding:11px 10px; font-size:12px; } }
 @media(max-width:380px) { .category-grid { gap:9px; } .category-tile-label { font-size:11px; padding:10px 8px; } }
+
+.image-failed { position:relative !important; background:#eee4d8 !important; }
+.photo.image-failed::after, .modal-photo.image-failed::after, .cart-item.image-failed::after { content:"BF"; position:absolute; inset:0; display:grid; place-items:center; color:#702b38; font-family:'Playfair Display',serif; font-size:30px; pointer-events:none; }
