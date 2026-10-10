@@ -125,8 +125,8 @@ export default function App() {
     <button className={`mobile-nav-item${mobileActive==='home'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('home');setCategory('all');setSearch('')}}><Home size={20}/><span>Home</span></button>
     <button className={`mobile-nav-item${mobileActive==='categories'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('categories');setSearch('')}}><Grid2X2 size={20}/><span>Categories</span></button>
     <button className={`mobile-nav-item${mobileActive==='search'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('search');setSearch('');searchInputRef.current?.focus()}}><Search size={20}/><span>Search</span></button>
-    <button className={`mobile-nav-item${mobileActive==='bag'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('bag')}}><span className="mobile-bag-icon"><ShoppingBag size={20}/>{count>0&&<b>{count>99?'99+':count}</b>}</span><span>Bag</span></button>
-    <button className={`mobile-nav-item${mobileActive==='account'?' active':''}`} onClick={()=>{setMobileActive('account');session?setDrawer('account'):login()}}><UserRound size={20}/><span>Account</span></button>
+    <button className={`mobile-nav-item${drawer==='cart'?' active':''}`} onClick={()=>setDrawer('cart')}><span className="mobile-bag-icon"><ShoppingBag size={20}/>{count>0&&<b>{count>99?'99+':count}</b>}</span><span>Bag</span></button>
+    <button className={`mobile-nav-item${drawer==='account'?' active':''}`} onClick={()=>session?setDrawer('account'):login()}><UserRound size={20}/><span>Account</span></button>
    </nav>
   </div>
   {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders',account:'Account','categories-manage':'Manage category images'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
