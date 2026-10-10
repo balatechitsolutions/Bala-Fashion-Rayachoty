@@ -85,7 +85,7 @@ export default function App() {
 
  return <div className="site app-shell">
   <aside className="app-sidebar">
-   <button className="brand app-brand" onClick={()=>{setCategory('all');setSearch('');setMobileActive('home')}}><span className="logo">BF</span><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></button>
+   <button className="brand app-brand" onClick={()=>{setCategory('all');setSearch('');setMobileActive('home')}}><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></button>
    <div className="sidebar-caption">YOUR STORE</div>
    <nav className="sidebar-nav" aria-label="App navigation">
     <button className={mobileActive==='home'?'active':''} onClick={()=>{setDrawer('');setMobileActive('home');setCategory('all');setSearch('')}}><Home size={19}/><span>Home</span></button>
@@ -98,7 +98,7 @@ export default function App() {
   </aside>
   <div className="app-workspace">
    <header className="app-topbar">
-    <div className="app-mobile-brand"><span className="logo">BF</span><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></div>
+    <div className="app-mobile-brand"><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></div>
     <div className="app-breadcrumb"><span>Store</span><ArrowRight size={14}/><b>{({home:'Overview',categories:'Categories',shop:'All products',search:'Search results',bag:'Your bag',account:'Account'})[mobileActive]||'Overview'}</b></div>
     <label className="app-search"><Search size={18}/><input ref={searchInputRef} aria-label="Search clothing" placeholder="Search products, styles..." value={search} onFocus={()=>{setDrawer('');setMobileActive('search')}} onChange={e=>{setDrawer('');setSearch(e.target.value);setMobileActive('search')}}/><kbd>⌕</kbd></label>
     <button className="app-account-button" onClick={()=>session?setDrawer('account'):login()}>{session?.user?.user_metadata?.avatar_url?<img src={session.user.user_metadata.avatar_url} alt="Profile"/>:<UserRound size={18}/>}<span>{session?.user?.user_metadata?.full_name?.split(' ')[0]||'Sign in'}</span></button>
