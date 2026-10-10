@@ -9,6 +9,12 @@ import cloudinary.uploader
 from .models import Category, Product, Vendor
 
 
+# Store-specific Django admin branding.
+admin.site.site_header = "Bala Fashion Rayachoty"
+admin.site.site_title = "Bala Fashion Admin"
+admin.site.index_title = "Store management dashboard"
+
+
 class CloudinaryUploadFormMixin:
     """Adds a real file picker while keeping image URLs in the existing database columns."""
 
@@ -115,7 +121,12 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("sort_order", "name")
-    readonly_fields = ("image_preview",)
+    readonly_fields = ("image_preview", "created_at")
+    fieldsets = (
+        ("Category details", {"fields": ("name", "slug", "sort_order", "is_active")}),
+        ("Category image", {"fields": ("image_upload", "image_preview", "image_url")}),
+        ("Record information", {"fields": ("created_at",)}),
+    )
 
     @admin.display(description="Image")
     def image_status(self, obj):
@@ -140,6 +151,12 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     search_fields = ("name", "slug", "phone", "address")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("created_at",)
+    fieldsets = (
+        ("Vendor details", {"fields": ("name", "slug", "owner_id", "status")}),
+        ("Contact information", {"fields": ("phone", "address", "description")}),
+        ("Branding", {"fields": ("logo_upload", "logo_url")}),
+        ("Record information", {"fields": ("created_at",)}),
+    )
 
 
 @admin.register(Product)
@@ -156,6 +173,13 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     autocomplete_fields = ("category", "vendor")
     list_editable = ("price", "stock_quantity", "is_active")
     readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        ("Product details", {"fields": ("name", "slug", "vendor", "category", "sku", "description")}),
+        ("Pricing & inventory", {"fields": ("price", "compare_at_price", "stock_quantity", "sizes", "colors")}),
+        ("Product image", {"fields": ("image_upload", "image_url", "image_public_id")}),
+        ("Store visibility", {"fields": ("is_active",)}),
+        ("Record information", {"fields": ("created_at", "updated_at")}),
+    )
 
     @admin.display(description="Image")
     def image_status(self, obj):
