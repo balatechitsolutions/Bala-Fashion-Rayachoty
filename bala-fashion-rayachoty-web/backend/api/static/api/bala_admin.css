@@ -1,0 +1,55 @@
+/* Bala Fashion Rayachoty — Django admin polish */
+:root {
+  --primary: #183b73;
+  --secondary: #102b55;
+  --accent: #f3b83f;
+  --primary-fg: #fff;
+}
+body, #container { background: #f4f7fb; }
+#header {
+  background: linear-gradient(120deg, #102b55 0%, #1d4b88 100%);
+  color: #fff;
+  box-shadow: 0 3px 14px rgba(16, 43, 85, .18);
+  padding: 18px 28px;
+}
+#branding h1, #branding h1 a:link, #branding h1 a:visited {
+  color: #fff; font-weight: 800; letter-spacing: -.35px; font-size: 21px;
+}
+#branding h1:before { content: "BF"; display: inline-grid; place-items: center; width: 32px; height: 32px; margin-right: 11px; border-radius: 10px; background: var(--accent); color: #102b55; font-size: 14px; vertical-align: middle; }
+#user-tools { color: #e7efff; padding-top: 7px; }
+#user-tools a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+div.breadcrumbs { background: #e8eef7; color: #27466f; padding: 13px 28px; border-bottom: 1px solid #dbe4f0; }
+div.breadcrumbs a { color: #1d4b88; }
+#content { padding: 26px 28px; }
+#content h1 { color: #172f52; font-weight: 800; margin-bottom: 20px; }
+.module, .inline-group, #changelist, .submit-row, .dashboard .module {
+  border: 1px solid #e1e8f2; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 5px 18px rgba(24, 59, 115, .055); background: #fff;
+}
+.module h2, .module caption, .inline-group h2 {
+  background: #edf3fb; color: #173b6c; font-weight: 750; padding: 13px 16px;
+}
+.module table th { background: #f7f9fc; }
+#changelist-filter { border-left: 1px solid #e1e8f2; }
+#changelist-filter h2 { background: #173b6c; color: #fff; }
+.button, input[type=submit], input[type=button], .submit-row input, a.button {
+  background: #1d4b88; border-radius: 8px; border: 0; padding: 9px 14px; font-weight: 700;
+}
+.button:hover, input[type=submit]:hover, input[type=button]:hover, .submit-row input:hover, a.button:hover { background: #102b55; }
+.button.default, input[type=submit].default, .submit-row input.default { background: #d99a1b; color: #142b4b; }
+.button.default:hover, input[type=submit].default:hover, .submit-row input.default:hover { background: #f3b83f; }
+input, textarea, select, .vTextField, .vLargeTextField {
+  border: 1px solid #cbd7e6; border-radius: 7px; padding: 8px 10px;
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid #9dbce7; border-color: #477fc4; }
+#changelist table thead th { background: #edf3fb; }
+#changelist table tbody tr:hover { background: #f5f9ff; }
+.paginator { padding: 14px; }
+.messagelist li { border-radius: 9px; margin: 8px 0; padding: 12px 15px; }
+.help, p.help, form .help { color: #64748b; }
+@media (max-width: 767px) {
+  #header { padding: 14px 16px; }
+  #content { padding: 18px 14px; }
+  #branding h1 { font-size: 17px; }
+  #user-tools { float: none; margin-top: 10px; }
+}
