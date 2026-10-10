@@ -69,3 +69,25 @@ main, section, header, footer, article, nav, .head-actions, .product-info { min-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* Keep account sign-in visible in the mobile header. */
+@media (max-width: 760px) {
+  .header .signin {
+    display: inline-flex !important;
+    flex: 0 0 auto;
+    padding: 6px 7px;
+    border: 1px solid var(--rose);
+    color: var(--rose);
+    background: transparent;
+    border-radius: 2px;
+    font-size: 9px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .header .signin img { width: 23px; height: 23px; }
+}
+@media (max-width: 380px) {
+  .header .signin { padding: 5px; font-size: 8px; }
+  .header .search input { width: 38px; max-width: 12vw; }
+}
