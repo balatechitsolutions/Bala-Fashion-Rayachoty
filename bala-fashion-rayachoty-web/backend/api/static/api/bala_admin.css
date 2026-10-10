@@ -116,3 +116,81 @@ label, .form-row label, .aligned label { color: #172033 !important; font-weight:
   #changelist .actions select { width: 100% !important; }
   .aligned .form-row input[type=text], .aligned .form-row input[type=number], .aligned .form-row textarea { width: 100%; }
 }
+
+
+/* Final visual polish: branded Django Admin shell */
+:root {
+  --bf-navy: #173b67;
+  --bf-navy-deep: #102b4c;
+  --bf-gold: #f3bd4c;
+  --bf-canvas: #f4f6fa;
+  --bf-border: #d9e1ec;
+  --bf-text: #182437;
+}
+html, body, #container { background: var(--bf-canvas) !important; }
+#header {
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(115deg, var(--bf-navy-deep), var(--bf-navy)) !important;
+}
+#site-name { margin: 0; }
+#site-name a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #fff !important;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: -.5px;
+  text-decoration: none;
+}
+#site-name a:hover { color: #fff !important; opacity: .94; }
+div.breadcrumbs { font-size: 13px; }
+#content h1 { font-size: clamp(23px, 2vw, 30px); letter-spacing: -.45px; margin-bottom: 20px; }
+#content-main { min-width: 0; }
+.dashboard #content { max-width: 1600px; margin: 0 auto; }
+.dashboard .module caption, .dashboard .module h2 { font-size: 13px; letter-spacing: .025em; }
+.dashboard .module table th, .dashboard .module table td { padding: 14px 16px; }
+.dashboard .module table td a { font-weight: 700; }
+.module, #changelist, .inline-group, .submit-row {
+  border-radius: 12px !important;
+  box-shadow: 0 5px 18px rgba(16, 43, 76, .055) !important;
+}
+.module h2, .module caption, .inline-group h2 { letter-spacing: .01em; }
+#content a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #86b7ff !important;
+  outline-offset: 2px;
+}
+#changelist .toplinks { border-radius: 8px; }
+#changelist table thead th a { color: var(--bf-navy-deep) !important; }
+#changelist table tbody tr.selected { background: #fff2d0 !important; }
+#changelist .paginator, .paginator { background: #fff; border-top: 1px solid var(--bf-border); }
+.object-tools { margin-top: 0; }
+.object-tools a { padding: 9px 14px !important; text-transform: none; letter-spacing: .01em; }
+.submit-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.submit-row input { margin: 0 5px 0 0; }
+#recent-actions-module li { padding: 8px 0; border-bottom: 1px solid #edf0f5; }
+#recent-actions-module li:last-child { border-bottom: 0; }
+#recent-actions-module .actiontime { color: #5a687b; font-size: 12px; }
+.bf-thumbnail { width: 58px; height: 58px; border-radius: 10px; border: 1px solid var(--bf-border); }
+@media (min-width: 768px) {
+  #content { padding: 28px 32px !important; }
+  .dashboard #content-main { width: 100%; }
+}
+@media (max-width: 767px) {
+  #header { display: block; }
+  #site-name a { font-size: 19px; }
+  #content { padding: 14px !important; }
+  #content h1 { font-size: 23px; }
+  .dashboard #content-main, #content-main, #content-related { width: 100%; float: none; }
+  #content-related { margin-top: 18px; }
+  #changelist-filter { width: 100%; float: none; border-left: 0; border-top: 1px solid var(--bf-border); }
+  #changelist #toolbar form { display: flex; flex-wrap: wrap; gap: 8px; }
+  #changelist #toolbar input[type="text"] { width: 100%; min-width: 0; }
+  .object-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+  .object-tools li { margin: 0; }
+  .submit-row { gap: 8px; }
+  .submit-row input, .submit-row a { flex: 1 1 auto; text-align: center; }
+}
