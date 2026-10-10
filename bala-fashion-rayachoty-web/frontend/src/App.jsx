@@ -102,7 +102,6 @@ export default function App() {
     <div className="app-breadcrumb"><span>Store</span><ArrowRight size={14}/><b>{({home:'Overview',categories:'Categories',shop:'All products',search:'Search results',bag:'Your bag',account:'Account'})[mobileActive]||'Overview'}</b></div>
     <label className="app-search"><Search size={18}/><input ref={searchInputRef} aria-label="Search clothing" placeholder="Search products, styles..." value={search} onFocus={()=>{setDrawer('');setMobileActive('search')}} onChange={e=>{setDrawer('');setSearch(e.target.value);setMobileActive('search')}}/><kbd>⌕</kbd></label>
     <button className="app-account-button" onClick={()=>session?setDrawer('account'):login()}>{session?.user?.user_metadata?.avatar_url?<img src={session.user.user_metadata.avatar_url} alt="Profile"/>:<UserRound size={18}/>}<span>{session?.user?.user_metadata?.full_name?.split(' ')[0]||'Sign in'}</span></button>
-    <button className="app-bag-button" aria-label={'Open bag, '+count+' items'} onClick={()=>{setMobileActive('bag');setDrawer('cart')}}><ShoppingBag size={19}/>{count>0&&<b>{count}</b>}</button>
    </header>
    <main className="app-main">
     {mobileActive==='home'&&<div className="app-page app-home-page">
