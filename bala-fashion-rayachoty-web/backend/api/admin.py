@@ -17,6 +17,7 @@ from .models import Category, Product, Vendor
 admin.site.site_header = "Bala Fashion Rayachoty"
 admin.site.site_title = "Bala Fashion Admin"
 admin.site.index_title = "Store management dashboard"
+admin.site.index_template = "admin/custom_index.html"
 
 
 class CloudinaryUploadFormMixin:
