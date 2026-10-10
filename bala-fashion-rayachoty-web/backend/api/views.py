@@ -67,6 +67,27 @@ def categories(request):
             return Response(_rows(c))
     except Exception:return Response({"detail":"Categories are temporarily unavailable."},status=503)
 
+@api_view(["PATCH"])
+def manage_category(request):
+    user,prof,error=_role_user(request,{"admin"})
+    if error:return error
+    category_id=str(request.data.get("category_id","")).strip()
+    image_url=str(request.data.get("image_url","")).strip()
+    try:
+        uuid.UUID(category_id)
+    except (ValueError,TypeError,AttributeError):
+        return Response({"detail":"Choose a valid category."},status=400)
+    if image_url and (not image_url.startswith("https://res.cloudinary.com/") or len(image_url)>1000):
+        return Response({"detail":"Upload a category image through Cloudinary first."},status=400)
+    try:
+        with connection.cursor() as c:
+            c.execute("update public.categories set image_url=%s where id=%s returning id,name,slug,image_url,sort_order",[image_url,category_id])
+            row=c.fetchone()
+        if not row:return Response({"detail":"Category not found."},status=404)
+        return Response({"id":str(row[0]),"name":row[1],"slug":row[2],"image_url":row[3],"sort_order":row[4]})
+    except Exception:
+        return Response({"detail":"Category image could not be saved. Please retry."},status=503)
+
 @api_view(["GET"])
 def products(request):
     search=request.query_params.get("search","").strip()[:100]
