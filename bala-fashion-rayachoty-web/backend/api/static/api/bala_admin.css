@@ -194,3 +194,145 @@ div.breadcrumbs { font-size: 13px; }
   .submit-row { gap: 8px; }
   .submit-row input, .submit-row a { flex: 1 1 auto; text-align: center; }
 }
+
+
+/* Action bars: make Django's top and bottom save controls consistent */
+.submit-row {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  padding: 14px 16px !important;
+  margin: 14px 0 !important;
+  background: #fff !important;
+  border: 1px solid #d9e1ec !important;
+  border-radius: 12px !important;
+}
+.submit-row input,
+.submit-row button,
+.submit-row a {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 10px 16px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 750 !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+}
+.submit-row input[name="_save"],
+.submit-row input[name="_saveasnew"] {
+  background: #173b67 !important;
+  border-color: #173b67 !important;
+  color: #fff !important;
+}
+.submit-row input[name="_addanother"],
+.submit-row input[name="_continue"] {
+  background: #fff !important;
+  border: 1px solid #b9c8dc !important;
+  color: #173b67 !important;
+}
+.submit-row input[name="_save"]:hover,
+.submit-row input[name="_saveasnew"]:hover {
+  background: #102b4c !important;
+}
+.submit-row input[name="_addanother"]:hover,
+.submit-row input[name="_continue"]:hover {
+  background: #edf4ff !important;
+}
+.submit-row a.deletelink {
+  margin-left: auto !important;
+  background: #fff1f1 !important;
+  color: #9a2020 !important;
+  border: 1px solid #e7b4b4 !important;
+}
+.submit-row a.deletelink:hover { background: #ffe0e0 !important; }
+
+/* Django login page */
+body.login { background: #f2f5fa !important; }
+body.login #container {
+  width: min(440px, calc(100% - 28px)) !important;
+  margin: 7vh auto !important;
+  border: 1px solid #d9e1ec !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+  background: #fff !important;
+  box-shadow: 0 18px 55px rgba(16, 43, 76, .14) !important;
+}
+body.login #header {
+  display: block;
+  text-align: center;
+  padding: 28px 20px !important;
+}
+body.login #branding h1 { margin: 0 !important; }
+body.login #content { padding: 28px !important; }
+body.login #content-main { width: 100% !important; float: none !important; }
+body.login .form-row { padding: 10px 0 !important; border: 0 !important; }
+body.login .form-row label { display: block; float: none; width: auto; margin-bottom: 7px; }
+body.login .form-row input { width: 100% !important; min-height: 44px; }
+body.login .submit-row { margin-top: 20px !important; }
+body.login .submit-row input[type="submit"] {
+  width: 100% !important;
+  min-height: 46px !important;
+  background: #173b67 !important;
+  color: #fff !important;
+  border-color: #173b67 !important;
+}
+body.login .password-reset-link { text-align: center; padding: 0 20px 20px; }
+
+/* Django's native theme control, when available */
+#theme-toggle,
+button.theme-toggle,
+.theme-toggle button,
+button[aria-label*="theme" i],
+button[title*="theme" i] {
+  min-width: 38px !important;
+  min-height: 38px !important;
+  padding: 8px !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255,255,255,.35) !important;
+  background: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+}
+#theme-toggle:hover,
+button.theme-toggle:hover,
+.theme-toggle button:hover {
+  background: rgba(255,255,255,.23) !important;
+}
+
+/* Respect Django's dark theme selection instead of forcing light surfaces */
+html[data-theme="dark"] body,
+html[data-theme="dark"] #container,
+html[data-theme="dark"] #content,
+html[data-theme="dark"] .module,
+html[data-theme="dark"] #changelist,
+html[data-theme="dark"] .inline-group,
+html[data-theme="dark"] .submit-row {
+  color-scheme: dark;
+}
+html[data-theme="dark"] .submit-row {
+  background: #202b3a !important;
+  border-color: #3c4b60 !important;
+}
+html[data-theme="dark"] .submit-row input[name="_addanother"],
+html[data-theme="dark"] .submit-row input[name="_continue"] {
+  background: #26364b !important;
+  color: #f2f6fc !important;
+  border-color: #50627a !important;
+}
+html[data-theme="dark"] .submit-row a.deletelink {
+  background: #48272b !important;
+  color: #ffdede !important;
+  border-color: #8c4a52 !important;
+}
+@media (max-width: 767px) {
+  .submit-row { display: grid !important; grid-template-columns: 1fr !important; }
+  .submit-row input, .submit-row button, .submit-row a { width: 100% !important; }
+  .submit-row a.deletelink { margin-left: 0 !important; }
+  body.login { padding: 0 !important; }
+  body.login #container { margin: 5vh auto !important; }
+  body.login #content { padding: 20px !important; }
+}
