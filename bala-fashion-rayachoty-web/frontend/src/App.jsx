@@ -14,6 +14,7 @@ export default function App() {
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([])
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',notes:''})
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+ const [categoryForm,setCategoryForm]=useState({category_id:'',image_url:''})
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(!s)setProfile(null)});return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(!session){setProfile(null);return}api('/profile/',{token:session.access_token}).then(setProfile).catch(()=>setProfile({role:'customer'}))},[session])
  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
@@ -38,6 +39,33 @@ export default function App() {
    if(!response.ok)throw new Error(data.error?.message||'Cloudinary upload failed')
    setProductForm(p=>({...p,image_url:data.secure_url,image_public_id:data.public_id}))
    notify('Image uploaded to Cloudinary')
+  }catch(e){notify(e.message)}finally{setBusy(false)}
+ }
+ async function uploadCategoryImage(file){
+  if(!file||!session)return notify('Sign in with an admin account first.')
+  if(!file.type.startsWith('image/'))return notify('Choose an image file.')
+  if(file.size>8*1024*1024)return notify('Choose an image smaller than 8 MB.')
+  setBusy(true)
+  try{
+   const sign=await api('/uploads/signature/',{method:'POST',token:session.access_token,body:JSON.stringify({folder:'bala-fashion/categories'})})
+   const form=new FormData()
+   Object.entries(sign.params).forEach(([k,v])=>form.append(k,v))
+   form.append('api_key',sign.api_key);form.append('signature',sign.signature);form.append('file',file)
+   const response=await fetch(`https://api.cloudinary.com/v1_1/${sign.cloud_name}/image/upload`,{method:'POST',body:form})
+   const data=await response.json()
+   if(!response.ok)throw new Error(data.error?.message||'Cloudinary upload failed')
+   setCategoryForm(p=>({...p,image_url:data.secure_url}))
+   notify('Category image uploaded')
+  }catch(e){notify(e.message)}finally{setBusy(false)}
+ }
+ async function saveCategoryImage(e){
+  e.preventDefault();if(busy)return;if(!session)return login()
+  if(!categoryForm.category_id)return notify('Choose a category first.')
+  if(!categoryForm.image_url)return notify('Upload a category image first.')
+  setBusy(true)
+  try{
+   await api('/categories/manage/',{method:'PATCH',token:session.access_token,body:JSON.stringify(categoryForm)})
+   await load();setDrawer('');notify('Category image saved')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function saveProduct(e){
@@ -86,7 +114,14 @@ export default function App() {
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><ShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><Minus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><Plus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1} onClick={()=>session?setDrawer('checkout'):login()}>Continue to checkout <ArrowRight size={16}/></button></div></>}</div>}
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}><p>Where should we deliver your order?</p>{[['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark'],['city','City'],['postal_code','PIN code']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark','postal_code'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}<label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label><div className="cod"><Check size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div><div className="summary"><div><span>Total</span><b>{money(subtotal)}</b></div><button className="primary full" disabled={busy}>{busy?'Placing order…':'Place COD order'} <ArrowRight size={16}/></button></div></form>}
    {drawer==='orders'&&<div className="drawer-body">{!session?<div className="empty"><p>Sign in to see your orders.</p><button className="primary" onClick={login}>Continue with Google</button></div>:!orders.length?<div className="empty"><h3>No orders yet</h3><button className="secondary" onClick={getOrders}>Refresh orders</button></div>:orders.map(o=><div className="order" key={o.id}><div><b>{o.order_number}</b><small>{o.status?.replaceAll('_',' ')}</small></div><p>{new Date(o.created_at).toLocaleDateString('en-IN')} · COD</p><strong>{money(o.total)}</strong></div>)}</div>}
-   {drawer==='account'&&<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={()=>setDrawer('manage')}>Manage products</button>}<button className="text" onClick={logout}>Sign out</button></div>}
+   {drawer==='account'&&<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={()=>setDrawer('manage')}>Manage products</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={()=>{setCategoryForm({category_id:'',image_url:''});setDrawer('categories-manage')}}>Manage category images</button>}<button className="text" onClick={logout}>Sign out</button></div>}
+   {drawer==='categories-manage'&&<form className="drawer-body form" onSubmit={saveCategoryImage}>
+    <p>Upload a category image to show it on the storefront. Only administrators can save these changes.</p>
+    <label>Category<select required value={categoryForm.category_id} onChange={e=>{const selected=categories.find(c=>c.id===e.target.value);setCategoryForm({category_id:e.target.value,image_url:selected?.image_url||''})}}><option value="">Choose category</option>{categories.filter(c=>c.slug!=='all'&&c.id).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+    <label>Category image (Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadCategoryImage(e.target.files?.[0])}/></label>
+    {categoryForm.image_url&&<img className="upload-preview" src={categoryForm.image_url} alt="Category image preview"/>}
+    <button className="primary full" disabled={busy||!categoryForm.category_id||!categoryForm.image_url}>{busy?'Saving…':'Save category image'}</button>
+   </form>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>Add a product to your approved store.</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
     <label>Description<textarea rows="3" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/></label>
