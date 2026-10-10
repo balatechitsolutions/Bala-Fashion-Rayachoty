@@ -3,6 +3,7 @@ import os
 from django import forms
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+from django.utils.html import format_html
 import cloudinary
 import cloudinary.uploader
 
@@ -45,6 +46,35 @@ class CategoryAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
 
 
 class ProductAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
+    sizes_text = forms.CharField(required=False, label="Sizes (comma separated)", widget=forms.TextInput(attrs={"placeholder": "S, M, L, XL"}))
+    colors_text = forms.CharField(required=False, label="Colours (comma separated)", widget=forms.TextInput(attrs={"placeholder": "Black, White, Blue"}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields["sizes_text"].initial = ", ".join(self.instance.sizes or [])
+            self.fields["colors_text"].initial = ", ".join(self.instance.colors or [])
+
+    def clean(self):
+        cleaned = super().clean()
+        for source, target in (("sizes_text", "sizes"), ("colors_text", "colors")):
+            cleaned[target] = list(dict.fromkeys(v.strip() for v in cleaned.get(source, "").split(",") if v.strip()))
+        if cleaned.get("stock_quantity") is not None and cleaned["stock_quantity"] < 0:
+            self.add_error("stock_quantity", "Stock cannot be negative.")
+        if cleaned.get("price") is not None and cleaned["price"] < 0:
+            self.add_error("price", "Price cannot be negative.")
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.sizes = self.cleaned_data["sizes"]
+        obj.colors = self.cleaned_data["colors"]
+        if commit:
+            obj.save()
+            self.save_m2m()
+        return obj
+
+
     image_upload = forms.FileField(
         required=False,
         label="Upload product image",
@@ -116,8 +146,13 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     upload_field = "image_upload"
     url_field = "image_url"
     upload_folder = "bala-fashion/categories"
-    list_display = ("name", "slug", "sort_order", "is_active", "image_status")
-    list_filter = ("is_active",)
+    list_display = ("thumbnail", "name", "sort_order", "is_active", "image_status")
+    list_display_links = ("name",)
+    list_editable = ("sort_order", "is_active")
+    list_per_page = 25
+    save_on_top = True
+    actions = ("activate", "deactivate")
+    list_filter = ("is_active", "created_at")
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("sort_order", "name")
@@ -127,6 +162,18 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
         ("Category image", {"fields": ("image_upload", "image_preview", "image_url")}),
         ("Record information", {"fields": ("created_at",)}),
     )
+
+    @admin.display(description="Preview")
+    def thumbnail(self, obj):
+        return format_html('<img src="{}" class="bf-thumbnail" alt="">', obj.image_url) if obj.image_url else "—"
+
+    @admin.action(description="Activate selected categories")
+    def activate(self, request, queryset):
+        self.message_user(request, f"{queryset.update(is_active=True)} categories activated.")
+
+    @admin.action(description="Deactivate selected categories")
+    def deactivate(self, request, queryset):
+        self.message_user(request, f"{queryset.update(is_active=False)} categories deactivated.")
 
     @admin.display(description="Image")
     def image_status(self, obj):
@@ -146,8 +193,13 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     upload_field = "logo_upload"
     url_field = "logo_url"
     upload_folder = "bala-fashion/vendor-logos"
-    list_display = ("name", "status", "phone", "created_at")
-    list_filter = ("status",)
+    list_display = ("thumbnail", "name", "status", "phone", "created_at")
+    list_display_links = ("name",)
+    list_editable = ("status",)
+    list_per_page = 25
+    save_on_top = True
+    actions = ("approve", "suspend")
+    list_filter = ("status", "created_at")
     search_fields = ("name", "slug", "phone", "address")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("created_at",)
@@ -158,6 +210,18 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
         ("Record information", {"fields": ("created_at",)}),
     )
 
+    @admin.display(description="Logo")
+    def thumbnail(self, obj):
+        return format_html('<img src="{}" class="bf-thumbnail" alt="">', obj.logo_url) if obj.logo_url else "—"
+
+    @admin.action(description="Approve selected vendors")
+    def approve(self, request, queryset):
+        self.message_user(request, f"{queryset.update(status='approved')} vendors approved.")
+
+    @admin.action(description="Suspend selected vendors")
+    def suspend(self, request, queryset):
+        self.message_user(request, f"{queryset.update(status='suspended')} vendors suspended.")
+
 
 @admin.register(Product)
 class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
@@ -166,20 +230,41 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     url_field = "image_url"
     public_id_field = "image_public_id"
     upload_folder = "bala-fashion/products"
-    list_display = ("name", "price", "stock_quantity", "category", "vendor", "is_active", "image_status")
-    list_filter = ("is_active", "category", "vendor")
+    list_display = ("thumbnail", "name", "price", "stock_quantity", "category", "vendor", "is_active", "image_status")
+    list_display_links = ("name",)
+    list_per_page = 25
+    save_on_top = True
+    actions = ("publish", "hide", "zero_stock")
+    list_filter = ("is_active", "category", "vendor", "created_at")
     search_fields = ("name", "slug", "description", "sku")
     prepopulated_fields = {"slug": ("name",)}
     autocomplete_fields = ("category", "vendor")
     list_editable = ("price", "stock_quantity", "is_active")
+    list_select_related = ("category", "vendor")
     readonly_fields = ("created_at", "updated_at")
     fieldsets = (
         ("Product details", {"fields": ("name", "slug", "vendor", "category", "sku", "description")}),
-        ("Pricing & inventory", {"fields": ("price", "compare_at_price", "stock_quantity", "sizes", "colors")}),
+        ("Pricing & inventory", {"fields": ("price", "compare_at_price", "stock_quantity", "sizes_text", "colors_text")}),
         ("Product image", {"fields": ("image_upload", "image_url", "image_public_id")}),
         ("Store visibility", {"fields": ("is_active",)}),
         ("Record information", {"fields": ("created_at", "updated_at")}),
     )
+
+    @admin.display(description="Preview")
+    def thumbnail(self, obj):
+        return format_html('<img src="{}" class="bf-thumbnail" alt="">', obj.image_url) if obj.image_url else "—"
+
+    @admin.action(description="Publish selected products")
+    def publish(self, request, queryset):
+        self.message_user(request, f"{queryset.update(is_active=True)} products published.")
+
+    @admin.action(description="Hide selected products")
+    def hide(self, request, queryset):
+        self.message_user(request, f"{queryset.update(is_active=False)} products hidden.")
+
+    @admin.action(description="Set selected products stock to zero")
+    def zero_stock(self, request, queryset):
+        self.message_user(request, f"{queryset.update(stock_quantity=0)} products updated.")
 
     @admin.display(description="Image")
     def image_status(self, obj):
