@@ -1,0 +1,15 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+  <div style="margin: 0 0 22px; padding: 18px 20px; background: var(--body-bg, #fff); border: 1px solid var(--border-color, #d9dfe7); border-radius: 10px;">
+    <h2 style="margin: 0 0 8px; font-size: 18px;">Supabase User UUIDs</h2>
+    <p style="margin: 0 0 14px; color: var(--body-quiet-color, #555);">
+      Find and copy the Supabase Auth UUID required for a vendor's Owner ID.
+    </p>
+    <a href="{% url 'admin:supabase_users' %}"
+       style="display: inline-block; padding: 10px 16px; background: #2563eb; color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600;">
+      View User UUIDs
+    </a>
+  </div>
+  {{ block.super }}
+{% endblock %}
