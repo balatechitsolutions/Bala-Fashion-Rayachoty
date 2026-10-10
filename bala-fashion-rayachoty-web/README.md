@@ -78,3 +78,10 @@ npm run build
 - Add business phone, privacy policy, returns policy, and delivery terms before launch.
 
 Checkout only allows products from one seller per order, revalidates prices/stock server-side, locks inventory rows, and runs in a database transaction. Online payments are not enabled. This starter still needs real-account end-to-end testing and an operational/security review before production.
+
+
+## Copy Supabase user UUIDs in Django Admin
+
+The storefront authenticates through Supabase Auth. Vendor `owner_id` references `auth.users.id`, so the UUID in the built-in Django **Users** list is not the correct value. Staff can use **Supabase Auth users — copy user UUIDs** in the Django Admin header to view paginated Supabase user UUIDs and copy the correct one.
+
+Set `SUPABASE_SERVICE_ROLE_KEY` as a secret environment variable on the Render backend. Obtain it from Supabase Dashboard → Project Settings → API Keys. Never put this key in frontend `VITE_*` variables, commit it to GitHub, or show it in admin pages. Keep `SUPABASE_URL` configured as well. If the secret is missing, the page displays setup guidance and does not reveal credentials.

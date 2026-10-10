@@ -1,7 +1,10 @@
 import os
 
+import requests
 from django import forms
 from django.contrib import admin, messages
+from django.shortcuts import render
+from django.urls import path
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
 import cloudinary
@@ -269,3 +272,80 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     @admin.display(description="Image")
     def image_status(self, obj):
         return "Uploaded" if obj.image_url else "Missing"
+
+
+# Read-only Supabase Auth user directory. These are the identities referenced by
+# public.vendors.owner_id; they are not Django's local staff-user records.
+def supabase_auth_users_view(request):
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    page = request.GET.get("page", "1")
+    try:
+        page = max(1, min(int(page), 10000))
+    except (TypeError, ValueError):
+        page = 1
+
+    context = {
+        **admin.site.each_context(request),
+        "title": "Supabase Auth users",
+        "users": [],
+        "page_number": page,
+        "has_previous": page > 1,
+        "previous_page": page - 1,
+        "next_page": page + 1,
+        "error": "",
+        "has_next": False,
+    }
+    if not supabase_url or not service_key:
+        context["error"] = (
+            "User UUIDs are stored in Supabase Auth. Configure SUPABASE_SERVICE_ROLE_KEY "
+            "and SUPABASE_URL in the Render backend environment to load this directory."
+        )
+        return render(request, "admin/supabase_users.html", context)
+
+    try:
+        response = requests.get(
+            f"{supabase_url}/auth/v1/admin/users",
+            params={"page": page, "per_page": 50},
+            headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        users = payload.get("users", []) if isinstance(payload, dict) else []
+        context["users"] = [
+            {
+                "id": str(user.get("id", "")),
+                "email": user.get("email") or "—",
+                "phone": user.get("phone") or "—",
+                "created_at": user.get("created_at") or "—",
+                "last_sign_in_at": user.get("last_sign_in_at") or "—",
+                "email_confirmed": bool(user.get("email_confirmed_at")),
+            }
+            for user in users
+            if user.get("id")
+        ]
+        context["has_next"] = len(users) == 50
+    except (requests.RequestException, ValueError, TypeError):
+        context["error"] = (
+            "Supabase Auth users could not be loaded. Verify the service-role secret, "
+            "Supabase URL, and backend network access."
+        )
+        context["has_next"] = False
+    return render(request, "admin/supabase_users.html", context)
+
+
+# Add a staff-only admin page without altering Django's default User model or IDs.
+_original_admin_get_urls = admin.site.get_urls
+
+def _admin_get_urls_with_supabase_users():
+    custom_urls = [
+        path(
+            "supabase-users/",
+            admin.site.admin_view(supabase_auth_users_view),
+            name="supabase_users",
+        ),
+    ]
+    return custom_urls + _original_admin_get_urls()
+
+admin.site.get_urls = _admin_get_urls_with_supabase_users

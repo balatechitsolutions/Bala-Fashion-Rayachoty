@@ -28,3 +28,15 @@ class EndpointTests(SimpleTestCase):
         with patch.object(views,"_user",return_value=({"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"},None)):
             res=views.orders(req)
         self.assertEqual(res.status_code,400)
+
+
+    def test_supabase_auth_user_directory_shows_setup_hint_without_secret(self):
+        from django.test import RequestFactory
+        from django.contrib.auth.models import AnonymousUser
+        from . import admin as admin_module
+        request = RequestFactory().get("/admin/supabase-users/")
+        request.user = AnonymousUser()
+        with patch.dict("os.environ", {"SUPABASE_SERVICE_ROLE_KEY": "", "SUPABASE_URL": ""}, clear=False):
+            response = admin_module.supabase_auth_users_view(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"SUPABASE_SERVICE_ROLE_KEY", response.content)

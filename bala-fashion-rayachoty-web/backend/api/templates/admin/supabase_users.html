@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <p>These UUIDs are the Supabase Auth user IDs used by <code>vendors.owner_id</code>. They are different from the numeric IDs of Django Admin staff users.</p>
+
+  {% if error %}
+    <div class="messagelist"><div class="error">{{ error }}</div></div>
+  {% else %}
+    <p>Page {{ page_number }}. Select and copy the UUID for the account that owns the vendor.</p>
+    <div class="module" style="overflow-x:auto">
+      <table style="width:100%; min-width:850px">
+        <thead><tr><th>User UUID</th><th>Email</th><th>Phone</th><th>Email confirmed</th><th>Created</th><th>Last sign-in</th></tr></thead>
+        <tbody>
+        {% for user in users %}
+          <tr>
+            <td><code style="user-select:all;overflow-wrap:anywhere">{{ user.id }}</code> <button type="button" class="copy-uuid" data-uuid="{{ user.id }}">Copy</button></td>
+            <td>{{ user.email }}</td><td>{{ user.phone }}</td>
+            <td>{% if user.email_confirmed %}Yes{% else %}No{% endif %}</td>
+            <td>{{ user.created_at }}</td><td>{{ user.last_sign_in_at }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">No Supabase Auth users were returned for this page.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p style="display:flex;gap:12px;align-items:center">
+      {% if has_previous %}<a class="button" href="?page={{ previous_page }}">Previous</a>{% endif %}
+      {% if has_next %}<a class="button" href="?page={{ next_page }}">Next</a>{% endif %}
+      <a href="{% url 'admin:api_vendor_changelist' %}">Back to vendors</a>
+    </p>
+    <script>
+      document.querySelectorAll('.copy-uuid').forEach(function (button) {
+        button.addEventListener('click', async function () {
+          const value = button.dataset.uuid;
+          try {
+            await navigator.clipboard.writeText(value);
+            button.textContent = 'Copied';
+          } catch (error) {
+            const range = document.createRange();
+            const code = button.parentElement.querySelector('code');
+            range.selectNodeContents(code);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            button.textContent = 'Select and copy';
+          }
+        });
+      });
+    </script>
+  {% endif %}
+{% endblock %}
