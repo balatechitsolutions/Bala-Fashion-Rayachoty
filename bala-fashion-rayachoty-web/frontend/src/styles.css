@@ -199,3 +199,55 @@ body{background:var(--app-bg);color:var(--app-ink);font-family:Inter,ui-sans-ser
 .app-shell .mobile-nav-item{min-height:50px;gap:4px;border-radius:10px;font-size:9px;color:#8a92a1}.app-shell .mobile-nav-item.active{background:#f8edf0;color:#702b38}.app-shell .mobile-nav-item svg{width:19px;height:19px}.app-shell .overlay{padding-bottom:0}.app-shell .drawer{max-height:100dvh}.app-shell .toast{bottom:calc(76px + env(safe-area-inset-bottom))}.app-account-card{padding:13px}
 }
 @media(max-width:380px){.app-topbar{padding-inline:8px;gap:6px}.app-mobile-brand .logo{width:28px;height:28px}.app-mobile-brand b{font-size:8px}.app-mobile-brand small{font-size:5px}.app-search{padding:8px 7px}.app-search input{font-size:10px}.app-bag-button{width:33px;height:33px}.app-main{padding-inline:10px}.app-promo-copy{padding:14px 12px}.app-promo-copy>b{font-size:20px}.app-category-thumb{width:54px;height:54px}.app-page .product{padding:6px}.app-page .product-name{font-size:11px}}
+
+
+/* Home screen: compact, touch-first shopping app layout. */
+.home-greeting{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 20px}
+.home-greeting h1{margin:11px 0 7px;color:#222b3c;font-size:clamp(27px,2.7vw,36px);font-weight:780;letter-spacing:-.05em;line-height:1.16}
+.home-greeting h1 em{color:#702b38;font-style:normal}
+.home-greeting p{margin:0;color:#818998;font-size:13px}
+.home-location{display:flex;align-items:center;gap:7px;color:#8b6470;font-size:10px;font-weight:800;letter-spacing:.1em}
+.home-live-dot{width:7px;height:7px;border-radius:50%;background:#36a878;box-shadow:0 0 0 3px #dff4e9}
+.home-profile-shortcut{display:grid;place-items:center;width:46px;height:46px;flex:0 0 auto;overflow:hidden;border:1px solid #e9dce0;border-radius:16px;background:#fff;color:#702b38}
+.home-profile-shortcut img{width:100%;height:100%;object-fit:cover}
+.home-search-shortcut{display:flex;align-items:center;gap:11px;margin:0 0 20px;padding:14px 15px;border:1px solid #e6e8ee;border-radius:13px;background:#fff;color:#858d9b;box-shadow:0 4px 16px #202c3d05}
+.home-search-shortcut input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#30384a;font:inherit;font-size:12px}
+.home-search-shortcut input::placeholder{color:#9299a6}
+.home-promo{min-height:205px;background:linear-gradient(112deg,#572b3b 0%,#713849 54%,#945766 100%)}
+.home-promo .app-promo-copy small{color:#f0d9df}
+.home-promo .app-promo-copy>b{font-size:clamp(27px,2.8vw,37px)}
+.home-promo .app-promo-image{background:#ffffff0d}
+.home-promo-monogram{display:grid;place-items:center;width:100%;height:100%;color:#f3dfe4;font-family:'Playfair Display',serif;font-size:clamp(58px,8vw,94px);letter-spacing:-.08em;background:radial-gradient(ellipse at 70% 30%,#ffffff16,transparent 60%)}
+.home-quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+.home-quick-actions>button{display:flex;align-items:center;gap:10px;min-width:0;padding:13px 12px;border:1px solid #e9ecf1;border-radius:13px;background:#fff;color:#4d5668;text-align:left}
+.home-action-icon{display:grid;place-items:center;width:37px;height:37px;flex:0 0 auto;border-radius:11px;background:#f7edf0;color:#702b38}
+.home-quick-actions>button>span:nth-child(2){display:flex;flex:1;flex-direction:column;gap:4px;min-width:0}
+.home-quick-actions b{font-size:12px;color:#30384a}
+.home-quick-actions small{overflow:hidden;color:#8b92a0;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.home-quick-actions>button>svg{flex:0 0 auto;color:#8b6470}
+.home-categories-section{margin-top:26px}
+.home-products-section{margin-top:30px}
+@media(max-width:760px){
+ .home-greeting{margin-bottom:16px}
+ .home-greeting h1{margin-top:9px;font-size:27px}
+ .home-greeting p{font-size:11px}
+ .home-location{font-size:8px;letter-spacing:.08em}
+ .home-profile-shortcut{width:40px;height:40px;border-radius:14px}
+ .home-search-shortcut{margin-bottom:15px;padding:12px 13px;border-radius:12px}
+ .home-search-shortcut input{font-size:11px}
+ .home-promo{min-height:155px}
+ .home-promo .app-promo-copy>b{font-size:25px}
+ .home-quick-actions{gap:9px;margin-top:12px}
+ .home-quick-actions>button{gap:8px;padding:10px 9px;border-radius:12px}
+ .home-action-icon{width:32px;height:32px;border-radius:10px}
+ .home-quick-actions b{font-size:11px}
+ .home-quick-actions small{font-size:9px}
+ .home-categories-section{margin-top:24px}
+ .home-products-section{margin-top:26px}
+}
+@media(max-width:380px){
+ .home-greeting h1{font-size:24px}
+ .home-location{font-size:7px}
+ .home-quick-actions{grid-template-columns:1fr}
+ .home-quick-actions>button{padding:10px 12px}
+}
