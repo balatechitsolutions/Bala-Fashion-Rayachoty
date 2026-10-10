@@ -85,3 +85,34 @@ label, .form-row label, .aligned label { color: #172033 !important; font-weight:
   .form-row { padding: 10px 12px; }
   input, textarea, select { width: 100%; }
 }
+
+
+/* Catalogue workspace usability */
+.bf-thumbnail { width: 54px; height: 54px; object-fit: cover; border: 1px solid #bdc9d9; border-radius: 8px; background: #f2f5fa; }
+#changelist-search { padding: 15px !important; background: #fff; }
+#changelist-search input[type=text] { min-width: 230px; max-width: 480px; }
+#changelist .actions { background: #edf3fc !important; padding: 12px !important; border: 1px solid #cbd7e6; }
+#changelist .actions label, #changelist .actions span { color: #172033 !important; font-weight: 700; }
+#changelist .actions select { width: auto !important; min-width: 180px; }
+#changelist .actions button { min-width: 80px; }
+#changelist table input[type=number], #changelist table input[type=text] { min-width: 75px; width: 110px; }
+#changelist table input[type=checkbox], .actions input[type=checkbox], .form-row input[type=checkbox] { width: 18px !important; height: 18px; accent-color: #123a72; cursor: pointer; }
+#changelist .results { overflow-x: auto; }
+#changelist .results table { min-width: 760px; }
+.form-row { padding: 16px !important; border-bottom: 1px solid #e0e7f0 !important; }
+.form-row .fieldBox { margin-right: 20px; }
+.aligned .form-row > div { max-width: 850px; }
+.aligned .form-row input[type=text], .aligned .form-row input[type=number], .aligned .form-row textarea { max-width: 650px; }
+.aligned .form-row textarea { min-height: 90px; }
+.submit-row { background: #e9eff8 !important; padding: 15px !important; border: 1px solid #cbd5e1 !important; }
+.submit-row a.deletelink { background: #a62020 !important; color: white !important; border-radius: 7px; padding: 10px 15px; font-weight: 800; }
+.submit-row a.deletelink:hover { background: #7c1414 !important; }
+.object-tools a.addlink { background: #136c3b !important; color: white !important; }
+#changelist-filter li { padding: 5px 10px; }
+#changelist-filter li.selected { background: #dbe8f8; border-radius: 5px; }
+#changelist-filter a { font-weight: 650; }
+@media(max-width:767px) {
+  #changelist-search input[type=text] { min-width: 0; width: 100%; }
+  #changelist .actions select { width: 100% !important; }
+  .aligned .form-row input[type=text], .aligned .form-row input[type=number], .aligned .form-row textarea { width: 100%; }
+}
