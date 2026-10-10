@@ -400,3 +400,8 @@ body{background:var(--app-bg);color:var(--app-ink);font-family:Inter,ui-sans-ser
   .app-shell .modal-photo { height: clamp(160px, 26dvh, 220px); }
 }
 
+
+/* B Tech logo branding */
+.app-shell .logo-image{width:40px;height:40px;flex:0 0 auto;display:block;object-fit:contain;object-position:center;border-radius:50%;background:#fff;border:1px solid #dbe4f0;padding:2px}
+.app-shell .app-brand .logo-image{width:42px;height:42px}
+@media(max-width:760px){.app-shell .app-brand .logo-image,.app-shell .app-mobile-brand .logo-image{width:34px;height:34px}}
