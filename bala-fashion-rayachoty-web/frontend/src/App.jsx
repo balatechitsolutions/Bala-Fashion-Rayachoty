@@ -88,9 +88,9 @@ export default function App() {
    <button className="brand app-brand" onClick={()=>{setCategory('all');setSearch('');setMobileActive('home')}}><span className="logo">BF</span><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></button>
    <div className="sidebar-caption">YOUR STORE</div>
    <nav className="sidebar-nav" aria-label="App navigation">
-    <button className={mobileActive==='home'?'active':''} onClick={()=>{setMobileActive('home');setCategory('all');setSearch('')}}><Home size={19}/><span>Home</span></button>
-    <button className={mobileActive==='categories'?'active':''} onClick={()=>{setMobileActive('categories');setCategory('all')}}><Grid2X2 size={19}/><span>Categories</span></button>
-    <button className={mobileActive==='shop'?'active':''} onClick={()=>{setMobileActive('shop');setCategory('all')}}><Store size={19}/><span>Shop all</span></button>
+    <button className={mobileActive==='home'?'active':''} onClick={()=>{setDrawer('');setMobileActive('home');setCategory('all');setSearch('')}}><Home size={19}/><span>Home</span></button>
+    <button className={mobileActive==='categories'?'active':''} onClick={()=>{setDrawer('');setMobileActive('categories');setCategory('all')}}><Grid2X2 size={19}/><span>Categories</span></button>
+    <button className={mobileActive==='shop'?'active':''} onClick={()=>{setDrawer('');setMobileActive('shop');setCategory('all')}}><Store size={19}/><span>Shop all</span></button>
     <button className={mobileActive==='bag'?'active':''} onClick={()=>{setMobileActive('bag');setDrawer('cart')}}><ShoppingBag size={19}/><span>My bag</span>{count>0&&<b className="sidebar-count">{count}</b>}</button>
     <button className={mobileActive==='account'?'active':''} onClick={()=>{setMobileActive('account');session?setDrawer('account'):login()}}><UserRound size={19}/><span>Account</span></button>
    </nav>
@@ -100,7 +100,7 @@ export default function App() {
    <header className="app-topbar">
     <div className="app-mobile-brand"><span className="logo">BF</span><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></div>
     <div className="app-breadcrumb"><span>Store</span><ArrowRight size={14}/><b>{({home:'Overview',categories:'Categories',shop:'All products',search:'Search results',bag:'Your bag',account:'Account'})[mobileActive]||'Overview'}</b></div>
-    <label className="app-search"><Search size={18}/><input ref={searchInputRef} aria-label="Search clothing" placeholder="Search products, styles..." value={search} onFocus={()=>setMobileActive('search')} onChange={e=>{setSearch(e.target.value);setMobileActive('search')}}/><kbd>⌕</kbd></label>
+    <label className="app-search"><Search size={18}/><input ref={searchInputRef} aria-label="Search clothing" placeholder="Search products, styles..." value={search} onFocus={()=>{setDrawer('');setMobileActive('search')}} onChange={e=>{setDrawer('');setSearch(e.target.value);setMobileActive('search')}}/><kbd>⌕</kbd></label>
     <button className="app-account-button" onClick={()=>session?setDrawer('account'):login()}>{session?.user?.user_metadata?.avatar_url?<img src={session.user.user_metadata.avatar_url} alt="Profile"/>:<UserRound size={18}/>}<span>{session?.user?.user_metadata?.full_name?.split(' ')[0]||'Sign in'}</span></button>
     <button className="app-bag-button" aria-label={'Open bag, '+count+' items'} onClick={()=>{setMobileActive('bag');setDrawer('cart')}}><ShoppingBag size={19}/>{count>0&&<b>{count}</b>}</button>
    </header>
@@ -122,10 +122,10 @@ export default function App() {
     {mobileActive==='account'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">YOUR PROFILE</div><h1>Account</h1><p>Manage your profile, orders and store tools.</p></section><div className="app-account-card"><div className="app-account-avatar"><UserRound size={24}/></div><div><b>{session?.user?.user_metadata?.full_name||session?.user?.email||'Welcome to Bala Fashion'}</b><small>{profile?.role||'Sign in to access your account'}</small></div></div><button className="primary" onClick={()=>session?setDrawer('account'):login()}>{session?'Open account':'Continue with Google'} <ArrowRight size={16}/></button>{session&&<button className="secondary app-orders-button" onClick={getOrders}>View my orders</button>}</div>}
    </main>
    <nav className="mobile-bottom-nav" aria-label="Primary app navigation">
-    <button className={`mobile-nav-item${mobileActive==='home'?' active':''}`} onClick={()=>{setMobileActive('home');setCategory('all');setSearch('')}}><Home size={20}/><span>Home</span></button>
-    <button className={`mobile-nav-item${mobileActive==='categories'?' active':''}`} onClick={()=>{setMobileActive('categories');setSearch('')}}><Grid2X2 size={20}/><span>Categories</span></button>
-    <button className={`mobile-nav-item${mobileActive==='search'?' active':''}`} onClick={()=>{setMobileActive('search');setSearch('');searchInputRef.current?.focus()}}><Search size={20}/><span>Search</span></button>
-    <button className={`mobile-nav-item${mobileActive==='bag'?' active':''}`} onClick={()=>setMobileActive('bag')}><span className="mobile-bag-icon"><ShoppingBag size={20}/>{count>0&&<b>{count>99?'99+':count}</b>}</span><span>Bag</span></button>
+    <button className={`mobile-nav-item${mobileActive==='home'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('home');setCategory('all');setSearch('')}}><Home size={20}/><span>Home</span></button>
+    <button className={`mobile-nav-item${mobileActive==='categories'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('categories');setSearch('')}}><Grid2X2 size={20}/><span>Categories</span></button>
+    <button className={`mobile-nav-item${mobileActive==='search'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('search');setSearch('');searchInputRef.current?.focus()}}><Search size={20}/><span>Search</span></button>
+    <button className={`mobile-nav-item${mobileActive==='bag'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('bag')}}><span className="mobile-bag-icon"><ShoppingBag size={20}/>{count>0&&<b>{count>99?'99+':count}</b>}</span><span>Bag</span></button>
     <button className={`mobile-nav-item${mobileActive==='account'?' active':''}`} onClick={()=>{setMobileActive('account');session?setDrawer('account'):login()}}><UserRound size={20}/><span>Account</span></button>
    </nav>
   </div>
