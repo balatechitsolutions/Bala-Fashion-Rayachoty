@@ -336,3 +336,54 @@ html[data-theme="dark"] .submit-row a.deletelink {
   body.login #container { margin: 5vh auto !important; }
   body.login #content { padding: 20px !important; }
 }
+
+
+/* Compact icon-only logout control — keeps the original logout form/action */
+#user-tools #logout-form,
+#user-tools form.logout-form {
+  display: inline-flex !important;
+  vertical-align: middle;
+  margin-left: 10px !important;
+}
+#user-tools #logout-form button,
+#user-tools form.logout-form button,
+#user-tools button[type="submit"] {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  font-size: 0 !important;
+  line-height: 1 !important;
+  color: #fff !important;
+  background: transparent !important;
+  border: 1px solid rgba(255,255,255,.35) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  text-decoration: none !important;
+}
+#user-tools #logout-form button::before,
+#user-tools form.logout-form button::before,
+#user-tools button[type="submit"]::before {
+  content: "⇥";
+  display: block;
+  font-size: 25px !important;
+  font-weight: 700;
+  line-height: 1;
+}
+#user-tools #logout-form button:hover,
+#user-tools form.logout-form button:hover,
+#user-tools button[type="submit"]:hover {
+  background: rgba(255,255,255,.16) !important;
+  border-color: rgba(255,255,255,.7) !important;
+}
+#user-tools #logout-form button:focus-visible,
+#user-tools form.logout-form button:focus-visible,
+#user-tools button[type="submit"]:focus-visible {
+  outline: 3px solid #ffbf36 !important;
+  outline-offset: 3px;
+}
