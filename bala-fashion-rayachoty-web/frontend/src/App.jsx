@@ -16,14 +16,14 @@ export default function App() {
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(!s)setProfile(null)});return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(!session){setProfile(null);return}api('/profile/',{token:session.access_token}).then(setProfile).catch(()=>setProfile({role:'customer'}))},[session])
- useEffect(()=>{load()},[category,search])
- async function load(){setLoading(true);try{const q=new URLSearchParams();if(category!=='all')q.set('category',category);if(search.trim())q.set('search',search.trim());const [p,c]=await Promise.all([api(`/products/?${q}`),api('/categories/').catch(()=>defaultCats.slice(1))]);setProducts(Array.isArray(p.results)?p.results:Array.isArray(p)?p:[]);setCategories([defaultCats[0],...c]);setError('')}catch(e){setProducts([]);setError('We could not load the live catalog. Check your connection and try again.')}finally{setLoading(false)}}
+ useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
+ async function load(signal){setLoading(true);try{const q=new URLSearchParams();if(category!=='all')q.set('category',category);if(search.trim())q.set('search',search.trim());const [p,c]=await Promise.all([api(`/products/?${q}`,{signal}),api('/categories/',{signal}).catch(e=>{if(e.name==='AbortError')throw e;return defaultCats.slice(1)})]);setProducts(Array.isArray(p.results)?p.results:Array.isArray(p)?p:[]);setCategories([defaultCats[0],...c]);setError('')}catch(e){if(e.name!=='AbortError'){setProducts([]);setError('We could not load the live catalog. Check your connection and try again.')}}finally{if(!signal?.aborted)setLoading(false)}}
  function notify(t){setToast(t);window.setTimeout(()=>setToast(''),2600)}
  async function login(){if(!supabase)return notify('Set Supabase frontend environment variables first.');const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin}});if(error)notify(error.message)}
  async function logout(){await supabase?.auth.signOut();setDrawer('');notify('Signed out')}
  const count=cart.reduce((n,p)=>n+p.quantity,0),subtotal=cart.reduce((n,p)=>n+Number(p.price)*p.quantity,0)
  const vendors=[...new Set(cart.map(p=>p.vendor_id||p.vendor_name))]
- function add(p,s=p.sizes?.[0]||'',c=p.colors?.[0]||''){const key=`${p.id}:${s}:${c}`;setCart(old=>old.some(i=>i.key===key)?old.map(i=>i.key===key?{...i,quantity:Math.min(i.quantity+1,Number(i.stock_quantity||20))}:i):[...old,{...p,key,quantity:1,size:s,color:c}]);setSelected(null);setDrawer('cart');notify('Added to your bag')}
+ function add(p,s=p.sizes?.[0]||'',c=p.colors?.[0]||''){const stock=Number(p.stock_quantity??p.stock??0);if(!Number.isFinite(stock)||stock<1){notify('This item is currently unavailable.');return}const key=`${p.id}:${s}:${c}`;setCart(old=>old.some(i=>i.key===key)?old.map(i=>i.key===key?{...i,quantity:Math.min(i.quantity+1,stock)}:i):[...old,{...p,key,quantity:1,size:s,color:c}]);setSelected(null);setDrawer('cart');notify('Added to your bag')}
  async function getOrders(){if(!session)return login();try{const r=await api('/orders/',{token:session.access_token});setOrders(r.results||r);setDrawer('orders')}catch(e){notify(e.message)}}
  async function uploadImage(file){
   if(!file||!session)return notify('Sign in with an approved vendor/admin account first.')
@@ -41,14 +41,14 @@ export default function App() {
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function saveProduct(e){
-  e.preventDefault();if(!session)return login();setBusy(true)
+  e.preventDefault();if(busy)return;if(!session)return login();setBusy(true)
   try{
    await api('/products/manage/',{method:'POST',token:session.access_token,body:JSON.stringify({...productForm,price:Number(productForm.price),compare_at_price:productForm.compare_at_price?Number(productForm.compare_at_price):null,stock_quantity:Number(productForm.stock_quantity),sizes:productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean),colors:productForm.colors.split(',').map(x=>x.trim()).filter(Boolean)})})
    setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
    await load();setDrawer('');notify('Product saved')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
- async function place(e){e.preventDefault();if(!session)return login();if(vendors.length>1)return notify('Checkout one seller at a time.');setBusy(true);try{const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})});setCart([]);setOrders(o=>[r,...o]);setDrawer('orders');notify(`Order ${r.order_number} placed`)}catch(err){notify(err.message)}finally{setBusy(false)}}
+ async function place(e){e.preventDefault();if(busy)return;if(!session)return login();if(vendors.length>1)return notify('Checkout one seller at a time.');setBusy(true);try{const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})});setCart([]);setOrders(o=>[r,...o]);setDrawer('orders');notify(`Order ${r.order_number} placed`)}catch(err){notify(err.message)}finally{setBusy(false)}}
  return <div className="site">
   <div className="topline"><span>Local fashion, thoughtfully picked</span><span><Truck size={14}/> Delivery across Rayachoty <b>•</b> Cash on delivery</span></div>
   <header className="header">
