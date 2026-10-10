@@ -123,3 +123,22 @@ button:disabled { opacity:.55; cursor:not-allowed; }
   .mobile-nav-item { font-size:9px; }
   .mobile-bottom-nav { padding-inline:3px; }
 }
+
+.category-showcase { padding:0 8% 72px; }
+.category-section-head { margin-bottom:22px; }
+.category-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; }
+.category-tile { display:block; text-align:left; padding:0; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; color:var(--ink); min-width:0; }
+.category-image { display:grid; place-items:center; width:100%; aspect-ratio:4/4.6; overflow:hidden; background:#eee4d8; }
+.category-image img { display:block; width:100%; height:100%; object-fit:cover; transition:transform .25s ease; }
+.category-tile:hover .category-image img { transform:scale(1.035); }
+.category-initial { display:grid; place-items:center; width:100%; height:100%; font-family:'Playfair Display',serif; font-size:clamp(32px,4vw,54px); color:#702b38; background:linear-gradient(145deg,#f3e8da,#e7d4c5); }
+.category-tone-1 .category-initial { color:#263f52; background:linear-gradient(145deg,#e5ebee,#cbd8df); }
+.category-tone-2 .category-initial { color:#6d5233; background:linear-gradient(145deg,#f2e8d1,#e0ceb0); }
+.category-tone-3 .category-initial { color:#702b38; background:linear-gradient(145deg,#f1e0e0,#dfc0c4); }
+.category-tone-4 .category-initial { color:#263f52; background:linear-gradient(145deg,#e4e9df,#cdd8c4); }
+.category-tile-label { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 12px; font-size:13px; font-weight:600; }
+.category-tile-label svg { flex:0 0 auto; color:#702b38; }
+.category-tile:focus-visible { outline:3px solid #702b38; outline-offset:3px; }
+@media(max-width:1000px) { .category-showcase { padding-inline:5%; } .category-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:760px) { .category-showcase { padding:0 4% 48px; } .category-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .category-tile-label { padding:11px 10px; font-size:12px; } }
+@media(max-width:380px) { .category-grid { gap:9px; } .category-tile-label { font-size:11px; padding:10px 8px; } }
