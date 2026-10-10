@@ -1,4 +1,4 @@
-const BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/$/, '')
+const BASE = (import.meta.env.VITE_API_BASE_URL || 'https://bala-fashion-api.onrender.com/api').replace(/\/$/, '')
 export async function api(path, { token, ...options } = {}) {
   const headers = new Headers(options.headers || {})
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
