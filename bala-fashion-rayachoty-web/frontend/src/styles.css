@@ -251,3 +251,152 @@ body{background:var(--app-bg);color:var(--app-ink);font-family:Inter,ui-sans-ser
  .home-quick-actions{grid-template-columns:1fr}
  .home-quick-actions>button{padding:10px 12px}
 }
+
+/* Mobile app-sheet windows: responsive product details and cart/checkout panels. */
+@media (max-width: 760px) {
+  .app-shell .overlay {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    padding-bottom: 0;
+    background: #17202f75;
+    backdrop-filter: blur(5px);
+    overscroll-behavior: contain;
+  }
+
+  .app-shell .drawer {
+    width: 100%;
+    max-width: 100%;
+    height: min(92dvh, 860px);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    min-height: 0;
+    border-radius: 20px 20px 0 0;
+    overflow: hidden;
+    box-shadow: 0 -12px 42px #17202f24;
+    animation: mobile-sheet-up .22s ease-out;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .app-shell .drawer-head {
+    flex: 0 0 auto;
+    padding: 18px 18px 14px;
+    background: var(--paper);
+  }
+
+  .app-shell .drawer-head h2 {
+    font-size: 25px;
+    line-height: 1.2;
+  }
+
+  .app-shell .drawer-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 18px 24px;
+  }
+
+  .app-shell .drawer-body.form {
+    gap: 12px;
+  }
+
+  .app-shell .drawer-body .summary {
+    padding-bottom: 8px;
+  }
+
+  .app-shell .modal-backdrop {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    background: #17202f75;
+    backdrop-filter: blur(5px);
+    overscroll-behavior: contain;
+  }
+
+  .app-shell .modal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+    border-radius: 20px 20px 0 0;
+    background: var(--paper);
+    box-shadow: 0 -12px 42px #17202f24;
+    animation: mobile-sheet-up .22s ease-out;
+  }
+
+  .app-shell .modal-photo {
+    flex: 0 0 auto;
+    width: 100%;
+    height: clamp(175px, 29dvh, 280px);
+    min-height: 0;
+    overflow: hidden;
+    background: #efe5db;
+  }
+
+  .app-shell .modal-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .app-shell .modal-info {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 18px calc(22px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-shell .modal-info h2 {
+    font-size: 24px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .app-shell .modal-info .primary.full {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    min-height: 48px;
+    margin-top: 8px;
+    box-shadow: 0 -5px 14px #f8f3eacc;
+  }
+
+  .app-shell .modal .close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    border: 1px solid #ffffffa8;
+    background: #fffdf2ed;
+    box-shadow: 0 3px 12px #17202f20;
+  }
+
+  .app-shell .toast {
+    max-width: calc(100vw - 28px);
+    overflow-wrap: anywhere;
+  }
+}
+
+@keyframes mobile-sheet-up {
+  from { transform: translateY(24px); opacity: .65; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 380px) {
+  .app-shell .drawer-head { padding: 16px 14px 12px; }
+  .app-shell .drawer-body { padding-inline: 14px; }
+  .app-shell .modal-info { padding-inline: 14px; }
+  .app-shell .modal-photo { height: clamp(160px, 26dvh, 220px); }
+}
+
