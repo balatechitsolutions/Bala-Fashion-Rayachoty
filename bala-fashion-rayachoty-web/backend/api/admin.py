@@ -1,3 +1,4 @@
+import logging
 import os
 
 import requests
@@ -6,11 +7,15 @@ from django.contrib import admin, messages
 from django.shortcuts import render
 from django.urls import path
 from django.core.exceptions import ValidationError
+from django.db import DatabaseError, IntegrityError
 from django.utils.html import format_html
+from django.utils.text import slugify
 import cloudinary
 import cloudinary.uploader
 
 from .models import Category, Product, Vendor
+
+logger = logging.getLogger(__name__)
 
 
 # Store-specific Django admin branding.
@@ -105,6 +110,28 @@ class VendorAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
     class Meta:
         model = Vendor
         fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+
+        # The Supabase Auth UUID is optional in the database. Never turn a
+        # blank value into an invalid UUID or a Django staff-user integer.
+        if not cleaned.get("owner_id"):
+            cleaned["owner_id"] = None
+
+        # Mobile browsers may not run Django's prepopulated slug JavaScript.
+        # Generate a unique slug server-side when the admin leaves it blank.
+        name = (cleaned.get("name") or "").strip()
+        slug = (cleaned.get("slug") or "").strip()
+        if name and not slug:
+            base = slugify(name)[:240] or "vendor"
+            candidate = base
+            suffix = 2
+            while Vendor.objects.filter(slug=candidate).exclude(pk=self.instance.pk).exists():
+                candidate = f"{base[:230]}-{suffix}"
+                suffix += 1
+            cleaned["slug"] = candidate
+        return cleaned
 
     def clean_logo_upload(self):
         image = self.cleaned_data.get("logo_upload")
@@ -213,6 +240,20 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
         ("Branding", {"fields": ("logo_upload", "logo_url")}),
         ("Record information", {"fields": ("created_at",)}),
     )
+
+    def save_model(self, request, obj, form, change):
+        # Keep blank owner IDs nullable; vendor ownership must use a Supabase
+        # Auth UUID, not a numeric Django admin-user ID.
+        if not obj.owner_id:
+            obj.owner_id = None
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError:
+            logger.exception("Vendor save failed due to a database integrity constraint.")
+            raise
+        except DatabaseError:
+            logger.exception("Vendor save failed due to a database error.")
+            raise
 
     @admin.display(description="Logo")
     def thumbnail(self, obj):
