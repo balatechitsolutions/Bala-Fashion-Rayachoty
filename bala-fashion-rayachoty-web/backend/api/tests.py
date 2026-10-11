@@ -136,3 +136,35 @@ class EndpointTests(SimpleTestCase):
         from django.urls import resolve
         match = resolve('/admin/vendor-uuids/')
         self.assertEqual(match.url_name, 'admin-vendor-uuids')
+
+    def test_delivered_cod_order_marks_payment_paid(self):
+        from contextlib import nullcontext
+        from datetime import datetime, timezone
+
+        order_id = "a2e4b2d8-2b77-4b84-a420-0e30e2a7d6aa"
+        req = self.factory.patch(
+            "/api/orders/manage/",
+            {"id": order_id, "status": "delivered"},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        user = {"id": "2d0f5b2c-cf10-463e-9190-ab2561a84229"}
+        profile = {"id": user["id"], "full_name": "Admin", "phone": "", "role": "admin"}
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.side_effect = [
+            (order_id, "out_for_delivery", "cod", "pending"),
+            (order_id, "BFR-TEST123", "delivered", "paid", "1499.00", datetime.now(timezone.utc)),
+        ]
+        with patch.object(views, "_user", return_value=(user, None)), \\
+             patch.object(views, "_profile", return_value=profile), \\
+             patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))), \\
+             patch.object(views.transaction, "atomic", return_value=nullcontext()):
+            response = views.manage_orders(req)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "delivered")
+        self.assertEqual(response.data["payment_status"], "paid")
+        update_call = cursor.execute.call_args_list[-1]
+        self.assertIn("payment_status=case", update_call.args[0].lower())
+        self.assertEqual(update_call.args[1], ["delivered", "delivered", order_id])
