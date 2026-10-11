@@ -4,6 +4,7 @@ urlpatterns = [
  path("health/",views.health),
  path("categories/",views.categories),
  path("categories/manage/",views.manage_category),
+ path("vendors/manage/",views.manage_vendors),
  path("products/",views.products),
  path("profile/",views.profile),
  path("orders/",views.orders),
