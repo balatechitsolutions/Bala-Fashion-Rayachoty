@@ -67,26 +67,140 @@ def categories(request):
             return Response(_rows(c))
     except Exception:return Response({"detail":"Categories are temporarily unavailable."},status=503)
 
-@api_view(["PATCH"])
+@api_view(["GET", "POST", "PATCH", "DELETE"])
 def manage_category(request):
-    user,prof,error=_role_user(request,{"admin"})
-    if error:return error
-    category_id=str(request.data.get("category_id","")).strip()
-    image_url=str(request.data.get("image_url","")).strip()
+    user, prof, error = _role_user(request, {"admin"})
+    if error:
+        return error
+    data = request.data
+    category_id = str(data.get("id") or data.get("category_id") or request.query_params.get("id") or "").strip()
+
+    if request.method == "GET":
+        try:
+            with connection.cursor() as c:
+                c.execute("select id,name,slug,image_url,sort_order,is_active from public.categories order by sort_order,name")
+                return Response(_rows(c))
+        except Exception:
+            return Response({"detail": "Categories could not be loaded."}, status=503)
+
+    if request.method in {"PATCH", "DELETE"}:
+        try:
+            uuid.UUID(category_id)
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Choose a valid category."}, status=400)
+        if request.method == "DELETE":
+            # Soft-delete categories to preserve historical product references.
+            try:
+                with connection.cursor() as c:
+                    c.execute("update public.categories set is_active=false where id=%s returning id,name,is_active", [category_id])
+                    row = c.fetchone()
+                if not row:
+                    return Response({"detail": "Category not found."}, status=404)
+                return Response({"id": str(row[0]), "name": row[1], "is_active": row[2]})
+            except Exception:
+                return Response({"detail": "Category could not be deactivated."}, status=503)
+
+    name = str(data.get("name", "")).strip()[:255] if "name" in data else ""
+    image_url = str(data.get("image_url", "")).strip()[:1000]
+    if image_url and not image_url.startswith("https://res.cloudinary.com/"):
+        return Response({"detail": "Upload a category image through Cloudinary first."}, status=400)
     try:
-        uuid.UUID(category_id)
-    except (ValueError,TypeError,AttributeError):
-        return Response({"detail":"Choose a valid category."},status=400)
-    if image_url and (not image_url.startswith("https://res.cloudinary.com/") or len(image_url)>1000):
-        return Response({"detail":"Upload a category image through Cloudinary first."},status=400)
+        sort_order = int(data.get("sort_order", 0))
+    except (TypeError, ValueError):
+        return Response({"detail": "Sort order must be a whole number."}, status=400)
+
     try:
         with connection.cursor() as c:
-            c.execute("update public.categories set image_url=%s where id=%s returning id,name,slug,image_url,sort_order",[image_url,category_id])
-            row=c.fetchone()
-        if not row:return Response({"detail":"Category not found."},status=404)
-        return Response({"id":str(row[0]),"name":row[1],"slug":row[2],"image_url":row[3],"sort_order":row[4]})
+            if request.method == "POST":
+                if not name:
+                    return Response({"detail": "Category name is required."}, status=400)
+                base_slug = slugify(str(data.get("slug") or name))[:255].strip("-")
+                if not base_slug:
+                    return Response({"detail": "Enter a valid category name."}, status=400)
+                slug = base_slug
+                suffix = 2
+                while True:
+                    c.execute("select 1 from public.categories where slug=%s", [slug])
+                    if not c.fetchone():
+                        break
+                    slug = f"{base_slug[:245]}-{suffix}"
+                    suffix += 1
+                c.execute(
+                    "insert into public.categories(name,slug,image_url,sort_order,is_active) values(%s,%s,%s,%s,true) returning id,name,slug,image_url,sort_order,is_active",
+                    [name, slug, image_url, sort_order],
+                )
+            else:
+                try:
+                    uuid.UUID(category_id)
+                except (ValueError, TypeError, AttributeError):
+                    return Response({"detail": "Choose a valid category."}, status=400)
+                fields = []
+                params = []
+                if "name" in data:
+                    if not name:
+                        return Response({"detail": "Category name is required."}, status=400)
+                    fields.extend(["name=%s", "slug=%s"])
+                    params.extend([name, slugify(str(data.get("slug") or name))[:255].strip("-")])
+                if "image_url" in data:
+                    fields.append("image_url=%s"); params.append(image_url)
+                if "sort_order" in data:
+                    fields.append("sort_order=%s"); params.append(sort_order)
+                if "is_active" in data:
+                    if not isinstance(data["is_active"], bool):
+                        return Response({"detail": "is_active must be true or false."}, status=400)
+                    fields.append("is_active=%s"); params.append(data["is_active"])
+                if not fields:
+                    return Response({"detail": "Provide category fields to update."}, status=400)
+                params.append(category_id)
+                c.execute(
+                    f"update public.categories set {', '.join(fields)} where id=%s returning id,name,slug,image_url,sort_order,is_active",
+                    params,
+                )
+            row = c.fetchone()
+        if not row:
+            return Response({"detail": "Category not found."}, status=404)
+        return Response({"id": str(row[0]), "name": row[1], "slug": row[2], "image_url": row[3], "sort_order": row[4], "is_active": row[5]}, status=201 if request.method == "POST" else 200)
     except Exception:
-        return Response({"detail":"Category image could not be saved. Please retry."},status=503)
+        return Response({"detail": "Category could not be saved. Check for duplicate category names or slugs and retry."}, status=503)
+
+
+@api_view(["GET", "PATCH"])
+def manage_vendors(request):
+    user, prof, error = _role_user(request, {"admin"})
+    if error:
+        return error
+    if request.method == "GET":
+        try:
+            with connection.cursor() as c:
+                c.execute(
+                    """select v.id,v.owner_id,v.name,v.slug,v.description,v.logo_url,v.phone,v.address,
+                              v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone
+                       from public.vendors v
+                       left join public.profiles p on p.id=v.owner_id
+                       order by case v.status when 'pending' then 0 when 'approved' then 1 else 2 end, v.created_at desc
+                       limit 500"""
+                )
+                return Response({"results": _rows(c)})
+        except Exception:
+            return Response({"detail": "Vendor list could not be loaded."}, status=503)
+
+    vendor_id = str(request.data.get("id", "")).strip()
+    try:
+        uuid.UUID(vendor_id)
+    except (ValueError, TypeError, AttributeError):
+        return Response({"detail": "Choose a valid vendor."}, status=400)
+    status_value = str(request.data.get("status", "")).strip().lower()
+    if status_value not in {"pending", "approved", "rejected", "suspended"}:
+        return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
+    try:
+        with connection.cursor() as c:
+            c.execute("update public.vendors set status=%s where id=%s returning id,name,slug,status,owner_id", [status_value, vendor_id])
+            row = c.fetchone()
+        if not row:
+            return Response({"detail": "Vendor not found."}, status=404)
+        return Response({"id": str(row[0]), "name": row[1], "slug": row[2], "status": row[3], "owner_id": str(row[4]) if row[4] else None})
+    except Exception:
+        return Response({"detail": "Vendor status could not be updated."}, status=503)
 
 @api_view(["GET"])
 def products(request):
