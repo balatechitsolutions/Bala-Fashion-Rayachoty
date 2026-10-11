@@ -186,6 +186,10 @@ class VendorAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
         return image
 
 
+class CloudinaryUploadFailure(Exception):
+    """A safe-to-display failure while uploading an admin image to Cloudinary."""
+
+
 class CloudinaryUploadAdminMixin:
     upload_field = None
     url_field = None
@@ -204,16 +208,22 @@ class CloudinaryUploadAdminMixin:
                     "Image upload is not configured. Set the three Cloudinary credentials on Render."
                 )
             cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
-            result = cloudinary.uploader.upload(
-                uploaded,
-                folder=self.upload_folder,
-                resource_type="image",
-                allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
-            )
+            try:
+                result = cloudinary.uploader.upload(
+                    uploaded,
+                    folder=self.upload_folder,
+                    resource_type="image",
+                    allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
+                )
+            except (cloudinary.exceptions.Error, ValueError) as exc:
+                logger.exception("Cloudinary image upload failed.")
+                raise CloudinaryUploadFailure("Cloudinary could not upload the selected image.") from exc
             image_url = result.get("secure_url")
             uploaded_public_id = result.get("public_id")
             if not image_url or not uploaded_public_id:
-                raise cloudinary.exceptions.Error("Cloudinary response did not include the uploaded image URL and public ID.")
+                raise CloudinaryUploadFailure(
+                    "Cloudinary response did not include the uploaded image URL and public ID."
+                )
             setattr(obj, self.url_field, image_url)
             if self.public_id_field:
                 setattr(obj, self.public_id_field, uploaded_public_id)
@@ -242,7 +252,7 @@ class CloudinaryUploadAdminMixin:
             logger.exception("Admin save failed because of a database error.")
             messages.error(request, "The database could not save this record. Check backend logs and retry.")
             return redirect(request.path)
-        except cloudinary.exceptions.Error:
+        except CloudinaryUploadFailure:
             logger.exception("Cloudinary rejected or failed an admin image upload.")
             messages.error(
                 request,
