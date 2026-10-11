@@ -44,6 +44,24 @@ class EndpointTests(SimpleTestCase):
         self.assertIsNone(error)
         self.assertEqual(resolved_profile["role"],"vendor")
 
+    def test_admin_role_is_authorized_for_admin_endpoints(self):
+        req=self.factory.get("/api/seller/dashboard/",HTTP_AUTHORIZATION="Bearer test")
+        user={"id":"2d0f5b2c-cf10-463e-9190-ab2561a84229"}
+        profile={"id":user["id"],"full_name":"Admin","phone":"","role":"admin"}
+        with patch.object(views,"_user",return_value=(user,None)), patch.object(views,"_profile",return_value=profile):
+            resolved_user,resolved_profile,error=views._role_user(req,{"vendor","admin"})
+        self.assertIsNone(error)
+        self.assertEqual(resolved_profile["role"],"admin")
+
+    def test_vendor_role_is_authorized_for_seller_endpoints(self):
+        req=self.factory.get("/api/seller/dashboard/",HTTP_AUTHORIZATION="Bearer test")
+        user={"id":"52c1edcc-bc32-44f7-b37b-f3a454617265"}
+        profile={"id":user["id"],"full_name":"Seller","phone":"","role":"vendor"}
+        with patch.object(views,"_user",return_value=(user,None)), patch.object(views,"_profile",return_value=profile):
+            resolved_user,resolved_profile,error=views._role_user(req,{"vendor","admin"})
+        self.assertIsNone(error)
+        self.assertEqual(resolved_profile["role"],"vendor")
+
     def test_customer_cannot_access_seller_dashboard(self):
         req=self.factory.get("/api/seller/dashboard/",HTTP_AUTHORIZATION="Bearer test")
         user={"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}
