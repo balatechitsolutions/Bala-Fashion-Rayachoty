@@ -113,6 +113,18 @@ class EndpointTests(SimpleTestCase):
             response = views.manage_product(req)
         self.assertEqual(response.status_code, 403)
 
+    def test_manage_orders_requires_bearer(self):
+        response = views.manage_orders(self.factory.get("/api/orders/manage/"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_customer_cannot_manage_orders(self):
+        req = self.factory.get("/api/orders/manage/", HTTP_AUTHORIZATION="Bearer test")
+        user = {"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}
+        profile = {"id": user["id"], "full_name": "Customer", "phone": "", "role": "customer"}
+        with patch.object(views, "_user", return_value=(user, None)), patch.object(views, "_profile", return_value=profile):
+            response = views.manage_orders(req)
+        self.assertEqual(response.status_code, 403)
+
     def test_order_requires_address_and_items(self):
         req=self.factory.post("/api/orders/",{"items":[]},format="json",HTTP_AUTHORIZATION="Bearer test")
         with patch.object(views,"_user",return_value=({"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"},None)):
