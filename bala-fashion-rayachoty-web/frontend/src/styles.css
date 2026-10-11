@@ -1234,3 +1234,8 @@ footer a,footer button{color:#f6dfe8}
  .order-detail-image{width:44px;height:52px}
  .order-detail-item>strong{grid-column:2}
 }
+
+.order-detail-link{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;padding:0;color:#722d48;font-size:12px;font-weight:800;text-align:left}
+.order-detail-link:hover{text-decoration:underline;text-underline-offset:3px}
+.order-detail-link:focus-visible{outline:2px solid #b47b90;outline-offset:3px;border-radius:4px}
+.drawer-body.account-orders-panel,.drawer-body.order-detail-page{display:flex;flex-direction:column}
