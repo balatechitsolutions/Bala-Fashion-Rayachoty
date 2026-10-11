@@ -268,7 +268,7 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     form = CategoryAdminForm
     upload_field = "image_upload"
     url_field = "image_url"
-    upload_folder = "bala-fashion/categories"
+    upload_folder = "Bala_fashon_Rayachoty"
     list_display = ("thumbnail", "name", "sort_order", "is_active", "image_status")
     list_display_links = ("name",)
     list_editable = ("sort_order", "is_active")
@@ -288,7 +288,7 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
     @admin.display(description="Preview")
     def thumbnail(self, obj):
-        return format_html('<img src="{}" class="bf-thumbnail" alt="">', obj.image_url) if obj.image_url else "—"
+        return format_html('<img src="{}" alt="Category image" style="width:56px;height:56px;max-width:56px;max-height:56px;object-fit:contain;border-radius:8px;background:#f3f4f6;padding:4px;box-sizing:border-box;">', obj.image_url) if obj.image_url else "—"
 
     @admin.action(description="Activate selected categories")
     def activate(self, request, queryset):
@@ -315,7 +315,7 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     form = VendorAdminForm
     upload_field = "logo_upload"
     url_field = "logo_url"
-    upload_folder = "bala-fashion/vendor-logos"
+    upload_folder = "Bala_fashon_Rayachoty"
     list_display = ("thumbnail", "name", "status", "phone", "created_at")
     list_display_links = ("name",)
     list_editable = ("status",)
@@ -358,7 +358,7 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     upload_field = "image_upload"
     url_field = "image_url"
     public_id_field = "image_public_id"
-    upload_folder = "bala-fashion/products"
+    upload_folder = "Bala_fashon_Rayachoty"
     list_display = ("thumbnail", "name", "price", "stock_quantity", "category", "vendor", "is_active", "image_status")
     list_display_links = ("name",)
     list_per_page = 25
@@ -381,7 +381,7 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
     @admin.display(description="Preview")
     def thumbnail(self, obj):
-        return format_html('<img src="{}" class="bf-thumbnail" alt="">', obj.image_url) if obj.image_url else "—"
+        return format_html('<img src="{}" alt="Product image" style="width:56px;height:56px;max-width:56px;max-height:56px;object-fit:contain;border-radius:8px;background:#f3f4f6;padding:4px;box-sizing:border-box;">', obj.image_url) if obj.image_url else "—"
 
     @admin.action(description="Publish selected products")
     def publish(self, request, queryset):
