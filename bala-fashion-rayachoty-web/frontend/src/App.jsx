@@ -14,7 +14,8 @@ export default function App() {
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([])
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',notes:''})
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
- const [categoryForm,setCategoryForm]=useState({category_id:'',image_url:''})
+ const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
+ const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(!s)setProfile(null)});return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
@@ -59,15 +60,42 @@ export default function App() {
    notify('Category image uploaded')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
+ async function openCategoryManagement(){
+  if(!session)return login()
+  setDrawer('categories-manage');setCategoryForm({category_id:'',name:'',image_url:'',sort_order:'0'})
+  try{const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[])}
+  catch(e){notify(e.message)}
+ }
  async function saveCategoryImage(e){
   e.preventDefault();if(busy)return;if(!session)return login()
-  if(!categoryForm.category_id)return notify('Choose a category first.')
-  if(!categoryForm.image_url)return notify('Upload a category image first.')
+  if(!categoryForm.name.trim()&&!categoryForm.category_id)return notify('Enter a category name or choose a category to update.')
+  if(categoryForm.image_url&&!categoryForm.image_url.startsWith('https://res.cloudinary.com/'))return notify('Upload a category image through Cloudinary first.')
   setBusy(true)
   try{
-   await api('/categories/manage/',{method:'PATCH',token:session.access_token,body:JSON.stringify(categoryForm)})
-   await load();setDrawer('');notify('Category image saved')
+   const editing=Boolean(categoryForm.category_id)
+   const payload=editing
+    ? {id:categoryForm.category_id,name:categoryForm.name.trim(),image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
+    : {name:categoryForm.name.trim(),image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
+   await api('/categories/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
+   const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[])
+   await load();setCategoryForm({category_id:'',name:'',image_url:'',sort_order:'0'});notify(editing?'Category updated':'Category created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
+ }
+ async function deactivateCategory(cat){
+  if(!session)return login();setBusy(true)
+  try{await api('/categories/manage/?id='+encodeURIComponent(cat.id),{method:'DELETE',token:session.access_token});const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[]);await load();notify('Category deactivated')}
+  catch(e){notify(e.message)}finally{setBusy(false)}
+ }
+ async function openVendorManagement(){
+  if(!session)return login()
+  setDrawer('vendors-manage')
+  try{const data=await api('/vendors/manage/',{token:session.access_token});setAdminVendors(data.results||[])}
+  catch(e){notify(e.message)}
+ }
+ async function updateVendorStatus(vendor,status){
+  if(!session)return login();setBusy(true)
+  try{await api('/vendors/manage/',{method:'PATCH',token:session.access_token,body:JSON.stringify({id:vendor.id,status})});setAdminVendors(old=>old.map(v=>v.id===vendor.id?{...v,status}:v));await refreshSellerDashboard();notify('Vendor status updated')}
+  catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function refreshSellerDashboard(){
   if(!session)return login()
@@ -178,14 +206,15 @@ export default function App() {
     <button className={`mobile-nav-item${drawer==='account'?' active':''}`} onClick={openAccountEntry}><UserRound size={20}/><span>Account</span></button>
    </nav>
   </div>
-  {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders',account:'Account','categories-manage':'Manage category images'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
+  {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders',account:'Account','categories-manage':'Manage categories','vendors-manage':'Manage vendors'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><ShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><Minus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><Plus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1} onClick={()=>session?setDrawer('checkout'):login()}>Continue to checkout <ArrowRight size={16}/></button></div></>}</div>}
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}><p>Where should we deliver your order?</p>{[['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark'],['city','City'],['postal_code','PIN code']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark','postal_code'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}<label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label><div className="cod"><Check size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div><div className="summary"><div><span>Total</span><b>{money(subtotal)}</b></div><button className="primary full" disabled={busy}>{busy?'Placing order…':'Place COD order'} <ArrowRight size={16}/></button></div></form>}
    {drawer==='orders'&&<div className="drawer-body">{!session?<div className="empty"><p>Sign in to see your orders.</p><button className="primary" onClick={login}>Continue with Google</button></div>:!orders.length?<div className="empty"><h3>No orders yet</h3><button className="secondary" onClick={getOrders}>Refresh orders</button></div>:orders.map(o=><div className="order" key={o.id}><div><b>{o.order_number}</b><small>{o.status?.replaceAll('_',' ')}</small></div><p>{new Date(o.created_at).toLocaleDateString('en-IN')} · COD</p><strong>{money(o.total)}</strong></div>)}</div>}
-   {drawer==='account'&&<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={openSellerDashboard}><LayoutDashboard size={16}/> Seller dashboard</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={()=>{setCategoryForm({category_id:'',image_url:''});setDrawer('categories-manage')}}>Manage category images</button>}<button className="text" onClick={logout}>Sign out</button></div>}
+   {drawer==='account'&&<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={openSellerDashboard}><LayoutDashboard size={16}/> Seller dashboard</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={openCategoryManagement}>Manage categories</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button>}<button className="text" onClick={logout}>Sign out</button></div>}
    {drawer==='seller-dashboard'&&<div className="drawer-body seller-dashboard">
     <div className="seller-dashboard-head"><div><b>{profile?.role==='admin'?'Management dashboard':'Seller dashboard'}</b><small>{sellerDashboard?.stores?.length||0} store(s) available to your account</small></div><div className="seller-dashboard-head-actions"><button className="secondary" onClick={refreshSellerDashboard} disabled={dashboardLoading}>{dashboardLoading?'Refreshing…':'Refresh'}</button><button className="secondary" onClick={logout}>Sign out</button></div></div>
     {dashboardLoading&&!sellerDashboard?<p>Loading your dashboard…</p>:<>
+     {profile?.role==='admin'&&<div className="seller-admin-actions"><button className="primary" onClick={openCategoryManagement}><Grid2X2 size={16}/> Manage categories</button><button className="secondary" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button></div>}
      <div className="seller-stat-grid"><div><b>{sellerDashboard?.stats?.products??0}</b><small>Products</small></div><div><b>{sellerDashboard?.stats?.active_products??0}</b><small>Published</small></div><div><b>{sellerDashboard?.stats?.low_stock??0}</b><small>Low stock</small></div><div><b>{sellerDashboard?.stats?.orders??0}</b><small>Recent orders</small></div></div>
      {sellerDashboard?.stores?.length>0&&<section className="seller-dashboard-section"><h3>{profile?.role==='admin'?'Stores you can manage':'Your store'}</h3>{sellerDashboard.stores.map(store=><div className="seller-store-row" key={store.id}><span><b>{store.name}</b><small>{store.slug}</small></span><span className={'seller-status '+store.status}>{store.status}</span></div>)}</section>}
      <section className="seller-dashboard-section"><div className="seller-section-title"><h3>Product inventory</h3><button className="primary" onClick={startNewProduct} disabled={!sellerDashboard?.stores?.some(s=>s.status==='approved')}> <Plus size={15}/> Add product</button></div>
@@ -194,13 +223,23 @@ export default function App() {
      <section className="seller-dashboard-section"><h3>Recent orders</h3>{!sellerDashboard?.orders?.length?<p className="seller-empty">No orders yet.</p>:sellerDashboard.orders.slice(0,10).map(order=><div className="seller-order-row" key={order.id}><span><b>{order.order_number}</b><small>{order.vendor_name} · {new Date(order.created_at).toLocaleDateString('en-IN')}</small></span><span><b>{money(order.total)}</b><small>{String(order.status||'').replaceAll('_',' ')}</small></span></div>)}</section>
     </>}
    </div>}
-   {drawer==='categories-manage'&&<form className="drawer-body form" onSubmit={saveCategoryImage}>
-    <p>Upload a category image to show it on the storefront. Only administrators can save these changes.</p>
-    <label>Category<select required value={categoryForm.category_id} onChange={e=>{const selected=categories.find(c=>c.id===e.target.value);setCategoryForm({category_id:e.target.value,image_url:selected?.image_url||''})}}><option value="">Choose category</option>{categories.filter(c=>c.slug!=='all'&&c.id).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-    <label>Category image (Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadCategoryImage(e.target.files?.[0])}/></label>
-    {categoryForm.image_url&&<img className="upload-preview" src={categoryForm.image_url} alt="Category image preview"/>}
-    <button className="primary full" disabled={busy||!categoryForm.category_id||!categoryForm.image_url}>{busy?'Saving…':'Save category image'}</button>
-   </form>}
+   {drawer==='categories-manage'&&<div className="drawer-body form">
+    <p>Create categories, edit their names and sort order, update category images, or deactivate categories. Existing product references are preserved.</p>
+    <form className="form" onSubmit={saveCategoryImage}>
+     <h3>{categoryForm.category_id?'Edit category':'Add category'}</h3>
+     <label>Category name<input required value={categoryForm.name} onChange={e=>setCategoryForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Western Wear"/></label>
+     <label>Sort order<input type="number" step="1" value={categoryForm.sort_order} onChange={e=>setCategoryForm(p=>({...p,sort_order:e.target.value}))}/></label>
+     <label>Category image (optional, Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadCategoryImage(e.target.files?.[0])}/></label>
+     {categoryForm.image_url&&<img className="upload-preview" src={categoryForm.image_url} alt="Category image preview"/>}
+     <div className="form-two"><button className="primary full" disabled={busy||!categoryForm.name.trim()}>{busy?'Saving…':categoryForm.category_id?'Save category':'Create category'}</button><button type="button" className="secondary full" onClick={()=>setCategoryForm({category_id:'',name:'',image_url:'',sort_order:'0'})}>Clear</button></div>
+    </form>
+    <section className="seller-dashboard-section"><h3>All categories</h3>{!adminCategories.length?<p className="seller-empty">No categories found.</p>:adminCategories.map(cat=><article className="seller-store-row" key={cat.id}><span><b>{cat.name}</b><small>{cat.slug} · sort {cat.sort_order} · {cat.is_active?'Active':'Inactive'}</small></span><span className="seller-product-actions"><button className="secondary" onClick={()=>setCategoryForm({category_id:cat.id,name:cat.name,image_url:cat.image_url||'',sort_order:String(cat.sort_order??0)})}><Pencil size={15}/></button>{cat.is_active&&<button className="secondary" disabled={busy} onClick={()=>deactivateCategory(cat)}>Deactivate</button>}</span></article>)}</section>
+   </div>}
+   {drawer==='vendors-manage'&&<div className="drawer-body seller-dashboard">
+    <div className="seller-section-title"><h3>Vendor management</h3><button className="secondary" onClick={openVendorManagement}>Refresh</button></div>
+    <p>Approve new vendor stores, reject applications, or suspend and reinstate vendor access.</p>
+    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions">{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}</div></article>)}
+   </div>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
     <label>Description<textarea rows="3" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/></label>
