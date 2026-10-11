@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, Grid2X2, Home, Menu, Minus, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
 
@@ -15,6 +15,7 @@ export default function App() {
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',notes:''})
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',image_url:''})
+ const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(!s)setProfile(null)});return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(!session){setProfile(null);return}api('/profile/',{token:session.access_token}).then(setProfile).catch(()=>setProfile({role:'customer'}))},[session])
  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
@@ -68,12 +69,40 @@ export default function App() {
    await load();setDrawer('');notify('Category image saved')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
+ async function refreshSellerDashboard(){
+  if(!session)return login()
+  setDashboardLoading(true)
+  try{const data=await api('/seller/dashboard/',{token:session.access_token});setSellerDashboard(data);return data}
+  catch(e){notify(e.message);return null}finally{setDashboardLoading(false)}
+ }
+ async function openSellerDashboard(){
+  if(!session)return login()
+  setDrawer('seller-dashboard')
+  const data=await refreshSellerDashboard()
+  if(data?.role==='vendor'&&!data.stores?.length)notify('Your seller account has no approved store yet. Contact the administrator.')
+ }
+ function startNewProduct(){
+  const firstStore=sellerDashboard?.stores?.find(s=>s.status==='approved')
+  setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+  setDrawer('manage')
+ }
+ function startEditProduct(product){
+  setProductForm({id:product.id,name:product.name||'',description:product.description||'',price:String(product.price??''),compare_at_price:product.compare_at_price==null?'':String(product.compare_at_price),category_id:product.category_id||'',vendor_id:product.vendor_id||'',image_url:product.image_url||'',image_public_id:product.image_public_id||'',sizes:(product.sizes||[]).join(','),colors:(product.colors||[]).join(','),stock_quantity:String(product.stock_quantity??0)})
+  setDrawer('manage')
+ }
+ async function hideProduct(product){
+  if(!session)return login()
+  setBusy(true)
+  try{await api('/products/manage/?id='+encodeURIComponent(product.id),{method:'DELETE',token:session.access_token});notify('Product unpublished');await refreshSellerDashboard();await load()}
+  catch(e){notify(e.message)}finally{setBusy(false)}
+ }
  async function saveProduct(e){
   e.preventDefault();if(busy)return;if(!session)return login();setBusy(true)
   try{
-   await api('/products/manage/',{method:'POST',token:session.access_token,body:JSON.stringify({...productForm,price:Number(productForm.price),compare_at_price:productForm.compare_at_price?Number(productForm.compare_at_price):null,stock_quantity:Number(productForm.stock_quantity),sizes:productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean),colors:productForm.colors.split(',').map(x=>x.trim()).filter(Boolean)})})
+   const payload={...productForm,price:Number(productForm.price),compare_at_price:productForm.compare_at_price?Number(productForm.compare_at_price):null,stock_quantity:Number(productForm.stock_quantity),sizes:productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean),colors:productForm.colors.split(',').map(x=>x.trim()).filter(Boolean)}
+   await api('/products/manage/',{method:productForm.id?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
-   await load();setDrawer('');notify('Product saved')
+   await load();await refreshSellerDashboard();setDrawer('seller-dashboard');notify(productForm.id?'Product updated':'Product created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function place(e){e.preventDefault();if(busy)return;if(!session)return login();if(vendors.length>1)return notify('Checkout one seller at a time.');setBusy(true);try{const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})});setCart([]);setOrders(o=>[r,...o]);setDrawer('orders');notify(`Order ${r.order_number} placed`)}catch(err){notify(err.message)}finally{setBusy(false)}}
@@ -132,7 +161,18 @@ export default function App() {
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><ShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><Minus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><Plus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1} onClick={()=>session?setDrawer('checkout'):login()}>Continue to checkout <ArrowRight size={16}/></button></div></>}</div>}
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}><p>Where should we deliver your order?</p>{[['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark'],['city','City'],['postal_code','PIN code']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark','postal_code'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}<label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label><div className="cod"><Check size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div><div className="summary"><div><span>Total</span><b>{money(subtotal)}</b></div><button className="primary full" disabled={busy}>{busy?'Placing order…':'Place COD order'} <ArrowRight size={16}/></button></div></form>}
    {drawer==='orders'&&<div className="drawer-body">{!session?<div className="empty"><p>Sign in to see your orders.</p><button className="primary" onClick={login}>Continue with Google</button></div>:!orders.length?<div className="empty"><h3>No orders yet</h3><button className="secondary" onClick={getOrders}>Refresh orders</button></div>:orders.map(o=><div className="order" key={o.id}><div><b>{o.order_number}</b><small>{o.status?.replaceAll('_',' ')}</small></div><p>{new Date(o.created_at).toLocaleDateString('en-IN')} · COD</p><strong>{money(o.total)}</strong></div>)}</div>}
-   {drawer==='account'&&<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={()=>setDrawer('manage')}>Manage products</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={()=>{setCategoryForm({category_id:'',image_url:''});setDrawer('categories-manage')}}>Manage category images</button>}<button className="text" onClick={logout}>Sign out</button></div>}
+   {drawer==='account'&&<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={openSellerDashboard}><LayoutDashboard size={16}/> Seller dashboard</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={()=>{setCategoryForm({category_id:'',image_url:''});setDrawer('categories-manage')}}>Manage category images</button>}<button className="text" onClick={logout}>Sign out</button></div>}
+   {drawer==='seller-dashboard'&&<div className="drawer-body seller-dashboard">
+    <div className="seller-dashboard-head"><div><b>{profile?.role==='admin'?'Management dashboard':'Seller dashboard'}</b><small>{sellerDashboard?.stores?.length||0} store(s) available to your account</small></div><button className="secondary" onClick={refreshSellerDashboard} disabled={dashboardLoading}>{dashboardLoading?'Refreshing…':'Refresh'}</button></div>
+    {dashboardLoading&&!sellerDashboard?<p>Loading your dashboard…</p>:<>
+     <div className="seller-stat-grid"><div><b>{sellerDashboard?.stats?.products??0}</b><small>Products</small></div><div><b>{sellerDashboard?.stats?.active_products??0}</b><small>Published</small></div><div><b>{sellerDashboard?.stats?.low_stock??0}</b><small>Low stock</small></div><div><b>{sellerDashboard?.stats?.orders??0}</b><small>Recent orders</small></div></div>
+     {sellerDashboard?.stores?.length>0&&<section className="seller-dashboard-section"><h3>{profile?.role==='admin'?'Stores you can manage':'Your store'}</h3>{sellerDashboard.stores.map(store=><div className="seller-store-row" key={store.id}><span><b>{store.name}</b><small>{store.slug}</small></span><span className={'seller-status '+store.status}>{store.status}</span></div>)}</section>}
+     <section className="seller-dashboard-section"><div className="seller-section-title"><h3>Product inventory</h3><button className="primary" onClick={startNewProduct} disabled={!sellerDashboard?.stores?.some(s=>s.status==='approved')}> <Plus size={15}/> Add product</button></div>
+      {!sellerDashboard?.products?.length?<p className="seller-empty">No products in your managed stores yet.</p>:sellerDashboard.products.map(product=><article className="seller-product-row" key={product.id}><div className="seller-product-thumb">{product.image_url?<img src={product.image_url} alt={product.name}/>:<span>BF</span>}</div><div className="seller-product-main"><b>{product.name}</b><small>{product.vendor_name||'Store'} · {product.category_name||'Uncategorized'}</small><strong>{money(product.price)} · Stock {product.stock_quantity}</strong><span className={'seller-status '+(product.is_active?'approved':'suspended')}>{product.is_active?'Published':'Hidden'}</span></div><div className="seller-product-actions"><button className="secondary" aria-label={'Edit '+product.name} onClick={()=>startEditProduct(product)}><Pencil size={15}/></button>{product.is_active&&<button className="secondary" aria-label={'Unpublish '+product.name} onClick={()=>hideProduct(product)} disabled={busy}><EyeOff size={15}/></button>}</div></article>)}
+     </section>
+     <section className="seller-dashboard-section"><h3>Recent orders</h3>{!sellerDashboard?.orders?.length?<p className="seller-empty">No orders yet.</p>:sellerDashboard.orders.slice(0,10).map(order=><div className="seller-order-row" key={order.id}><span><b>{order.order_number}</b><small>{order.vendor_name} · {new Date(order.created_at).toLocaleDateString('en-IN')}</small></span><span><b>{money(order.total)}</b><small>{String(order.status||'').replaceAll('_',' ')}</small></span></div>)}</section>
+    </>}
+   </div>}
    {drawer==='categories-manage'&&<form className="drawer-body form" onSubmit={saveCategoryImage}>
     <p>Upload a category image to show it on the storefront. Only administrators can save these changes.</p>
     <label>Category<select required value={categoryForm.category_id} onChange={e=>{const selected=categories.find(c=>c.id===e.target.value);setCategoryForm({category_id:e.target.value,image_url:selected?.image_url||''})}}><option value="">Choose category</option>{categories.filter(c=>c.slug!=='all'&&c.id).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
@@ -140,16 +180,16 @@ export default function App() {
     {categoryForm.image_url&&<img className="upload-preview" src={categoryForm.image_url} alt="Category image preview"/>}
     <button className="primary full" disabled={busy||!categoryForm.category_id||!categoryForm.image_url}>{busy?'Saving…':'Save category image'}</button>
    </form>}
-   {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>Add a product to your approved store.</p>
+   {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
     <label>Description<textarea rows="3" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/></label>
-    <label>Approved vendor ID<input required value={productForm.vendor_id} onChange={e=>setProductForm({...productForm,vendor_id:e.target.value})} placeholder="Vendor UUID"/></label>
+    {profile?.role==='admin'?<label>Store<select required value={productForm.vendor_id} onChange={e=>setProductForm({...productForm,vendor_id:e.target.value})}><option value="">Choose approved store</option>{(sellerDashboard?.stores||[]).filter(s=>s.status==='approved').map(store=><option key={store.id} value={store.id}>{store.name}</option>)}</select></label>:<div className="seller-store-note">Store: <b>{sellerDashboard?.stores?.find(s=>s.id===productForm.vendor_id)?.name||sellerDashboard?.stores?.[0]?.name||'Your approved store'}</b><small>The server assigns products to your own approved store.</small></div>}
     <label>Category<select required value={productForm.category_id} onChange={e=>setProductForm({...productForm,category_id:e.target.value})}><option value="">Choose category</option>{categories.filter(c=>c.slug!=='all').map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
     <div className="form-two"><label>Price (₹)<input required type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})}/></label><label>Compare price<input type="number" min="0" step="0.01" value={productForm.compare_at_price} onChange={e=>setProductForm({...productForm,compare_at_price:e.target.value})}/></label></div>
     <label>Product image (Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadImage(e.target.files?.[0])}/></label>{productForm.image_url&&<img className="upload-preview" src={productForm.image_url} alt="Uploaded product preview"/>}
     <label>Sizes (comma separated)<input value={productForm.sizes} onChange={e=>setProductForm({...productForm,sizes:e.target.value})}/></label><label>Colours (comma separated)<input value={productForm.colors} onChange={e=>setProductForm({...productForm,colors:e.target.value})}/></label>
     <label>Stock quantity<input required type="number" min="0" value={productForm.stock_quantity} onChange={e=>setProductForm({...productForm,stock_quantity:e.target.value})}/></label>
-    <button className="primary full" disabled={busy}>{busy?'Saving…':'Save product'}</button></form>}
+    <button className="primary full" disabled={busy}>{busy?'Saving…':(productForm.id?'Update product':'Save product')}</button><button type="button" className="secondary full" onClick={()=>setDrawer('seller-dashboard')}>Cancel</button></form>}
   </aside></div>}
   {selected&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setSelected(null)}><section className="modal"><button className="icon close" onClick={()=>setSelected(null)}><X/></button><div className="modal-photo">{selected.image_url?<img src={selected.image_url} alt={selected.name} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}</div><div className="modal-info"><div className="eyebrow muted">{selected.category_name||'CURATED STYLE'}</div><h2>{selected.name}</h2><small>Sold by {selected.vendor_name||'a local seller'}</small><h3>{money(selected.price)} {selected.compare_at_price&&<del>{money(selected.compare_at_price)}</del>}</h3><p>{selected.description||'A thoughtfully selected piece for your wardrobe.'}</p>{selected.sizes?.length>0&&<div className="options"><b>Choose size</b><div>{selected.sizes.map(s=><button className={size===s?'selected':''} key={s} onClick={()=>setSize(s)}>{s}</button>)}</div></div>}{selected.colors?.length>0&&<div className="options"><b>Choose colour</b><div>{selected.colors.map(c=><button className={color===c?'selected':''} key={c} onClick={()=>setColor(c)}>{c}</button>)}</div></div>}<button className="primary full" disabled={busy||Number(selected.stock_quantity??selected.stock??0)<1} onClick={()=>add(selected,size,color)}><ShoppingBag size={16}/> {Number(selected.stock_quantity??selected.stock??0)<1?'Currently unavailable':`Add to bag — ${money(selected.price)}`}</button><small className="delivery"><Truck size={14}/> Local delivery · Cash on delivery</small></div></section></div>}
   {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
