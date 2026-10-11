@@ -156,11 +156,11 @@ class EndpointTests(SimpleTestCase):
             (order_id, "out_for_delivery", "cod", "pending"),
             (order_id, "BFR-TEST123", "delivered", "paid", "1499.00", datetime.now(timezone.utc)),
         ]
-        with patch.object(views, "_user", return_value=(user, None)), \\
-             patch.object(views, "_profile", return_value=profile), \\
-             patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))), \\
-             patch.object(views.transaction, "atomic", return_value=nullcontext()):
-            response = views.manage_orders(req)
+        with patch.object(views, "_user", return_value=(user, None)):
+            with patch.object(views, "_profile", return_value=profile):
+                with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+                    with patch.object(views.transaction, "atomic", return_value=nullcontext()):
+                        response = views.manage_orders(req)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "delivered")
