@@ -372,7 +372,7 @@ def manage_orders(request):
                 with connection.cursor() as c:
                     if prof["role"] == "vendor":
                         c.execute(
-                            """select o.id, o.status
+                            """select o.id, o.status, o.payment_method, o.payment_status
                                from public.orders o
                                join public.vendors v on v.id=o.vendor_id
                                where o.id=%s and v.owner_id=%s and v.status='approved'
@@ -380,7 +380,7 @@ def manage_orders(request):
                             [order_id, user["id"]],
                         )
                     else:
-                        c.execute("select id, status from public.orders where id=%s for update", [order_id])
+                        c.execute("select id, status, payment_method, payment_status from public.orders where id=%s for update", [order_id])
                     current = c.fetchone()
                     if not current:
                         return Response({"detail": "Order not found or you do not have permission to manage it."}, status=404)
@@ -400,10 +400,17 @@ def manage_orders(request):
                             status=409,
                         )
                     c.execute(
-                        """update public.orders set status=%s, updated_at=now()
+                        """update public.orders
+                           set status=%s,
+                               payment_status=case
+                                   when %s='delivered' and payment_method='cod' and payment_status='pending'
+                                   then 'paid'
+                                   else payment_status
+                               end,
+                               updated_at=now()
                            where id=%s
                            returning id, order_number, status, payment_status, total, created_at""",
-                        [status_value, order_id],
+                        [status_value, status_value, order_id],
                     )
                     row = c.fetchone()
             return Response({
