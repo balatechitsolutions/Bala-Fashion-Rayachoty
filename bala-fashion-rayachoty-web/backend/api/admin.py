@@ -173,6 +173,7 @@ class CloudinaryUploadAdminMixin:
 
 @admin.register(Category)
 class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
+    change_form_template = "admin/change_form.html"
     form = CategoryAdminForm
     upload_field = "image_upload"
     url_field = "image_url"
@@ -220,6 +221,7 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
 @admin.register(Vendor)
 class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
+    change_form_template = "admin/change_form.html"
     form = VendorAdminForm
     upload_field = "logo_upload"
     url_field = "logo_url"
@@ -270,6 +272,7 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
+    change_form_template = "admin/change_form.html"
     form = ProductAdminForm
     upload_field = "image_upload"
     url_field = "image_url"
