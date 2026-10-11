@@ -1085,3 +1085,5 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .notification-popover-foot{display:flex;justify-content:center;padding:12px 16px;border-top:1px solid #eee7df;background:#fffdfa;font-size:11px;color:#82766c}
 @media(max-width:760px){.notification-bell{width:36px;height:36px;border-radius:10px}.notification-popover{right:-54px;top:calc(100% + 10px);width:min(350px,calc(100vw - 20px))}.app-topbar{gap:9px}.notification-count{top:-5px;right:-5px}}
 @media(max-width:380px){.notification-bell{width:32px;height:32px}.notification-popover{right:-48px}}
+
+.notification-area{order:2}.app-account-button{order:3}
