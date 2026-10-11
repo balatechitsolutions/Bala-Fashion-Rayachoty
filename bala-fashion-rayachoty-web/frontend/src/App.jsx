@@ -23,9 +23,60 @@ export default function App() {
  useEffect(()=>{if(!supabase)return;let active=true,authEventReceived=false;const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){notify('Could not restore your sign-in session. Please sign in again.');return}if(data?.session)setSession(data.session);else if(!authEventReceived)setSession(null)}catch{if(active&&!authEventReceived)setSession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{authEventReceived=true;if(!active)return;if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}setSession(nextSession||null);if(!nextSession)setProfile(null)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';if(location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical){location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
+ useEffect(()=>{
+  const userId=session?.user?.id
+  if(!userId){setNotifications([]);setNotificationOpen(false);setPushEnabled(false);return}
+  try{
+   const saved=JSON.parse(localStorage.getItem('bala:notifications:'+userId)||'[]')
+   setNotifications(Array.isArray(saved)?saved:[])
+   setPushEnabled(Boolean(localStorage.getItem('bala:push-enabled:'+userId)))
+  }catch{setNotifications([]);setPushEnabled(false)}
+ },[session?.user?.id])
+ useEffect(()=>{
+  const userId=session?.user?.id
+  if(!userId)return
+  let active=true,unsubscribe=()=>{}
+  subscribeToFirebaseMessages(payload=>{
+   if(!active)return
+   const message=payload?.notification||{},data=payload?.data||{}
+   const item={id:data.notificationId||String(Date.now())+'-'+Math.random().toString(36).slice(2,8),title:message.title||data.title||'Bala Fashion update',body:message.body||data.body||'You have a new notification.',createdAt:new Date().toISOString(),read:false,url:data.url||''}
+   setNotifications(previous=>{
+    const next=[item,...previous.filter(n=>n.id!==item.id)].slice(0,50)
+    try{localStorage.setItem('bala:notifications:'+userId,JSON.stringify(next))}catch{}
+    return next
+   })
+   if('Notification' in window&&Notification.permission==='granted'&&document.visibilityState==='visible')notify(item.title)
+  }).then(stop=>{if(active)unsubscribe=stop;else stop()}).catch(error=>console.warn('Firebase messaging unavailable:',error))
+  return()=>{active=false;unsubscribe()}
+ },[session?.user?.id])
  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
  async function load(signal){setLoading(true);try{const q=new URLSearchParams();if(category!=='all')q.set('category',category);if(search.trim())q.set('search',search.trim());const [p,c]=await Promise.all([api(`/products/?${q}`,{signal}),api('/categories/',{signal}).catch(e=>{if(e.name==='AbortError')throw e;return defaultCats.slice(1)})]);setProducts(Array.isArray(p.results)?p.results:Array.isArray(p)?p:[]);setCategories([defaultCats[0],...c]);setError('')}catch(e){if(e.name!=='AbortError'){setProducts([]);setError('We could not load the live catalog. Check your connection and try again.')}}finally{if(!signal?.aborted)setLoading(false)}}
  function notify(t){setToast(t);window.setTimeout(()=>setToast(''),2600)}
+ const unreadNotificationCount=notifications.filter(item=>!item.read).length
+ function persistNotifications(next){
+  setNotifications(next)
+  const userId=session?.user?.id
+  if(userId){try{localStorage.setItem('bala:notifications:'+userId,JSON.stringify(next))}catch{}}
+ }
+ function openNotifications(){
+  if(!session){setDrawer('account');notify('Sign in to view your notifications.');return}
+  setNotificationOpen(value=>!value)
+ }
+ async function enablePush(){
+  if(!session){setDrawer('account');notify('Sign in to enable notifications.');return}
+  if(!firebaseConfigured){notify('Firebase is not configured yet. Add the VITE_FIREBASE settings in Vercel.');return}
+  setPushEnabling(true)
+  try{
+   const token=await enableFirebaseNotifications()
+   localStorage.setItem('bala:fcm-token:'+session.user.id,token)
+   localStorage.setItem('bala:push-enabled:'+session.user.id,'1')
+   setPushEnabled(true)
+   notify('Push notifications enabled on this device.')
+  }catch(error){notify(error.message||'Could not enable notifications.')}
+  finally{setPushEnabling(false)}
+ }
+ function markNotificationRead(id){persistNotifications(notifications.map(item=>item.id===id?{...item,read:true}:item))}
+ function markAllNotificationsRead(){persistNotifications(notifications.map(item=>({...item,read:true})))}
  async function login(){if(!supabase)return notify('Set Supabase frontend environment variables first.');const {error}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:'https://bala-fashion-rayachoty-omega.vercel.app'}});if(error)notify(error.message)}
  async function submitEmailAuth(e){e.preventDefault();if(!supabase)return notify('Set Supabase frontend environment variables first.');setAuthSubmitting(true);try{if(authMode==='reset'){const {data,error}=await supabase.auth.updateUser({password:authPassword});if(error)throw error;setAuthPassword('');setAuthMode('signin');setDrawer('');notify('Password updated successfully. You are signed in.');return}if(authMode==='signup'){const {data,error}=await supabase.auth.signUp({email:authEmail.trim(),password:authPassword,options:{emailRedirectTo:'https://bala-fashion-rayachoty-omega.vercel.app'}});if(error)throw error;if(data.session){setSession(data.session);setDrawer('');notify('Account created and signed in.')}else notify('Account created. Check your email to confirm your address, then sign in.')}else{const {data,error}=await supabase.auth.signInWithPassword({email:authEmail.trim(),password:authPassword});if(error)throw error;setSession(data.session);setDrawer('');notify('Signed in successfully.')}}catch(e){notify(e.message||'Authentication failed. Please try again.')}finally{setAuthSubmitting(false)}}
  async function sendPasswordReset(e){e.preventDefault();if(!supabase)return notify('Set Supabase frontend environment variables first.');if(!authEmail.trim())return notify('Enter your email address first.');setAuthSubmitting(true);try{const {error}=await supabase.auth.resetPasswordForEmail(authEmail.trim(),{redirectTo:'https://bala-fashion-rayachoty-omega.vercel.app'});if(error)throw error;notify('If an account exists for that email, a password reset link has been sent. Check your inbox and spam folder.');setAuthMode('signin')}catch(e){notify(e.message||'Could not send the reset email. Please try again.')}finally{setAuthSubmitting(false)}}
