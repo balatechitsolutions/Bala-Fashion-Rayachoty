@@ -181,7 +181,7 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     list_display_links = ("name",)
     list_editable = ("sort_order", "is_active")
     list_per_page = 25
-    save_on_top = True
+    save_on_top = False
     actions = ("activate", "deactivate")
     list_filter = ("is_active", "created_at")
     search_fields = ("name", "slug")
@@ -228,7 +228,7 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     list_display_links = ("name",)
     list_editable = ("status",)
     list_per_page = 25
-    save_on_top = True
+    save_on_top = False
     actions = ("approve", "suspend")
     list_filter = ("status", "created_at")
     search_fields = ("name", "slug", "phone", "address")
@@ -278,7 +278,7 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     list_display = ("thumbnail", "name", "price", "stock_quantity", "category", "vendor", "is_active", "image_status")
     list_display_links = ("name",)
     list_per_page = 25
-    save_on_top = True
+    save_on_top = False
     actions = ("publish", "hide", "zero_stock")
     list_filter = ("is_active", "category", "vendor", "created_at")
     search_fields = ("name", "slug", "description", "sku")
