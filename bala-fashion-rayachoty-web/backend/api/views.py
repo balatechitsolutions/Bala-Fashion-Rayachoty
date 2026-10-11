@@ -323,7 +323,7 @@ def orders(request):
     if request.method=="GET":
         try:
             with connection.cursor() as c:
-                c.execute("""select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.subtotal,o.delivery_fee,o.total,o.created_at,coalesce(json_agg(json_build_object('product_name',oi.product_name,'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,'color',oi.color,'line_total',oi.line_total)) filter(where oi.id is not null),'[]'::json) as items from public.orders o left join public.order_items oi on oi.order_id=o.id where o.customer_id=%s group by o.id order by o.created_at desc limit 50""",[user["id"]])
+                c.execute("""select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.subtotal,o.delivery_fee,o.total,o.created_at,o.address_snapshot,o.notes,coalesce(json_agg(json_build_object('product_id',oi.product_id,'product_name',oi.product_name,'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,'color',oi.color,'unit_price',oi.unit_price,'line_total',oi.line_total)) filter(where oi.id is not null),'[]'::json) as items from public.orders o left join public.order_items oi on oi.order_id=o.id where o.customer_id=%s group by o.id order by o.created_at desc limit 50""",[user["id"]])
                 rows=_rows(c)
             return Response({"results":rows,"count":len(rows)})
         except Exception:return Response({"detail":"Order history is unavailable."},status=503)
@@ -635,10 +635,12 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
-                          v.name as vendor_name,
+                          v.name as vendor_name,o.payment_method,o.subtotal,o.delivery_fee,
+                          o.address_snapshot,o.notes,
                           coalesce(json_agg(json_build_object(
-                            'product_name',oi.product_name,'quantity',oi.quantity,
-                            'size',oi.size,'color',oi.color,'line_total',oi.line_total
+                            'product_id',oi.product_id,'product_name',oi.product_name,
+                            'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,
+                            'color',oi.color,'unit_price',oi.unit_price,'line_total',oi.line_total
                           )) filter(where oi.id is not null),'[]'::json) as items
                    from public.orders o
                    join public.vendors v on v.id=o.vendor_id
