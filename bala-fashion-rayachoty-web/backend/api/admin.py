@@ -206,9 +206,20 @@ class CloudinaryUploadAdminMixin:
                     resource_type="image",
                     allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
                 )
-            except (cloudinary.exceptions.Error, ValueError) as exc:
-                logger.exception("Cloudinary image upload failed.")
-                raise CloudinaryUploadFailure("Cloudinary could not upload the selected image.") from exc
+            except Exception as exc:
+                # Cloudinary can fail with SDK errors, HTTP errors, timeouts,
+                # DNS failures, or connection errors. Handle all upload failures
+                # through Django Admin messaging instead of returning an unhandled 500.
+                logger.error(
+                    "Cloudinary image upload failed (%s): %s",
+                    type(exc).__name__,
+                    str(exc)[:500],
+                    exc_info=True,
+                )
+                raise CloudinaryUploadFailure(
+                    "Image upload failed. Check the Cloudinary credentials and the latest "
+                    "Render application logs for the exact cause. The record was not saved."
+                ) from exc
             image_url = result.get("secure_url")
             uploaded_public_id = result.get("public_id")
             if not image_url or not uploaded_public_id:
