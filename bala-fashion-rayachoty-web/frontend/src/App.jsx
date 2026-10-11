@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
+import { ArrowRight, Bell, Check, ChevronDown, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
+import { enableFirebaseNotifications, firebaseConfigured, subscribeToFirebaseMessages } from './firebase'
 
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
@@ -12,6 +13,7 @@ export default function App() {
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[search,setSearch]=useState(''),[category,setCategory]=useState('all')
  const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState('')
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([])
+ const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false),[pushEnabling,setPushEnabling]=useState(false),[pushEnabled,setPushEnabled]=useState(false)
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',notes:''})
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
