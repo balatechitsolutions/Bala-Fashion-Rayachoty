@@ -953,3 +953,13 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .app-main { padding-right: 22px; padding-left: 22px; }
   .app-page .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
 }
+
+/* Render the same original Cloudinary product image across cards, details and cart.
+   Contain keeps full garments/logos visible instead of cropping their edges. */
+.photo img,
+.modal-photo img,
+.cart-item > img {
+  object-fit: contain;
+  object-position: center;
+  background: #f0e8df;
+}
