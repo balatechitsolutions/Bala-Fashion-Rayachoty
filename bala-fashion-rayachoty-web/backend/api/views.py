@@ -177,7 +177,10 @@ def upload_signature(request):
     if error:return error
     if not all([CLOUD_NAME,CLOUD_KEY,CLOUD_SECRET]):return Response({"detail":"Cloudinary credentials are not configured on the backend."},status=503)
     folder=str(request.data.get("folder","bala-fashion/products"))[:100]
-    if not folder.startswith("bala-fashion/"):return Response({"detail":"Invalid upload folder."},status=400)
+    if folder not in {"bala-fashion/products","bala-fashion/categories"}:
+        return Response({"detail":"Invalid upload folder."},status=400)
+    if prof["role"] == "vendor" and folder != "bala-fashion/products":
+        return Response({"detail":"Sellers can upload product images only."},status=403)
     import time
     params={"timestamp":int(time.time()),"folder":folder}
     return Response({"cloud_name":CLOUD_NAME,"api_key":CLOUD_KEY,"params":params,"signature":api_sign_request(params,CLOUD_SECRET)})
@@ -216,7 +219,7 @@ def seller_dashboard(request):
                    from public.products p
                    left join public.categories c on c.id=p.category_id
                    join public.vendors v on v.id=p.vendor_id
-                   where p.vendor_id = any(%s)
+                   where p.vendor_id = any(%s) and v.status='approved'
                    order by p.created_at desc limit 200""",
                 [store_ids],
             )
