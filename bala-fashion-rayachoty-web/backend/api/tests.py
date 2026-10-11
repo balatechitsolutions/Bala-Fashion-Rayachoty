@@ -76,6 +76,43 @@ class EndpointTests(SimpleTestCase):
         with patch.object(views,"_user",return_value=(user,None)), patch.object(views,"_profile",return_value=profile):
             res=views.upload_signature(req)
         self.assertEqual(res.status_code,403)
+    def test_admin_can_republish_hidden_product(self):
+        from unittest.mock import MagicMock
+        product_id = "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"
+        req = self.factory.patch(
+            "/api/products/manage/",
+            {"id": product_id, "is_active": True},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        user = {"id": "2d0f5b2c-cf10-463e-9190-ab2561a84229"}
+        profile = {"id": user["id"], "full_name": "Admin", "phone": "", "role": "admin"}
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.side_effect = [(product_id, "Hidden shirt"), (product_id, "Hidden shirt", True)]
+        with patch.object(views, "_user", return_value=(user, None)), \
+             patch.object(views, "_profile", return_value=profile), \
+             patch.object(views.connection, "cursor", return_value=cursor):
+            response = views.manage_product(req)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["is_active"])
+        self.assertEqual(response.data["detail"], "Product published.")
+
+    def test_customer_cannot_republish_product(self):
+        product_id = "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"
+        req = self.factory.patch(
+            "/api/products/manage/",
+            {"id": product_id, "is_active": True},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        user = {"id": product_id}
+        profile = {"id": user["id"], "full_name": "Customer", "phone": "", "role": "customer"}
+        with patch.object(views, "_user", return_value=(user, None)), \
+             patch.object(views, "_profile", return_value=profile):
+            response = views.manage_product(req)
+        self.assertEqual(response.status_code, 403)
+
     def test_order_requires_address_and_items(self):
         req=self.factory.post("/api/orders/",{"items":[]},format="json",HTTP_AUTHORIZATION="Bearer test")
         with patch.object(views,"_user",return_value=({"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"},None)):
