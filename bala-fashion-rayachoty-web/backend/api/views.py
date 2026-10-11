@@ -182,31 +182,268 @@ def upload_signature(request):
     params={"timestamp":int(time.time()),"folder":folder}
     return Response({"cloud_name":CLOUD_NAME,"api_key":CLOUD_KEY,"params":params,"signature":api_sign_request(params,CLOUD_SECRET)})
 
-@api_view(["POST"])
-def manage_product(request):
-    user,prof,error=_role_user(request,{"vendor","admin"})
-    if error:return error
-    d=request.data;name=str(d.get("name","")).strip()[:180];vendor=str(d.get("vendor_id","")).strip()
-    if not name:return Response({"detail":"Product name is required."},status=400)
-    try:
-        uuid.UUID(vendor);price=Decimal(str(d.get("price","")));stock=int(d.get("stock_quantity",0))
-        if not price.is_finite() or price<0 or stock<0:raise ValueError()
-    except (ValueError,InvalidOperation,TypeError):return Response({"detail":"Enter a valid price, vendor ID and non-negative stock."},status=400)
-    if prof["role"]=="vendor":
-        with connection.cursor() as c:c.execute("select id from public.vendors where id=%s and owner_id=%s and status='approved'",[vendor,user["id"]]);ok=c.fetchone()
-    else:
-        with connection.cursor() as c:c.execute("select id from public.vendors where id=%s and status='approved'",[vendor]);ok=c.fetchone()
-    if not ok:return Response({"detail":"Choose an approved store you are allowed to manage."},status=403)
-    category=d.get("category_id") or None
-    if category:
-        try:uuid.UUID(str(category))
-        except (ValueError,TypeError,AttributeError):return Response({"detail":"Invalid category."},status=400)
-    sizes=d.get("sizes",[]);colors=d.get("colors",[])
-    if not isinstance(sizes,list) or not isinstance(colors,list):return Response({"detail":"Sizes and colours must be arrays."},status=400)
-    slug=slugify(name)[:160]+"-"+uuid.uuid4().hex[:6]
+@api_view(["GET"])
+def seller_dashboard(request):
+    """Return only the stores and records the authenticated role is allowed to manage."""
+    user, prof, error = _role_user(request, {"vendor", "admin"})
+    if error:
+        return error
     try:
         with connection.cursor() as c:
-            c.execute("""insert into public.products(vendor_id,category_id,name,slug,description,price,compare_at_price,image_url,image_public_id,sizes,colors,stock_quantity,is_active) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true) returning id,name,slug,price,stock_quantity,image_url""",[vendor,category,name,slug,str(d.get("description",""))[:4000],price,d.get("compare_at_price") or None,str(d.get("image_url",""))[:1000],str(d.get("image_public_id",""))[:255],[str(x)[:30] for x in sizes],[str(x)[:50] for x in colors],stock])
-            r=c.fetchone()
-        return Response({"id":str(r[0]),"name":r[1],"slug":r[2],"price":str(r[3]),"stock_quantity":r[4],"image_url":r[5]},status=201)
-    except Exception:return Response({"detail":"Product could not be saved. Verify category, vendor and database settings."},status=400)
+            if prof["role"] == "vendor":
+                c.execute(
+                    "select id,name,slug,status,logo_url from public.vendors where owner_id=%s order by name",
+                    [user["id"]],
+                )
+            else:
+                c.execute(
+                    "select id,name,slug,status,logo_url from public.vendors order by name"
+                )
+            stores = _rows(c)
+            if prof["role"] == "vendor":
+                stores = [store for store in stores if store["status"] == "approved"]
+            store_ids = [store["id"] for store in stores]
+            if not store_ids:
+                return Response({
+                    "role": prof["role"], "stores": [], "products": [],
+                    "orders": [], "stats": {"products": 0, "active_products": 0, "low_stock": 0, "orders": 0},
+                })
+            c.execute(
+                """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
+                          p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                          p.category_id,p.vendor_id,p.is_active,p.created_at,
+                          c.name as category_name,v.name as vendor_name
+                   from public.products p
+                   left join public.categories c on c.id=p.category_id
+                   join public.vendors v on v.id=p.vendor_id
+                   where p.vendor_id = any(%s)
+                   order by p.created_at desc limit 200""",
+                [store_ids],
+            )
+            managed_products = _rows(c)
+            c.execute(
+                """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
+                          v.name as vendor_name,
+                          coalesce(json_agg(json_build_object(
+                            'product_name',oi.product_name,'quantity',oi.quantity,
+                            'size',oi.size,'color',oi.color,'line_total',oi.line_total
+                          )) filter(where oi.id is not null),'[]'::json) as items
+                   from public.orders o
+                   join public.vendors v on v.id=o.vendor_id
+                   left join public.order_items oi on oi.order_id=o.id
+                   where o.vendor_id = any(%s)
+                   group by o.id,v.name order by o.created_at desc limit 50""",
+                [store_ids],
+            )
+            managed_orders = _rows(c)
+        return Response({
+            "role": prof["role"], "stores": stores, "products": managed_products,
+            "orders": managed_orders,
+            "stats": {
+                "products": len(managed_products),
+                "active_products": sum(1 for p in managed_products if p["is_active"]),
+                "low_stock": sum(1 for p in managed_products if int(p["stock_quantity"] or 0) <= 5),
+                "orders": len(managed_orders),
+            },
+        })
+    except Exception:
+        return Response({"detail": "Seller dashboard data is temporarily unavailable."}, status=503)
+
+
+@api_view(["GET", "POST", "PATCH", "DELETE"])
+def manage_product(request):
+    user, prof, error = _role_user(request, {"vendor", "admin"})
+    if error:
+        return error
+
+    def allowed_store(vendor_id):
+        with connection.cursor() as c:
+            if prof["role"] == "vendor":
+                c.execute(
+                    "select id from public.vendors where id=%s and owner_id=%s and status='approved'",
+                    [vendor_id, user["id"]],
+                )
+            else:
+                c.execute(
+                    "select id from public.vendors where id=%s and status='approved'",
+                    [vendor_id],
+                )
+            return c.fetchone() is not None
+
+    if request.method == "GET":
+        try:
+            with connection.cursor() as c:
+                if prof["role"] == "vendor":
+                    c.execute(
+                        """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
+                                  p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                                  p.category_id,p.vendor_id,p.is_active,p.created_at,
+                                  c.name as category_name,v.name as vendor_name
+                           from public.products p
+                           left join public.categories c on c.id=p.category_id
+                           join public.vendors v on v.id=p.vendor_id
+                           where v.owner_id=%s and v.status='approved'
+                           order by p.created_at desc limit 200""",
+                        [user["id"]],
+                    )
+                else:
+                    c.execute(
+                        """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
+                                  p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                                  p.category_id,p.vendor_id,p.is_active,p.created_at,
+                                  c.name as category_name,v.name as vendor_name
+                           from public.products p
+                           left join public.categories c on c.id=p.category_id
+                           join public.vendors v on v.id=p.vendor_id
+                           order by p.created_at desc limit 200"""
+                    )
+                return Response({"results": _rows(c)})
+        except Exception:
+            return Response({"detail": "Managed products could not be loaded."}, status=503)
+
+    data = request.data
+    if request.method in {"PATCH", "DELETE"}:
+        product_id = str(data.get("id") or request.query_params.get("id") or "").strip()
+        try:
+            uuid.UUID(product_id)
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Choose a valid product."}, status=400)
+        try:
+            with connection.cursor() as c:
+                if prof["role"] == "vendor":
+                    c.execute(
+                        """select p.id,p.vendor_id from public.products p
+                           join public.vendors v on v.id=p.vendor_id
+                           where p.id=%s and v.owner_id=%s and v.status='approved'""",
+                        [product_id, user["id"]],
+                    )
+                else:
+                    c.execute(
+                        """select p.id,p.vendor_id from public.products p
+                           join public.vendors v on v.id=p.vendor_id
+                           where p.id=%s and v.status='approved'""",
+                        [product_id],
+                    )
+                existing = c.fetchone()
+            if not existing:
+                return Response({"detail": "Product not found or you do not have permission to manage it."}, status=404)
+            if request.method == "DELETE":
+                with connection.cursor() as c:
+                    c.execute(
+                        "update public.products set is_active=false,updated_at=now() where id=%s returning id,name,is_active",
+                        [product_id],
+                    )
+                    row = c.fetchone()
+                return Response({"id": str(row[0]), "name": row[1], "is_active": row[2], "detail": "Product unpublished."})
+        except Exception:
+            return Response({"detail": "Product could not be updated. Please retry."}, status=503)
+
+    name = str(data.get("name", "")).strip()[:180]
+    if not name:
+        return Response({"detail": "Product name is required."}, status=400)
+    try:
+        price = Decimal(str(data.get("price", "")))
+        compare_raw = data.get("compare_at_price")
+        compare_price = Decimal(str(compare_raw)) if compare_raw not in (None, "") else None
+        stock = int(data.get("stock_quantity", 0))
+        if not price.is_finite() or price < 0 or stock < 0:
+            raise ValueError()
+        if compare_price is not None and (not compare_price.is_finite() or compare_price < price):
+            return Response({"detail": "Compare price must be greater than or equal to the selling price."}, status=400)
+    except (ValueError, InvalidOperation, TypeError):
+        return Response({"detail": "Enter a valid price, compare price and non-negative stock quantity."}, status=400)
+
+    if prof["role"] == "vendor":
+        # Seller accounts can never choose a different seller's store from request data.
+        with connection.cursor() as c:
+            c.execute(
+                "select id from public.vendors where owner_id=%s and status='approved' order by created_at limit 2",
+                [user["id"]],
+            )
+            owned_stores = [str(row[0]) for row in c.fetchall()]
+        if not owned_stores:
+            return Response({"detail": "Your account has no approved store yet. Contact the administrator."}, status=403)
+        requested_vendor = str(data.get("vendor_id") or "").strip()
+        vendor = requested_vendor if requested_vendor in owned_stores else owned_stores[0]
+        if vendor not in owned_stores:
+            return Response({"detail": "You can only manage your own approved store."}, status=403)
+    else:
+        vendor = str(data.get("vendor_id") or "").strip()
+        try:
+            uuid.UUID(vendor)
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Choose an approved store."}, status=400)
+        if not allowed_store(vendor):
+            return Response({"detail": "Choose an approved store you are allowed to manage."}, status=403)
+
+    category = data.get("category_id") or None
+    if category:
+        try:
+            uuid.UUID(str(category))
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Invalid category."}, status=400)
+        with connection.cursor() as c:
+            c.execute("select id from public.categories where id=%s and is_active=true", [category])
+            if not c.fetchone():
+                return Response({"detail": "Choose an active category."}, status=400)
+
+    sizes = data.get("sizes", [])
+    colors = data.get("colors", [])
+    if not isinstance(sizes, list) or not isinstance(colors, list):
+        return Response({"detail": "Sizes and colours must be arrays."}, status=400)
+    image_url = str(data.get("image_url", "")).strip()
+    image_public_id = str(data.get("image_public_id", "")).strip()
+    if image_url and (not image_url.startswith("https://res.cloudinary.com/") or len(image_url) > 1000):
+        return Response({"detail": "Upload the image through the configured Cloudinary uploader."}, status=400)
+
+    try:
+        with transaction.atomic():
+            with connection.cursor() as c:
+                if request.method == "PATCH":
+                    product_id = str(data.get("id") or "").strip()
+                    try:
+                        uuid.UUID(product_id)
+                    except (ValueError, TypeError, AttributeError):
+                        return Response({"detail": "Choose a valid product to edit."}, status=400)
+                    if prof["role"] == "vendor":
+                        c.execute(
+                            """select p.id from public.products p join public.vendors v on v.id=p.vendor_id
+                               where p.id=%s and v.owner_id=%s and v.status='approved'""",
+                            [product_id, user["id"]],
+                        )
+                    else:
+                        c.execute(
+                            """select p.id from public.products p join public.vendors v on v.id=p.vendor_id
+                               where p.id=%s and v.status='approved'""",
+                            [product_id],
+                        )
+                    if not c.fetchone():
+                        return Response({"detail": "Product not found or you do not have permission to edit it."}, status=404)
+                    c.execute(
+                        """update public.products set vendor_id=%s,category_id=%s,name=%s,
+                           description=%s,price=%s,compare_at_price=%s,image_url=%s,image_public_id=%s,
+                           sizes=%s,colors=%s,stock_quantity=%s,updated_at=now()
+                           where id=%s returning id,name,slug,price,stock_quantity,image_url,is_active,vendor_id""",
+                        [vendor, category, name, str(data.get("description", ""))[:4000], price, compare_price,
+                         image_url, image_public_id, [str(x)[:30] for x in sizes],
+                         [str(x)[:50] for x in colors], stock, product_id],
+                    )
+                else:
+                    slug = slugify(name)[:150] + "-" + uuid.uuid4().hex[:8]
+                    c.execute(
+                        """insert into public.products(vendor_id,category_id,name,slug,description,price,
+                           compare_at_price,image_url,image_public_id,sizes,colors,stock_quantity,is_active)
+                           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
+                           returning id,name,slug,price,stock_quantity,image_url,is_active,vendor_id""",
+                        [vendor, category, name, slug, str(data.get("description", ""))[:4000], price,
+                         compare_price, image_url, image_public_id, [str(x)[:30] for x in sizes],
+                         [str(x)[:50] for x in colors], stock],
+                    )
+                row = c.fetchone()
+        return Response({
+            "id": str(row[0]), "name": row[1], "slug": row[2], "price": str(row[3]),
+            "stock_quantity": row[4], "image_url": row[5], "is_active": row[6],
+            "vendor_id": str(row[7]),
+        }, status=201 if request.method == "POST" else 200)
+    except Exception:
+        return Response({"detail": "Product could not be saved. Verify the category, vendor and database settings."}, status=400)
