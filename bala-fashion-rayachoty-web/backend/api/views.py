@@ -338,6 +338,22 @@ def manage_product(request):
                     )
                     row = c.fetchone()
                 return Response({"id": str(row[0]), "name": row[1], "is_active": row[2], "detail": "Product unpublished."})
+            # A status-only PATCH lets an authorized owner/admin republish hidden items
+            # without resubmitting product fields or changing inventory and pricing.
+            if request.method == "PATCH" and "is_active" in data and set(data.keys()).issubset({"id", "is_active"}):
+                is_active = data.get("is_active")
+                if not isinstance(is_active, bool):
+                    return Response({"detail": "is_active must be true or false."}, status=400)
+                with connection.cursor() as c:
+                    c.execute(
+                        "update public.products set is_active=%s,updated_at=now() where id=%s returning id,name,is_active",
+                        [is_active, product_id],
+                    )
+                    row = c.fetchone()
+                return Response({
+                    "id": str(row[0]), "name": row[1], "is_active": row[2],
+                    "detail": "Product published." if row[2] else "Product unpublished.",
+                })
         except Exception:
             return Response({"detail": "Product could not be updated. Please retry."}, status=503)
 
