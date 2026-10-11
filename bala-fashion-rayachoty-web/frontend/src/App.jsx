@@ -17,7 +17,7 @@ export default function App() {
  const [categoryForm,setCategoryForm]=useState({category_id:'',image_url:''})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(!s)setProfile(null)});return()=>data.subscription.unsubscribe()},[])
- useEffect(()=>{if(!session){setProfile(null);return}api('/profile/',{token:session.access_token}).then(setProfile).catch(()=>setProfile({role:'customer'}))},[session])
+ useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
  async function load(signal){setLoading(true);try{const q=new URLSearchParams();if(category!=='all')q.set('category',category);if(search.trim())q.set('search',search.trim());const [p,c]=await Promise.all([api(`/products/?${q}`,{signal}),api('/categories/',{signal}).catch(e=>{if(e.name==='AbortError')throw e;return defaultCats.slice(1)})]);setProducts(Array.isArray(p.results)?p.results:Array.isArray(p)?p:[]);setCategories([defaultCats[0],...c]);setError('')}catch(e){if(e.name!=='AbortError'){setProducts([]);setError('We could not load the live catalog. Check your connection and try again.')}}finally{if(!signal?.aborted)setLoading(false)}}
  function notify(t){setToast(t);window.setTimeout(()=>setToast(''),2600)}
@@ -81,6 +81,17 @@ export default function App() {
   const data=await refreshSellerDashboard()
   if(data?.role==='vendor'&&!data.stores?.length)notify('Your seller account has no approved store yet. Contact the administrator.')
  }
+ async function openAccountEntry(){
+  if(!session)return login()
+  let currentProfile=profile
+  if(!currentProfile){
+   try{currentProfile=await api('/profile/',{token:session.access_token});setProfile(currentProfile)}
+   catch(e){setDrawer('account');notify('Could not load your account role. Please retry.');return}
+  }
+  setMobileActive('account')
+  if(['vendor','admin'].includes(currentProfile?.role))await openSellerDashboard()
+  else setDrawer('account')
+ }
  function startNewProduct(){
   const firstStore=sellerDashboard?.stores?.find(s=>s.status==='approved')
   setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
@@ -121,7 +132,7 @@ export default function App() {
     <button className={mobileActive==='categories'?'active':''} onClick={()=>{setDrawer('');setMobileActive('categories');setCategory('all')}}><Grid2X2 size={19}/><span>Categories</span></button>
     <button className={mobileActive==='shop'?'active':''} onClick={()=>{setDrawer('');setMobileActive('shop');setCategory('all')}}><Store size={19}/><span>Shop all</span></button>
     <button className={mobileActive==='bag'?'active':''} onClick={()=>{setMobileActive('bag');setDrawer('cart')}}><ShoppingBag size={19}/><span>My bag</span>{count>0&&<b className="sidebar-count">{count}</b>}</button>
-    <button className={mobileActive==='account'?'active':''} onClick={()=>{setMobileActive('account');session?setDrawer('account'):login()}}><UserRound size={19}/><span>Account</span></button>
+    <button className={mobileActive==='account'?'active':''} onClick={openAccountEntry}><UserRound size={19}/><span>Account</span></button>
    </nav>
    <div className="sidebar-bottom"><span className="status-dot"/><span>Rayachoty store</span><small>Local fashion · COD</small></div>
   </aside>
@@ -130,7 +141,7 @@ export default function App() {
     <div className="app-mobile-brand"><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></div>
     <div className="app-breadcrumb"><span>Store</span><ArrowRight size={14}/><b>{({home:'Overview',categories:'Categories',shop:'All products',search:'Search results',bag:'Your bag',account:'Account'})[mobileActive]||'Overview'}</b></div>
     <label className="app-search"><Search size={18}/><input ref={searchInputRef} aria-label="Search clothing" placeholder="Search products, styles..." value={search} onFocus={()=>{setDrawer('');setMobileActive('search')}} onChange={e=>{setDrawer('');setSearch(e.target.value);setMobileActive('search')}}/><kbd>⌕</kbd></label>
-    <button className="app-account-button" onClick={()=>session?setDrawer('account'):login()}>{session?.user?.user_metadata?.avatar_url?<img src={session.user.user_metadata.avatar_url} alt="Profile"/>:<UserRound size={18}/>}<span>{session?.user?.user_metadata?.full_name?.split(' ')[0]||'Sign in'}</span></button>
+    <button className="app-account-button" onClick={openAccountEntry}>{session?.user?.user_metadata?.avatar_url?<img src={session.user.user_metadata.avatar_url} alt="Profile"/>:<UserRound size={18}/>}<span>{session?.user?.user_metadata?.full_name?.split(' ')[0]||'Sign in'}</span></button>
    </header>
    <main className="app-main">
     {mobileActive==='home'&&<div className="app-page app-home-page">
@@ -147,14 +158,14 @@ export default function App() {
     {mobileActive==='shop'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">THE COLLECTION</div><h1>{categories.find(c=>c.slug===category)?.name||'All products'}</h1><p>Live products currently available from local sellers.</p></section><div className="app-filter-row">{categories.map(c=><button className={category===c.slug?'active':''} key={c.slug} onClick={()=>setCategory(c.slug)}>{c.name}</button>)}</div>{catalogContent}</div>}
     {mobileActive==='search'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">FIND YOUR FIT</div><h1>Search</h1><p>{search ? 'Results for “'+search+'”' : 'Search products by name, category or style.'}</p></section>{search&&<button className="clear-search" onClick={()=>setSearch('')}>Clear search <X size={14}/></button>}{catalogContent}</div>}
     {mobileActive==='bag'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">READY WHEN YOU ARE</div><h1>Your bag</h1><p>Your selected styles stay here while you shop.</p></section><button className="primary" onClick={()=>setDrawer('cart')}>Open bag <ShoppingBag size={17}/>{count>0&&<span>({count})</span>}</button></div>}
-    {mobileActive==='account'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">YOUR PROFILE</div><h1>Account</h1><p>Manage your profile, orders and store tools.</p></section><div className="app-account-card"><div className="app-account-avatar"><UserRound size={24}/></div><div><b>{session?.user?.user_metadata?.full_name||session?.user?.email||'Welcome to Bala Fashion'}</b><small>{profile?.role||'Sign in to access your account'}</small></div></div><button className="primary" onClick={()=>session?setDrawer('account'):login()}>{session?'Open account':'Continue with Google'} <ArrowRight size={16}/></button>{session&&<button className="secondary app-orders-button" onClick={getOrders}>View my orders</button>}</div>}
+    {mobileActive==='account'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">YOUR PROFILE</div><h1>Account</h1><p>Manage your profile, orders and store tools.</p></section><div className="app-account-card"><div className="app-account-avatar"><UserRound size={24}/></div><div><b>{session?.user?.user_metadata?.full_name||session?.user?.email||'Welcome to Bala Fashion'}</b><small>{profile?.role||'Sign in to access your account'}</small></div></div><button className="primary" onClick={openAccountEntry}>{session?(['vendor','admin'].includes(profile?.role)?'Open management dashboard':'Open account'):'Continue with Google'} <ArrowRight size={16}/></button>{session&&<button className="secondary app-orders-button" onClick={getOrders}>View my orders</button>}</div>}
    </main>
    <nav className="mobile-bottom-nav" aria-label="Primary app navigation">
     <button className={`mobile-nav-item${mobileActive==='home'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('home');setCategory('all');setSearch('')}}><Home size={20}/><span>Home</span></button>
     <button className={`mobile-nav-item${mobileActive==='categories'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('categories');setSearch('')}}><Grid2X2 size={20}/><span>Categories</span></button>
     <button className={`mobile-nav-item${mobileActive==='search'?' active':''}`} onClick={()=>{setDrawer('');setMobileActive('search');setSearch('');searchInputRef.current?.focus()}}><Search size={20}/><span>Search</span></button>
     <button className={`mobile-nav-item${drawer==='cart'?' active':''}`} onClick={()=>setDrawer('cart')}><span className="mobile-bag-icon"><ShoppingBag size={20}/>{count>0&&<b>{count>99?'99+':count}</b>}</span><span>Bag</span></button>
-    <button className={`mobile-nav-item${drawer==='account'?' active':''}`} onClick={()=>session?setDrawer('account'):login()}><UserRound size={20}/><span>Account</span></button>
+    <button className={`mobile-nav-item${drawer==='account'?' active':''}`} onClick={openAccountEntry}><UserRound size={20}/><span>Account</span></button>
    </nav>
   </div>
   {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders',account:'Account','categories-manage':'Manage category images'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
