@@ -67,7 +67,14 @@ export default function App() {
   setNotificationOpen(false);setMobileActive('account');setDrawer('orders')
   try{
    if(!session?.access_token)throw new Error('Sign in to view order details.')
-   const data=await api('/orders/',{token:session.access_token}),rows=data.results||data||[]
+   let rows=[]
+   if(['vendor','admin'].includes(profile?.role)){
+    const data=await api('/seller/dashboard/',{token:session.access_token})
+    rows=data.orders||[]
+   }else{
+    const data=await api('/orders/',{token:session.access_token})
+    rows=data.results||data||[]
+   }
    setOrders(rows)
    const order=rows.find(row=>String(row.id)===String(item.orderId))
    if(order){setSelectedOrder(order);setDrawer('order-details')}
