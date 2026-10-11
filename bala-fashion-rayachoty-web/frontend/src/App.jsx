@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Bell, Check, ChevronDown, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
+import { ArrowRight, Bell, Check, ChevronDown, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
 
@@ -170,6 +170,17 @@ export default function App() {
    notify(`Order ${order.order_number} updated to ${status.replaceAll('_',' ')}`)
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
+ async function deleteOrder(order){
+  if(profile?.role!=='admin')return notify('Only administrators can delete orders.')
+  if(!window.confirm(`Permanently delete order ${order.order_number}? This cannot be undone. Stock will be restored if the order was not delivered.`))return
+  if(!session)return login()
+  setBusy(true)
+  try{
+   await api('/orders/manage/',{method:'DELETE',token:session.access_token,body:JSON.stringify({id:order.id})})
+   await refreshSellerDashboard()
+   notify(`Order ${order.order_number} deleted`)
+  }catch(e){notify(e.message||'Order could not be deleted.')}finally{setBusy(false)}
+ }
  async function refreshSellerDashboard(){
   if(!session)return login()
   setDashboardLoading(true)
@@ -303,7 +314,7 @@ export default function App() {
      <section className="seller-dashboard-section"><div className="seller-section-title"><h3>Product inventory</h3><button className="primary" onClick={startNewProduct} disabled={!sellerDashboard?.stores?.some(s=>s.status==='approved')}> <Plus size={15}/> Add product</button></div>
       {!sellerDashboard?.products?.length?<p className="seller-empty">No products in your managed stores yet.</p>:sellerDashboard.products.map(product=><article className="seller-product-row" key={product.id}><div className="seller-product-thumb">{product.image_url?<img src={product.image_url} alt={product.name}/>:<span>BF</span>}</div><div className="seller-product-main"><b>{product.name}</b><small>{product.vendor_name||'Store'} · {product.category_name||'Uncategorized'}</small><strong>{money(product.price)} · Stock {product.stock_quantity}</strong><span className={'seller-status '+(product.is_active?'approved':'suspended')}>{product.is_active?'Published':'Hidden'}</span></div><div className="seller-product-actions"><button className="secondary" aria-label={'Edit '+product.name} title="Edit product" onClick={()=>startEditProduct(product)}><Pencil size={15}/></button>{product.is_active?<button className="secondary" aria-label={'Unpublish '+product.name} title="Hide product from storefront" onClick={()=>hideProduct(product)} disabled={busy}><EyeOff size={15}/></button>:<button className="secondary" aria-label={'Publish '+product.name} title="Publish product to storefront" onClick={()=>publishProduct(product)} disabled={busy}><Eye size={15}/></button>}</div></article>)}
      </section>
-     <section className="seller-dashboard-section"><h3>Order management</h3>{!sellerDashboard?.orders?.length?<p className="seller-empty">No orders yet.</p>:sellerDashboard.orders.slice(0,50).map(order=><article className="seller-order-row" key={order.id}><span><b>{order.order_number}</b><small>{order.vendor_name} · {new Date(order.created_at).toLocaleDateString('en-IN')}</small><small>{order.payment_method?.toUpperCase()||'COD'} · Payment: {order.payment_status==='paid'?'Successful':(order.payment_status||'Pending')}</small></span><span><b>{money(order.total)}</b><small>{String(order.status||'').replaceAll('_',' ')}</small><div className="seller-product-actions">{(({placed:['confirmed','cancelled'],confirmed:['packed','cancelled'],packed:['out_for_delivery'],out_for_delivery:['delivered']})[order.status]||[]).map(next=><button key={next} className="secondary" disabled={busy} onClick={()=>updateOrderStatus(order,next)}>{next.replaceAll('_',' ')}</button>)}</div></span></article>)}</section>
+     <section className="seller-dashboard-section"><h3>Order management</h3>{!sellerDashboard?.orders?.length?<p className="seller-empty">No orders yet.</p>:sellerDashboard.orders.slice(0,50).map(order=><article className="seller-order-row" key={order.id}><span><b>{order.order_number}</b><small>{order.vendor_name} · {new Date(order.created_at).toLocaleDateString('en-IN')}</small><small>{order.payment_method?.toUpperCase()||'COD'} · Payment: {order.payment_status==='paid'?'Successful':(order.payment_status||'Pending')}</small></span><span><b>{money(order.total)}</b><small>{String(order.status||'').replaceAll('_',' ')}</small><div className="seller-product-actions">{(({placed:['confirmed','cancelled'],confirmed:['packed','cancelled'],packed:['out_for_delivery'],out_for_delivery:['delivered']})[order.status]||[]).map(next=><button key={next} className="secondary" disabled={busy} onClick={()=>updateOrderStatus(order,next)}>{next.replaceAll('_',' ')}</button>)}{profile?.role==='admin'&&<button className="secondary" aria-label={`Delete order ${order.order_number}`} title="Permanently delete order" disabled={busy} onClick={()=>deleteOrder(order)}><Trash2 size={15}/><span>Delete</span></button>}</div></span></article>)}</section>
     </>}
    </div>}
    {drawer==='categories-manage'&&<div className="drawer-body form">
