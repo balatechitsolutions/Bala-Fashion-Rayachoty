@@ -348,6 +348,112 @@ def orders(request):
     except ValueError as e:return Response({"detail":str(e)},status=409)
     except Exception:return Response({"detail":"Could not place order. Please retry or contact support."},status=503)
 
+
+@api_view(["GET", "PATCH"])
+def manage_orders(request):
+    """Role-scoped order management: admins see all orders; vendors see their own."""
+    user, prof, error = _role_user(request, {"vendor", "admin"})
+    if error:
+        return error
+
+    if request.method == "PATCH":
+        order_id = str(request.data.get("id") or request.data.get("order_id") or "").strip()
+        status_value = str(request.data.get("status") or "").strip().lower()
+        try:
+            uuid.UUID(order_id)
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Choose a valid order."}, status=400)
+        allowed_statuses = {"placed", "confirmed", "packed", "out_for_delivery", "delivered", "cancelled"}
+        if status_value not in allowed_statuses:
+            return Response({"detail": "Choose a valid order status."}, status=400)
+
+        try:
+            with transaction.atomic():
+                with connection.cursor() as c:
+                    if prof["role"] == "vendor":
+                        c.execute(
+                            """select o.id, o.status
+                               from public.orders o
+                               join public.vendors v on v.id=o.vendor_id
+                               where o.id=%s and v.owner_id=%s and v.status='approved'
+                               for update of o""",
+                            [order_id, user["id"]],
+                        )
+                    else:
+                        c.execute("select id, status from public.orders where id=%s for update", [order_id])
+                    current = c.fetchone()
+                    if not current:
+                        return Response({"detail": "Order not found or you do not have permission to manage it."}, status=404)
+
+                    current_status = current[1]
+                    transitions = {
+                        "placed": {"confirmed", "cancelled"},
+                        "confirmed": {"packed", "cancelled"},
+                        "packed": {"out_for_delivery"},
+                        "out_for_delivery": {"delivered"},
+                        "delivered": set(),
+                        "cancelled": set(),
+                    }
+                    if status_value != current_status and status_value not in transitions.get(current_status, set()):
+                        return Response(
+                            {"detail": f"Order cannot move from {current_status} to {status_value}."},
+                            status=409,
+                        )
+                    c.execute(
+                        """update public.orders set status=%s, updated_at=now()
+                           where id=%s
+                           returning id, order_number, status, payment_status, total, created_at""",
+                        [status_value, order_id],
+                    )
+                    row = c.fetchone()
+            return Response({
+                "id": str(row[0]), "order_number": row[1], "status": row[2],
+                "payment_status": row[3], "total": str(row[4]),
+                "created_at": row[5].isoformat() if hasattr(row[5], "isoformat") else row[5],
+            })
+        except Exception:
+            return Response({"detail": "Order status could not be updated. Please retry."}, status=503)
+
+    try:
+        with connection.cursor() as c:
+            if prof["role"] == "vendor":
+                c.execute(
+                    """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
+                              o.subtotal,o.delivery_fee,o.total,o.address_snapshot,o.notes,o.created_at,
+                              v.name as vendor_name,
+                              coalesce(json_agg(json_build_object(
+                                'product_name',oi.product_name,'image_url',oi.image_url,
+                                'quantity',oi.quantity,'size',oi.size,'color',oi.color,
+                                'line_total',oi.line_total
+                              )) filter(where oi.id is not null),'[]'::json) as items
+                       from public.orders o
+                       join public.vendors v on v.id=o.vendor_id
+                       left join public.order_items oi on oi.order_id=o.id
+                       where v.owner_id=%s and v.status='approved'
+                       group by o.id,v.name order by o.created_at desc limit 100""",
+                    [user["id"]],
+                )
+            else:
+                c.execute(
+                    """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
+                              o.subtotal,o.delivery_fee,o.total,o.address_snapshot,o.notes,o.created_at,
+                              v.name as vendor_name,
+                              coalesce(json_agg(json_build_object(
+                                'product_name',oi.product_name,'image_url',oi.image_url,
+                                'quantity',oi.quantity,'size',oi.size,'color',oi.color,
+                                'line_total',oi.line_total
+                              )) filter(where oi.id is not null),'[]'::json) as items
+                       from public.orders o
+                       join public.vendors v on v.id=o.vendor_id
+                       left join public.order_items oi on oi.order_id=o.id
+                       group by o.id,v.name order by o.created_at desc limit 200"""
+                )
+            rows = _rows(c)
+        return Response({"results": rows, "count": len(rows), "role": prof["role"]})
+    except Exception:
+        return Response({"detail": "Orders could not be loaded. Check the backend database connection."}, status=503)
+
+
 @api_view(["POST"])
 def upload_signature(request):
     user,prof,error=_role_user(request,{"vendor","admin"})
