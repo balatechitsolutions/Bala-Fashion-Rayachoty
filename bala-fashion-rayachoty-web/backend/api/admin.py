@@ -209,7 +209,6 @@ class CloudinaryUploadAdminMixin:
                 folder=self.upload_folder,
                 resource_type="image",
                 allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
-                timeout=30,
             )
             image_url = result.get("secure_url")
             uploaded_public_id = result.get("public_id")
@@ -223,7 +222,7 @@ class CloudinaryUploadAdminMixin:
         except (IntegrityError, DatabaseError):
             if uploaded_public_id:
                 try:
-                    cloudinary.uploader.destroy(uploaded_public_id, resource_type="image", timeout=15)
+                    cloudinary.uploader.destroy(uploaded_public_id, resource_type="image")
                 except Exception:
                     logger.exception("Could not clean up Cloudinary asset after database save failure.")
             raise
