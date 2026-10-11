@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ExternalLink, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
 
@@ -231,7 +231,7 @@ export default function App() {
    {drawer==='seller-dashboard'&&<div className="drawer-body seller-dashboard">
     <div className="seller-dashboard-head"><div><b>{profile?.role==='admin'?'Management dashboard':'Seller dashboard'}</b><small>{sellerDashboard?.stores?.length||0} store(s) available to your account</small></div><div className="seller-dashboard-head-actions"><button className="secondary" onClick={refreshSellerDashboard} disabled={dashboardLoading}>{dashboardLoading?'Refreshing…':'Refresh'}</button><button className="secondary" onClick={logout}>Sign out</button></div></div>
     {dashboardLoading&&!sellerDashboard?<p>Loading your dashboard…</p>:<>
-     {profile?.role==='admin'&&<div className="seller-admin-actions"><button className="primary" onClick={openCategoryManagement}><Grid2X2 size={16}/> Manage categories</button><button className="secondary" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button></div>}
+     {profile?.role==='admin'&&<div className="seller-admin-actions"><button className="primary" onClick={openCategoryManagement}><Grid2X2 size={16}/> Manage categories</button><button className="secondary" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button><button className="secondary" onClick={()=>window.open('https://bala-fashion-api.onrender.com/admin/vendor-id/','_blank','noopener,noreferrer')}><ExternalLink size={16}/> Vendor ID</button></div>}
      <div className="seller-stat-grid"><div><b>{sellerDashboard?.stats?.products??0}</b><small>Products</small></div><div><b>{sellerDashboard?.stats?.active_products??0}</b><small>Published</small></div><div><b>{sellerDashboard?.stats?.low_stock??0}</b><small>Low stock</small></div><div><b>{sellerDashboard?.stats?.orders??0}</b><small>Recent orders</small></div></div>
      {sellerDashboard?.stores?.length>0&&<section className="seller-dashboard-section"><h3>{profile?.role==='admin'?'Stores you can manage':'Your store'}</h3>{sellerDashboard.stores.map(store=><div className="seller-store-row" key={store.id}><span><b>{store.name}</b><small>{store.slug}</small></span><span className={'seller-status '+store.status}>{store.status}</span></div>)}</section>}
      <section className="seller-dashboard-section"><div className="seller-section-title"><h3>Product inventory</h3><button className="primary" onClick={startNewProduct} disabled={!sellerDashboard?.stores?.some(s=>s.status==='approved')}> <Plus size={15}/> Add product</button></div>
