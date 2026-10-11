@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, ChevronDown, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, Menu, Minus, Pencil, Plus, Search, ShoppingBag, Sparkles, Store, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
 
@@ -107,6 +107,16 @@ export default function App() {
   try{await api('/products/manage/?id='+encodeURIComponent(product.id),{method:'DELETE',token:session.access_token});notify('Product unpublished');await refreshSellerDashboard();await load()}
   catch(e){notify(e.message)}finally{setBusy(false)}
  }
+ async function publishProduct(product){
+  if(!session)return login()
+  setBusy(true)
+  try{
+   await api('/products/manage/',{method:'PATCH',token:session.access_token,body:JSON.stringify({id:product.id,is_active:true})})
+   notify('Product published')
+   await refreshSellerDashboard()
+   await load()
+  }catch(e){notify(e.message)}finally{setBusy(false)}
+ }
  async function saveProduct(e){
   e.preventDefault();if(busy)return;if(!session)return login();setBusy(true)
   try{
@@ -179,7 +189,7 @@ export default function App() {
      <div className="seller-stat-grid"><div><b>{sellerDashboard?.stats?.products??0}</b><small>Products</small></div><div><b>{sellerDashboard?.stats?.active_products??0}</b><small>Published</small></div><div><b>{sellerDashboard?.stats?.low_stock??0}</b><small>Low stock</small></div><div><b>{sellerDashboard?.stats?.orders??0}</b><small>Recent orders</small></div></div>
      {sellerDashboard?.stores?.length>0&&<section className="seller-dashboard-section"><h3>{profile?.role==='admin'?'Stores you can manage':'Your store'}</h3>{sellerDashboard.stores.map(store=><div className="seller-store-row" key={store.id}><span><b>{store.name}</b><small>{store.slug}</small></span><span className={'seller-status '+store.status}>{store.status}</span></div>)}</section>}
      <section className="seller-dashboard-section"><div className="seller-section-title"><h3>Product inventory</h3><button className="primary" onClick={startNewProduct} disabled={!sellerDashboard?.stores?.some(s=>s.status==='approved')}> <Plus size={15}/> Add product</button></div>
-      {!sellerDashboard?.products?.length?<p className="seller-empty">No products in your managed stores yet.</p>:sellerDashboard.products.map(product=><article className="seller-product-row" key={product.id}><div className="seller-product-thumb">{product.image_url?<img src={product.image_url} alt={product.name}/>:<span>BF</span>}</div><div className="seller-product-main"><b>{product.name}</b><small>{product.vendor_name||'Store'} · {product.category_name||'Uncategorized'}</small><strong>{money(product.price)} · Stock {product.stock_quantity}</strong><span className={'seller-status '+(product.is_active?'approved':'suspended')}>{product.is_active?'Published':'Hidden'}</span></div><div className="seller-product-actions"><button className="secondary" aria-label={'Edit '+product.name} onClick={()=>startEditProduct(product)}><Pencil size={15}/></button>{product.is_active&&<button className="secondary" aria-label={'Unpublish '+product.name} onClick={()=>hideProduct(product)} disabled={busy}><EyeOff size={15}/></button>}</div></article>)}
+      {!sellerDashboard?.products?.length?<p className="seller-empty">No products in your managed stores yet.</p>:sellerDashboard.products.map(product=><article className="seller-product-row" key={product.id}><div className="seller-product-thumb">{product.image_url?<img src={product.image_url} alt={product.name}/>:<span>BF</span>}</div><div className="seller-product-main"><b>{product.name}</b><small>{product.vendor_name||'Store'} · {product.category_name||'Uncategorized'}</small><strong>{money(product.price)} · Stock {product.stock_quantity}</strong><span className={'seller-status '+(product.is_active?'approved':'suspended')}>{product.is_active?'Published':'Hidden'}</span></div><div className="seller-product-actions"><button className="secondary" aria-label={'Edit '+product.name} title="Edit product" onClick={()=>startEditProduct(product)}><Pencil size={15}/></button>{product.is_active?<button className="secondary" aria-label={'Unpublish '+product.name} title="Hide product from storefront" onClick={()=>hideProduct(product)} disabled={busy}><EyeOff size={15}/></button>:<button className="secondary" aria-label={'Publish '+product.name} title="Publish product to storefront" onClick={()=>publishProduct(product)} disabled={busy}><Eye size={15}/></button>}</div></article>)}
      </section>
      <section className="seller-dashboard-section"><h3>Recent orders</h3>{!sellerDashboard?.orders?.length?<p className="seller-empty">No orders yet.</p>:sellerDashboard.orders.slice(0,10).map(order=><div className="seller-order-row" key={order.id}><span><b>{order.order_number}</b><small>{order.vendor_name} · {new Date(order.created_at).toLocaleDateString('en-IN')}</small></span><span><b>{money(order.total)}</b><small>{String(order.status||'').replaceAll('_',' ')}</small></span></div>)}</section>
     </>}
