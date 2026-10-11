@@ -330,6 +330,24 @@ def manage_product(request):
                 existing = c.fetchone()
             if not existing:
                 return Response({"detail": "Product not found or you do not have permission to manage it."}, status=404)
+            # Visibility-only PATCH requests must be handled before the full edit
+            # validation below. Otherwise the Publish button fails with "Product
+            # name is required" and hidden products cannot be republished.
+            if request.method == "PATCH" and "is_active" in data and set(data.keys()).issubset({"id", "is_active"}):
+                if not isinstance(data.get("is_active"), bool):
+                    return Response({"detail": "Product visibility must be true or false."}, status=400)
+                with connection.cursor() as c:
+                    c.execute(
+                        "update public.products set is_active=%s,updated_at=now() where id=%s returning id,name,is_active",
+                        [data["is_active"], product_id],
+                    )
+                    row = c.fetchone()
+                if not row:
+                    return Response({"detail": "Product not found."}, status=404)
+                return Response({
+                    "id": str(row[0]), "name": row[1], "is_active": row[2],
+                    "detail": "Product published." if row[2] else "Product unpublished.",
+                })
             if request.method == "DELETE":
                 with connection.cursor() as c:
                     c.execute(
