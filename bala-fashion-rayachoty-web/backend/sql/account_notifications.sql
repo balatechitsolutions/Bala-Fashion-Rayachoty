@@ -22,3 +22,8 @@ CREATE INDEX IF NOT EXISTS account_notifications_unread_idx
 
 -- The frontend/backend access this table through the trusted Django database
 -- connection; do not expose direct client writes from the browser.
+
+
+-- This table is backend-only. Prevent direct reads/writes through Supabase APIs.
+ALTER TABLE public.account_notifications ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.account_notifications FROM PUBLIC, anon, authenticated, service_role;
