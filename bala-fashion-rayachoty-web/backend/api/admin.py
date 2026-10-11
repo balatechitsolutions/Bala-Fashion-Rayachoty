@@ -4,13 +4,14 @@ import os
 import requests
 from django import forms
 from django.contrib import admin, messages
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import path
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError
 from django.utils.html import format_html
 from django.utils.text import slugify
 import cloudinary
+import cloudinary.exceptions
 import cloudinary.uploader
 
 from .models import Category, Product, Vendor
@@ -31,10 +32,33 @@ class CloudinaryUploadFormMixin:
     def _validate_upload(self, uploaded_file):
         if not uploaded_file:
             return
-        if not uploaded_file.content_type or not uploaded_file.content_type.startswith("image/"):
+        content_type = getattr(uploaded_file, "content_type", "") or ""
+        if not content_type.startswith("image/"):
             raise ValidationError("Choose a valid image file.")
         if uploaded_file.size > 8 * 1024 * 1024:
             raise ValidationError("Image must be 8 MB or smaller.")
+        if not all(os.getenv(key, "").strip() for key in (
+            "CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"
+        )):
+            raise ValidationError(
+                "Image upload is not configured. Add CLOUDINARY_CLOUD_NAME, "
+                "CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET to the Render environment."
+            )
+
+
+def _unique_slug(model, name, current_pk=None):
+    """Return a URL-safe, unused slug; database uniqueness remains the final guard."""
+    base = slugify((name or "").strip())[:220] or "item"
+    candidate = base
+    suffix = 2
+    queryset = model.objects.all()
+    if current_pk:
+        queryset = queryset.exclude(pk=current_pk)
+    while queryset.filter(slug=candidate).exists():
+        tail = f"-{suffix}"
+        candidate = f"{base[:255 - len(tail)]}{tail}"
+        suffix += 1
+    return candidate
 
 
 class CategoryAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
@@ -47,6 +71,19 @@ class CategoryAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
     class Meta:
         model = Category
         fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+        name = (cleaned.get("name") or "").strip()
+        slug = (cleaned.get("slug") or "").strip()
+        if name:
+            if not slug:
+                cleaned["slug"] = _unique_slug(Category, name, self.instance.pk)
+            elif Category.objects.filter(slug=slug).exclude(pk=self.instance.pk).exists():
+                self.add_error("slug", "This slug is already used. Choose another slug.")
+            if Category.objects.filter(name__iexact=name).exclude(pk=self.instance.pk).exists():
+                self.add_error("name", "A category with this name already exists.")
+        return cleaned
 
     def clean_image_upload(self):
         image = self.cleaned_data.get("image_upload")
@@ -70,8 +107,21 @@ class ProductAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
             cleaned[target] = list(dict.fromkeys(v.strip() for v in cleaned.get(source, "").split(",") if v.strip()))
         if cleaned.get("stock_quantity") is not None and cleaned["stock_quantity"] < 0:
             self.add_error("stock_quantity", "Stock cannot be negative.")
-        if cleaned.get("price") is not None and cleaned["price"] < 0:
+        price = cleaned.get("price")
+        compare_at_price = cleaned.get("compare_at_price")
+        if price is not None and price < 0:
             self.add_error("price", "Price cannot be negative.")
+        if compare_at_price is not None and compare_at_price < 0:
+            self.add_error("compare_at_price", "Compare-at price cannot be negative.")
+        if price is not None and compare_at_price is not None and compare_at_price < price:
+            self.add_error("compare_at_price", "Compare-at price must be greater than or equal to the selling price.")
+        name = (cleaned.get("name") or "").strip()
+        slug = (cleaned.get("slug") or "").strip()
+        if name:
+            if not slug:
+                cleaned["slug"] = _unique_slug(Product, name, self.instance.pk)
+            elif Product.objects.filter(slug=slug).exclude(pk=self.instance.pk).exists():
+                self.add_error("slug", "This slug is already used. Choose another slug.")
         return cleaned
 
     def save(self, commit=True):
@@ -119,18 +169,15 @@ class VendorAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
         if not cleaned.get("owner_id"):
             cleaned["owner_id"] = None
 
-        # Mobile browsers may not run Django's prepopulated slug JavaScript.
-        # Generate a unique slug server-side when the admin leaves it blank.
+        # Generate slugs server-side for mobile browsers and report duplicates
+        # as form errors instead of allowing a database IntegrityError to escape.
         name = (cleaned.get("name") or "").strip()
         slug = (cleaned.get("slug") or "").strip()
-        if name and not slug:
-            base = slugify(name)[:240] or "vendor"
-            candidate = base
-            suffix = 2
-            while Vendor.objects.filter(slug=candidate).exclude(pk=self.instance.pk).exists():
-                candidate = f"{base[:230]}-{suffix}"
-                suffix += 1
-            cleaned["slug"] = candidate
+        if name:
+            if not slug:
+                cleaned["slug"] = _unique_slug(Vendor, name, self.instance.pk)
+            elif Vendor.objects.filter(slug=slug).exclude(pk=self.instance.pk).exists():
+                self.add_error("slug", "This slug is already used. Choose another slug.")
         return cleaned
 
     def clean_logo_upload(self):
@@ -147,28 +194,62 @@ class CloudinaryUploadAdminMixin:
 
     def save_model(self, request, obj, form, change):
         uploaded = form.cleaned_data.get(self.upload_field) if self.upload_field else None
+        uploaded_public_id = None
         if uploaded:
-            cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "")
-            api_key = os.getenv("CLOUDINARY_API_KEY", "")
-            api_secret = os.getenv("CLOUDINARY_API_SECRET", "")
+            cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+            api_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
+            api_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
             if not all((cloud_name, api_key, api_secret)):
-                self.message_user(
-                    request,
-                    "Image upload is unavailable: configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET on Render.",
-                    level=messages.ERROR,
+                raise ValidationError(
+                    "Image upload is not configured. Set the three Cloudinary credentials on Render."
                 )
-                raise ValidationError("Cloudinary credentials are not configured.")
             cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
             result = cloudinary.uploader.upload(
                 uploaded,
                 folder=self.upload_folder,
                 resource_type="image",
                 allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
+                timeout=30,
             )
-            setattr(obj, self.url_field, result["secure_url"])
+            image_url = result.get("secure_url")
+            uploaded_public_id = result.get("public_id")
+            if not image_url or not uploaded_public_id:
+                raise cloudinary.exceptions.Error("Cloudinary response did not include the uploaded image URL and public ID.")
+            setattr(obj, self.url_field, image_url)
             if self.public_id_field:
-                setattr(obj, self.public_id_field, result["public_id"])
-        super().save_model(request, obj, form, change)
+                setattr(obj, self.public_id_field, uploaded_public_id)
+        try:
+            super().save_model(request, obj, form, change)
+        except (IntegrityError, DatabaseError):
+            if uploaded_public_id:
+                try:
+                    cloudinary.uploader.destroy(uploaded_public_id, resource_type="image", timeout=15)
+                except Exception:
+                    logger.exception("Could not clean up Cloudinary asset after database save failure.")
+            raise
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except IntegrityError:
+            logger.exception("Admin save rejected by a database integrity constraint.")
+            messages.error(
+                request,
+                "The record was not saved because it conflicts with a database constraint "
+                "(for example, a duplicate slug/name or an invalid relationship). Review the fields and retry.",
+            )
+            return redirect(request.path)
+        except DatabaseError:
+            logger.exception("Admin save failed because of a database error.")
+            messages.error(request, "The database could not save this record. Check backend logs and retry.")
+            return redirect(request.path)
+        except cloudinary.exceptions.Error:
+            logger.exception("Cloudinary rejected or failed an admin image upload.")
+            messages.error(
+                request,
+                "Cloudinary could not upload this image. Check Render's Cloudinary credentials and Cloudinary logs, then retry.",
+            )
+            return redirect(request.path)
 
 
 @admin.register(Category)
@@ -244,18 +325,10 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        # Keep blank owner IDs nullable; vendor ownership must use a Supabase
-        # Auth UUID, not a numeric Django admin-user ID.
+        # Vendor ownership is a Supabase Auth UUID, not a Django staff-user ID.
         if not obj.owner_id:
             obj.owner_id = None
-        try:
-            super().save_model(request, obj, form, change)
-        except IntegrityError:
-            logger.exception("Vendor save failed due to a database integrity constraint.")
-            raise
-        except DatabaseError:
-            logger.exception("Vendor save failed due to a database error.")
-            raise
+        super().save_model(request, obj, form, change)
 
     @admin.display(description="Logo")
     def thumbnail(self, obj):
