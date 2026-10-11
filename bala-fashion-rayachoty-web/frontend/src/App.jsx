@@ -16,6 +16,7 @@ export default function App() {
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
+ const [vendorForm,setVendorForm]=useState({owner_id:'',name:'',phone:'',address:'',description:'',status:'pending'})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data})=>setSession(data.session));const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(!s)setProfile(null)});return()=>data.subscription.unsubscribe()},[])
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
@@ -91,6 +92,22 @@ export default function App() {
   setDrawer('vendors-manage')
   try{const data=await api('/vendors/manage/',{token:session.access_token});setAdminVendors(data.results||[])}
   catch(e){notify(e.message)}
+ }
+ async function createVendor(e){
+  e.preventDefault();if(busy)return;if(!session)return login()
+  const ownerId=vendorForm.owner_id.trim()
+  const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if(!uuidPattern.test(ownerId))return notify('Enter a valid Supabase Auth user UUID (not a Django ID or email).')
+  if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
+  setBusy(true)
+  try{
+   await api('/vendors/manage/',{method:'POST',token:session.access_token,body:JSON.stringify({...vendorForm,owner_id:ownerId,name:vendorForm.name.trim()})})
+   const data=await api('/vendors/manage/',{token:session.access_token})
+   setAdminVendors(data.results||[])
+   setVendorForm({owner_id:'',name:'',phone:'',address:'',description:'',status:'pending'})
+   await refreshSellerDashboard()
+   notify('Vendor created and linked to the Supabase user UUID')
+  }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function updateVendorStatus(vendor,status){
   if(!session)return login();setBusy(true)
@@ -237,7 +254,18 @@ export default function App() {
    </div>}
    {drawer==='vendors-manage'&&<div className="drawer-body seller-dashboard">
     <div className="seller-section-title"><h3>Vendor management</h3><button className="secondary" onClick={openVendorManagement}>Refresh</button></div>
-    <p>Approve new vendor stores, reject applications, or suspend and reinstate vendor access.</p>
+    <p>Create a store for an existing Supabase Auth user. The owner UUID is the Supabase Auth user ID, not a Django numeric ID. New vendor stores start pending unless you choose another status.</p>
+    <form className="form admin-vendor-create" onSubmit={createVendor}>
+     <h3>Create vendor / store</h3>
+     <label>Supabase Auth user UUID<input required value={vendorForm.owner_id} onChange={e=>setVendorForm(p=>({...p,owner_id:e.target.value.trimStart()}))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoCapitalize="off" autoCorrect="off" spellCheck="false"/></label>
+     <small>Find this UUID in Supabase → Authentication → Users → select the user → User ID. The user must already exist.</small>
+     <label>Vendor / store name<input required maxLength="180" value={vendorForm.name} onChange={e=>setVendorForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Bala Fashion Store"/></label>
+     <label>Contact phone<input value={vendorForm.phone} onChange={e=>setVendorForm(p=>({...p,phone:e.target.value}))} placeholder="Mobile number"/></label>
+     <label>Store address<textarea rows="2" value={vendorForm.address} onChange={e=>setVendorForm(p=>({...p,address:e.target.value}))} placeholder="Store address"/></label>
+     <label>Description<textarea rows="2" value={vendorForm.description} onChange={e=>setVendorForm(p=>({...p,description:e.target.value}))} placeholder="Optional store description"/></label>
+     <label>Initial status<select value={vendorForm.status} onChange={e=>setVendorForm(p=>({...p,status:e.target.value}))}><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
+     <button className="primary full" disabled={busy}>{busy?'Creating vendor…':'Create vendor'}</button>
+    </form>
     {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions">{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}</div></article>)}
    </div>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
