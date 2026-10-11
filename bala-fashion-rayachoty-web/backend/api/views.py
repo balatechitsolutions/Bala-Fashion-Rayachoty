@@ -164,7 +164,7 @@ def manage_category(request):
         return Response({"detail": "Category could not be saved. Check for duplicate category names or slugs and retry."}, status=503)
 
 
-@api_view(["GET", "PATCH"])
+@api_view(["GET", "POST", "PATCH"])
 def manage_vendors(request):
     user, prof, error = _role_user(request, {"admin"})
     if error:
@@ -183,6 +183,69 @@ def manage_vendors(request):
                 return Response({"results": _rows(c)})
         except Exception:
             return Response({"detail": "Vendor list could not be loaded."}, status=503)
+
+    if request.method == "POST":
+        data = request.data
+        owner_id = str(data.get("owner_id", "")).strip()
+        try:
+            owner_uuid = uuid.UUID(owner_id)
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Enter the vendor owner's valid Supabase Auth UUID."}, status=400)
+        name = str(data.get("name", "")).strip()[:180]
+        if not name:
+            return Response({"detail": "Store/vendor name is required."}, status=400)
+        phone = str(data.get("phone", "")).strip()[:30]
+        address = str(data.get("address", "")).strip()[:500]
+        description = str(data.get("description", "")).strip()[:2000]
+        requested_status = str(data.get("status", "pending")).strip().lower()
+        if requested_status not in {"pending", "approved", "rejected", "suspended"}:
+            return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
+        base_slug = slugify(name)[:240].strip("-")
+        if not base_slug:
+            return Response({"detail": "Enter a valid vendor/store name."}, status=400)
+        try:
+            with transaction.atomic():
+                with connection.cursor() as c:
+                    # Check the UUID against Supabase Auth itself, not a Django integer ID.
+                    c.execute("select id, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s", [str(owner_uuid)])
+                    auth_user = c.fetchone()
+                    if not auth_user:
+                        return Response({"detail": "No Supabase Auth user exists for that UUID. Copy the user's UUID from Supabase Authentication."}, status=400)
+                    c.execute(
+                        """insert into public.profiles(id,full_name,phone,role)
+                           values(%s,%s,%s,'vendor')
+                           on conflict(id) do update set
+                             full_name=case when excluded.full_name<>'' then excluded.full_name else public.profiles.full_name end,
+                             phone=case when excluded.phone<>'' then excluded.phone else public.profiles.phone end,
+                             role=case when public.profiles.role='customer' then 'vendor' else public.profiles.role end,
+                             updated_at=now()""",
+                        [str(owner_uuid), str(auth_user[1] or "")[:120], phone],
+                    )
+                    slug = base_slug
+                    suffix = 2
+                    while True:
+                        c.execute("select 1 from public.vendors where slug=%s", [slug])
+                        if not c.fetchone():
+                            break
+                        slug = f"{base_slug[:245]}-{suffix}"
+                        suffix += 1
+                    c.execute(
+                        """insert into public.vendors(owner_id,name,slug,description,phone,address,status)
+                           values(%s,%s,%s,%s,%s,%s,%s)
+                           returning id,owner_id,name,slug,description,logo_url,phone,address,status,created_at""",
+                        [str(owner_uuid), name, slug, description, phone, address, requested_status],
+                    )
+                    row = c.fetchone()
+            result = {key: value for key, value in zip(
+                ["id","owner_id","name","slug","description","logo_url","phone","address","status","created_at"], row
+            )}
+            result["id"] = str(result["id"])
+            result["owner_id"] = str(result["owner_id"])
+            if hasattr(result["created_at"], "isoformat"):
+                result["created_at"] = result["created_at"].isoformat()
+            return Response(result, status=201)
+        except Exception:
+            return Response({"detail": "Vendor could not be created. Confirm the UUID belongs to an existing Supabase Auth user and that the database schema is up to date."}, status=503)
 
     vendor_id = str(request.data.get("id", "")).strip()
     try:
