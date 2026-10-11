@@ -43,6 +43,25 @@ def _profile(user_id):
         row=c.fetchone()
     return {"id":str(row[0]),"full_name":row[1],"phone":row[2],"role":row[3]} if row else {"id":str(user_id),"full_name":"","phone":"","role":"customer"}
 
+
+def _insert_account_notification(cursor, recipient_id, event_type, title, body, order_id):
+    """Persist one account-scoped notification; uniqueness prevents duplicate events."""
+    if not recipient_id:
+        return
+    cursor.execute(
+        """insert into public.account_notifications
+               (id, recipient_id, event_type, title, body, order_id)
+           values (%s, %s, %s, %s, %s, %s)
+           on conflict (recipient_id, order_id, event_type) do nothing""",
+        [str(uuid.uuid4()), str(recipient_id), event_type, title, body, str(order_id)],
+    )
+
+
+def _notify_admins(cursor, event_type, title, body, order_id):
+    cursor.execute("select id from public.profiles where role='admin'")
+    for (admin_id,) in cursor.fetchall():
+        _insert_account_notification(cursor, admin_id, event_type, title, body, order_id)
+
 def _role_user(request,roles):
     user,error=_user(request)
     if error:return None,None,error
@@ -344,6 +363,19 @@ def orders(request):
                     c.execute("update public.products set stock_quantity=stock_quantity-%s,updated_at=now() where id=%s and stock_quantity >= %s",[i["qty"],i["id"],i["qty"]])
                     if c.rowcount!=1:raise ValueError("Inventory changed during checkout. Please retry.")
                     c.execute("""insert into public.order_items(order_id,product_id,product_name,image_url,size,color,quantity,unit_price,line_total) values(%s,%s,%s,%s,%s,%s,%s,%s,%s)""",[order_id,i["id"],i["name"],i["image"],i["size"],i["color"],i["qty"],i["price"],i["line"]])
+
+                # Only the two requested events are persisted: placed and delivered.
+                c.execute("select owner_id from public.vendors where id=%s", [str(vendor)])
+                seller_row = c.fetchone()
+                if seller_row and seller_row[0]:
+                    _insert_account_notification(
+                        c, seller_row[0], "placed", "New order placed",
+                        f"Order {order[1]} has been placed.", order_id,
+                    )
+                _notify_admins(
+                    c, "placed", "New order placed",
+                    f"Order {order[1]} has been placed.", order_id,
+                )
             return Response({"id":str(order[0]),"order_number":order[1],"status":order[2],"payment_method":order[3],"subtotal":str(order[4]),"delivery_fee":str(order[5]),"total":str(order[6]),"created_at":order[7].isoformat()},status=201)
     except ValueError as e:return Response({"detail":str(e)},status=409)
     except Exception:return Response({"detail":"Could not place order. Please retry or contact support."},status=503)
@@ -372,7 +404,7 @@ def manage_orders(request):
                 with connection.cursor() as c:
                     if prof["role"] == "vendor":
                         c.execute(
-                            """select o.id, o.status, o.payment_method, o.payment_status
+                            """select o.id, o.status, o.payment_method, o.payment_status, o.customer_id, o.order_number
                                from public.orders o
                                join public.vendors v on v.id=o.vendor_id
                                where o.id=%s and v.owner_id=%s and v.status='approved'
@@ -380,7 +412,7 @@ def manage_orders(request):
                             [order_id, user["id"]],
                         )
                     else:
-                        c.execute("select id, status, payment_method, payment_status from public.orders where id=%s for update", [order_id])
+                        c.execute("select id, status, payment_method, payment_status, customer_id, order_number from public.orders where id=%s for update", [order_id])
                     current = c.fetchone()
                     if not current:
                         return Response({"detail": "Order not found or you do not have permission to manage it."}, status=404)
@@ -413,6 +445,16 @@ def manage_orders(request):
                         [status_value, status_value, order_id],
                     )
                     row = c.fetchone()
+                    if status_value == "delivered" and current_status != "delivered":
+                        customer_id, order_number = current[4], current[5]
+                        _insert_account_notification(
+                            c, customer_id, "delivered", "Your order was delivered",
+                            f"Order {order_number} has been delivered.", current[0],
+                        )
+                        _notify_admins(
+                            c, "delivered", "Order delivered",
+                            f"Order {order_number} has been delivered.", current[0],
+                        )
             return Response({
                 "id": str(row[0]), "order_number": row[1], "status": row[2],
                 "payment_status": row[3], "total": str(row[4]),
@@ -459,6 +501,54 @@ def manage_orders(request):
         return Response({"results": rows, "count": len(rows), "role": prof["role"]})
     except Exception:
         return Response({"detail": "Orders could not be loaded. Check the backend database connection."}, status=503)
+
+
+@api_view(["GET", "PATCH"])
+def account_notifications(request):
+    """Read and mark read only notifications belonging to the authenticated Supabase account."""
+    user, error = _user(request)
+    if error:
+        return error
+
+    try:
+        with connection.cursor() as c:
+            if request.method == "PATCH":
+                notification_id = str(request.data.get("id") or "").strip()
+                if request.data.get("mark_all_read") is True:
+                    c.execute(
+                        """update public.account_notifications set read_at=now()
+                           where recipient_id=%s and read_at is null""",
+                        [user["id"]],
+                    )
+                else:
+                    try:
+                        uuid.UUID(notification_id)
+                    except (ValueError, TypeError, AttributeError):
+                        return Response({"detail": "Choose a valid notification or mark all as read."}, status=400)
+                    c.execute(
+                        """update public.account_notifications set read_at=now()
+                           where id=%s and recipient_id=%s and read_at is null""",
+                        [notification_id, user["id"]],
+                    )
+                    if c.rowcount == 0:
+                        c.execute(
+                            "select 1 from public.account_notifications where id=%s and recipient_id=%s",
+                            [notification_id, user["id"]],
+                        )
+                        if not c.fetchone():
+                            return Response({"detail": "Notification not found."}, status=404)
+
+            c.execute(
+                """select id,event_type,title,body,order_id,created_at,read_at
+                   from public.account_notifications
+                   where recipient_id=%s
+                   order by created_at desc limit 100""",
+                [user["id"]],
+            )
+            rows = _rows(c)
+        return Response({"results": rows, "count": len(rows), "unread_count": sum(1 for item in rows if not item["read_at"])})
+    except Exception:
+        return Response({"detail": "Notifications are temporarily unavailable. Verify the account_notifications database table exists."}, status=503)
 
 
 @api_view(["POST"])
