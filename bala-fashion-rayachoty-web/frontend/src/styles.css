@@ -1051,3 +1051,37 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .auth-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:22px;padding-top:16px;border-top:1px solid #eee4d9;color:#8c7d70;font-size:10px}
 .auth-secure svg{color:#6f8a68}
 @media(max-width:520px){.auth-intro h3{font-size:28px}.auth-panel{padding:20px!important}.auth-divider{margin:18px 0}}
+
+/* Firebase notification center */
+.notification-area{position:relative;display:flex;align-items:center;flex:0 0 auto;order:2}
+.notification-bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--app-line);border-radius:12px;background:#fff;color:#40495b;transition:background .18s,border-color .18s,transform .18s}
+.notification-bell:hover,.notification-bell.is-open{background:#f7f3ef;border-color:#d7c4b7}
+.notification-bell:active{transform:scale(.97)}
+.notification-count{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;padding:0 5px;display:grid;place-items:center;border:2px solid #fff;border-radius:999px;background:#a52b3b;color:#fff;font-size:10px;line-height:1;font-weight:800;box-shadow:0 2px 5px #0002}
+.notification-popover{position:absolute;z-index:50;top:calc(100% + 12px);right:-6px;width:min(370px,calc(100vw - 24px));max-height:min(560px,calc(100dvh - 105px));display:flex;flex-direction:column;overflow:hidden;border:1px solid #e7ded5;border-radius:16px;background:#fff;box-shadow:0 18px 55px #28201824;color:#29251f}
+.notification-popover-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 17px 14px;border-bottom:1px solid #eee7df}
+.notification-popover-head>div:first-child{display:flex;flex-direction:column;gap:4px}
+.notification-popover-head b{font-size:14px}
+.notification-popover-head small{font-size:11px;color:#83776d}
+.notification-head-actions{display:flex;align-items:center;gap:10px}
+.notification-head-actions button,.notification-popover-foot button{border:0;background:transparent;color:#702b38;font-size:11px;font-weight:750}
+.notification-head-actions .notification-close{display:grid;place-items:center;width:28px;height:28px;border:1px solid #eee7df;border-radius:8px;color:#62574e}
+.notification-empty{display:flex;align-items:center;flex-direction:column;text-align:center;padding:27px 20px 25px}
+.notification-empty-icon{width:48px;height:48px;display:grid;place-items:center;margin-bottom:13px;border-radius:15px;background:#f8f1eb;color:#702b38}
+.notification-empty>b{font-size:13px}
+.notification-empty>p{max-width:245px;margin:7px 0 17px;color:#82766c;font-size:11px;line-height:1.6}
+.notification-enable{border:1px solid #702b38;border-radius:9px;padding:10px 13px;background:#702b38;color:#fff8f0;font-size:11px;font-weight:750}
+.notification-enable:disabled,.notification-popover-foot button:disabled{opacity:.6;cursor:wait}
+.notification-list{overflow:auto;overscroll-behavior:contain}
+.notification-item{position:relative;display:flex;align-items:flex-start;gap:11px;width:100%;padding:14px 16px;border:0;border-bottom:1px solid #f1ebe5;background:#fff;text-align:left;color:inherit}
+.notification-item:hover{background:#fbf8f4}
+.notification-item.read{background:#fff;color:#756d64}
+.notification-item-mark{flex:0 0 31px;width:31px;height:31px;display:grid;place-items:center;border-radius:10px;background:#f8f0eb;color:#702b38}
+.notification-item-copy{min-width:0;display:flex;flex-direction:column;gap:4px;padding-right:9px}
+.notification-item-copy>b{font-size:12px;font-weight:750;line-height:1.35}
+.notification-item-copy>small{font-size:11px;line-height:1.5;color:#756d64;overflow-wrap:anywhere}
+.notification-item-copy>time{margin-top:3px;font-size:10px;color:#9b8f84}
+.notification-unread-dot{position:absolute;top:19px;right:15px;width:7px;height:7px;border-radius:50%;background:#a52b3b}
+.notification-popover-foot{display:flex;justify-content:center;padding:12px 16px;border-top:1px solid #eee7df;background:#fffdfa;font-size:11px;color:#82766c}
+@media(max-width:760px){.notification-bell{width:36px;height:36px;border-radius:10px}.notification-popover{right:-54px;top:calc(100% + 10px);width:min(350px,calc(100vw - 20px))}.app-topbar{gap:9px}.notification-count{top:-5px;right:-5px}}
+@media(max-width:380px){.notification-bell{width:32px;height:32px}.notification-popover{right:-48px}}
