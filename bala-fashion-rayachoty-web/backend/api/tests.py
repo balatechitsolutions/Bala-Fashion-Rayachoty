@@ -1,4 +1,5 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
 from . import views
@@ -14,7 +15,7 @@ class EndpointTests(SimpleTestCase):
     def test_health_database_failure_is_503(self):
         req=self.factory.get("/api/health/")
         with patch.object(views.os,"getenv",return_value="postgresql://example"):
-            with patch.object(views.connection,"cursor",side_effect=Exception("db down")):
+            with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(side_effect=Exception("db down")))):
                 res=views.health(req)
         self.assertEqual(res.status_code,503)
     def test_orders_requires_bearer(self):
@@ -92,7 +93,7 @@ class EndpointTests(SimpleTestCase):
         cursor.fetchone.side_effect = [(product_id, "Hidden shirt"), (product_id, "Hidden shirt", True)]
         with patch.object(views, "_user", return_value=(user, None)), \
              patch.object(views, "_profile", return_value=profile), \
-             patch.object(views.connection, "cursor", return_value=cursor):
+             patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
             response = views.manage_product(req)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["is_active"])
@@ -131,13 +132,7 @@ class EndpointTests(SimpleTestCase):
             res=views.orders(req)
         self.assertEqual(res.status_code,400)
 
-    def test_supabase_auth_user_directory_shows_setup_hint_without_secret(self):
-        from django.test import RequestFactory
-        from django.contrib.auth.models import AnonymousUser
-        from . import admin as admin_module
-        request = RequestFactory().get("/admin/supabase-users/")
-        request.user = AnonymousUser()
-        with patch.dict("os.environ", {"SUPABASE_SERVICE_ROLE_KEY": "", "SUPABASE_URL": ""}, clear=False):
-            response = admin_module.supabase_auth_users_view(request)
-        self.assertEqual(response.status_code,200)
-        self.assertIn(b"SUPABASE_SERVICE_ROLE_KEY",response.content)
+    def test_django_admin_uuid_page_is_registered(self):
+        from django.urls import resolve
+        match = resolve('/admin/vendor-uuids/')
+        self.assertEqual(match.url_name, 'admin-vendor-uuids')
