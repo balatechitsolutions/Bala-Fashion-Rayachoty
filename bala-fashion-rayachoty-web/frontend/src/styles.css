@@ -963,3 +963,26 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   object-position: center;
   background: #f0e8df;
 }
+
+
+/* Portrait product-card images: native 9:16 frame, edge-to-edge with no gaps or overflow. */
+.photo,
+.app-page .photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 9 / 16;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  background: #f0e8df;
+}
+.photo img,
+.app-page .photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center;
+}
