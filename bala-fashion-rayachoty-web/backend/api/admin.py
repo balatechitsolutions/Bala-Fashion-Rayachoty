@@ -341,7 +341,7 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
     @admin.display(description="Logo")
     def thumbnail(self, obj):
-        return format_html('<img src="{}" class="bf-thumbnail" alt="">', obj.logo_url) if obj.logo_url else "—"
+        return format_html('<img src="{}" alt="Vendor logo" style="width:56px;height:56px;max-width:56px;max-height:56px;object-fit:contain;border-radius:8px;background:#f3f4f6;padding:4px;box-sizing:border-box;">', obj.logo_url) if obj.logo_url else "—"
 
     @admin.action(description="Approve selected vendors")
     def approve(self, request, queryset):
