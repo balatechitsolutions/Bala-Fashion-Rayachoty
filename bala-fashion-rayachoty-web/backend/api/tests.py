@@ -155,6 +155,44 @@ class EndpointTests(SimpleTestCase):
             response = views.manage_orders(req)
         self.assertEqual(response.status_code, 403)
 
+    @patch.object(views, "_user", return_value=({"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}, None))
+    @patch.object(views, "road_distance_meters", return_value=1250.5)
+    def test_delivery_quote_uses_road_distance_and_fee(self, road_distance, auth):
+        vendor_id = "a2e4b2d8-2b77-4b84-a420-0e30e2a7d6aa"
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.return_value = ("Rayachoty Store", 14.05, 78.75)
+        req = self.factory.post(
+            "/api/delivery/quote/",
+            {"vendor_id": vendor_id, "latitude": 14.06, "longitude": 78.76},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+            response = views.delivery_quote(req)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["delivery_fee"], "15.00")
+        self.assertEqual(response.data["distance_meters"], 1250)
+        road_distance.assert_called_once()
+
+    @patch.object(views, "_user", return_value=({"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}, None))
+    @patch.object(views, "road_distance_meters", return_value=5200)
+    def test_delivery_quote_rejects_routes_over_five_kilometres(self, road_distance, auth):
+        vendor_id = "a2e4b2d8-2b77-4b84-a420-0e30e2a7d6aa"
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.return_value = ("Rayachoty Store", 14.05, 78.75)
+        req = self.factory.post(
+            "/api/delivery/quote/",
+            {"vendor_id": vendor_id, "latitude": 14.06, "longitude": 78.76},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+            response = views.delivery_quote(req)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("5 km", response.data["detail"])
+
     def test_order_requires_address_and_items(self):
         req=self.factory.post("/api/orders/",{"items":[]},format="json",HTTP_AUTHORIZATION="Bearer test")
         with patch.object(views,"_user",return_value=({"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"},None)):
