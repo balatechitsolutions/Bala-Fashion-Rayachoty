@@ -1,5 +1,5 @@
 import json, os, re, uuid
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 import requests
 from django.db import connection, transaction
 from django.utils.text import slugify
@@ -36,7 +36,7 @@ def delivery_fee_for_distance(distance_meters):
         raise ValueError("Could not calculate the delivery distance.")
     if not distance.is_finite() or distance < 0:
         raise ValueError("Could not calculate the delivery distance.")
-    blocks = (distance / Decimal(DELIVERY_BLOCK_METERS)).to_integral_value(rounding="ROUND_CEILING")
+    blocks = (distance / Decimal(DELIVERY_BLOCK_METERS)).to_integral_value(rounding=ROUND_CEILING)
     return (blocks * DELIVERY_BLOCK_FEE).quantize(Decimal("0.01"))
 
 def road_distance_meters(origin_latitude, origin_longitude, destination_latitude, destination_longitude):
