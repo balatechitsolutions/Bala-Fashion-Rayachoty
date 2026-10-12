@@ -2,7 +2,8 @@ from django.contrib import admin, messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connection
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+import uuid
 from django.urls import include, path
 
 from api.views import manage_vendors
@@ -50,6 +51,46 @@ def delivery_staff_uuids(request):
     """Read-only list of delivery staff from Supabase-backed profiles; no Django model/table."""
     _is_admin_superuser(request)
 
+    if request.method == "POST":
+        staff_id_raw = request.POST.get("user_id", "").strip()
+        full_name = request.POST.get("full_name", "").strip()[:120]
+        phone = request.POST.get("phone", "").strip()[:30]
+        try:
+            staff_id = str(uuid.UUID(staff_id_raw))
+        except (ValueError, TypeError, AttributeError):
+            messages.error(request, "Enter a valid Supabase Auth UUID copied from Supabase Authentication → Users.")
+            return redirect("admin-delivery-staff-uuids")
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id, COALESCE(raw_user_meta_data->>'full_name', '') FROM auth.users WHERE id = %s",
+                    [staff_id],
+                )
+                auth_user = cursor.fetchone()
+                if not auth_user:
+                    messages.error(request, "No Supabase Auth user exists for that UUID. Create the user in Supabase Authentication first.")
+                    return redirect("admin-delivery-staff-uuids")
+                cursor.execute("SELECT role FROM public.profiles WHERE id = %s", [staff_id])
+                existing_profile = cursor.fetchone()
+                if existing_profile and existing_profile[0] in {"admin", "vendor"}:
+                    messages.error(request, "This account already has an admin/vendor role. Use a separate customer account for delivery work.")
+                    return redirect("admin-delivery-staff-uuids")
+                cursor.execute(
+                    """INSERT INTO public.profiles (id, full_name, phone, role)
+                       VALUES (%s, %s, %s, 'delivery_boy')
+                       ON CONFLICT (id) DO UPDATE SET
+                         full_name = CASE WHEN EXCLUDED.full_name <> '' THEN EXCLUDED.full_name ELSE public.profiles.full_name END,
+                         phone = CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE public.profiles.phone END,
+                         role = 'delivery_boy',
+                         updated_at = now()""",
+                    [staff_id, full_name or str(auth_user[1] or "")[:120], phone],
+                )
+            messages.success(request, "Delivery staff authorized successfully. The Supabase Auth UUID is now enabled for delivery assignments.")
+        except DatabaseError:
+            messages.error(request, "Could not authorize delivery staff. Verify the Supabase database connection and apply the delivery-role SQL migration.")
+        return redirect("admin-delivery-staff-uuids")
+
     staff = []
     try:
         with connection.cursor() as cursor:
@@ -75,7 +116,7 @@ def delivery_staff_uuids(request):
     return render(
         request,
         "admin/delivery_staff_uuids.html",
-        {"title": "Delivery Staff UUIDs", "delivery_staff": staff},
+        {"title": "Delivery Staff Management", "delivery_staff": staff},
     )
 
 
