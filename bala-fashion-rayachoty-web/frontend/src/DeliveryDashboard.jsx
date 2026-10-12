@@ -6,7 +6,7 @@ const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximu
 
 export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify, authUsers = [] }) {
   const [staff, setStaff] = useState([])
-  const [userId, setUserId] = useState('')
+  const [userEmail, setUserEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [assignments, setAssignments] = useState({})
@@ -33,9 +33,9 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     try {
       await api('/delivery/staff/', {
         method: 'POST', token: session.access_token,
-        body: JSON.stringify({ user_id: userId.trim(), full_name: fullName.trim(), phone: phone.trim() }),
+        body: JSON.stringify({ email: userEmail.trim().toLowerCase(), full_name: fullName.trim(), phone: phone.trim() }),
       })
-      setUserId(''); setFullName(''); setPhone('')
+      setUserEmail(''); setFullName(''); setPhone('')
       await loadStaff()
       notify('Delivery-boy role enabled. The user can now sign in.')
     } catch (err) {
@@ -43,6 +43,18 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     } finally { setSaving(false) }
   }
 
+  async function removeStaff(person) {
+    if (!session?.access_token || saving) return
+    if (!window.confirm('Remove delivery access for ' + (person.email || person.full_name || person.id) + '? Their account will return to customer role and active orders will be unassigned.')) return
+    setSaving(true)
+    try {
+      await api('/delivery/staff/', { method: 'DELETE', token: session.access_token, body: JSON.stringify({ id: person.id }) })
+      await Promise.all([loadStaff(), onRefresh?.()])
+      notify('Delivery staff access removed')
+    } catch (err) {
+      notify(err.message || 'Could not remove delivery staff.')
+    } finally { setSaving(false) }
+  }
   async function assign(order) {
     const deliveryBoyId = assignments[order.id] || order.assigned_delivery_boy_id || ''
     if (!deliveryBoyId) return notify('Choose a delivery person first.')
@@ -66,21 +78,8 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     </div>
     <form className="form admin-vendor-create" onSubmit={addStaff}>
       <h3><UserPlus size={17}/> Authorize delivery person</h3>
-      <label>Existing website user (match delivery person's email)
-        <select required value={userId} onChange={event => {
-          const selected = authUsers.find(user => user.id === event.target.value)
-          setUserId(selected?.id || '')
-          setFullName(selected?.full_name || '')
-          setPhone(selected?.phone || '')
-        }}>
-          <option value="">Select existing website account by email</option>
-          {authUsers.filter(user => user.role === 'customer').map(user =>
-            <option key={user.id} value={user.id}>{user.email || 'No email'} — {user.full_name || 'Unnamed user'}</option>
-          )}
-        </select>
-      </label>
-      {userId && <p className="staff-help">Selected Auth UUID: <code>{userId}</code></p>}
-      <small>First fetch users from the admin management dashboard. Only existing customer accounts are eligible; admin, vendor and already-authorized delivery accounts cannot be selected.</small>
+      <label>Existing website account email<input type="email" required value={userEmail} onChange={event => setUserEmail(event.target.value)} placeholder="Enter delivery person's registered email" autoCapitalize="off" autoCorrect="off" spellCheck={false}/></label>
+      <small>The backend matches this email to an existing Supabase Auth account. Admin and vendor accounts cannot be converted to delivery staff. No dropdown or UUID entry is needed.</small>
       <label>Display name (optional)<input value={fullName} onChange={event => setFullName(event.target.value)} maxLength={120}/></label>
       <label>Phone (optional)<input value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} inputMode="tel"/></label>
       <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Enable delivery account'}</button>
@@ -90,8 +89,8 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       <h3>Authorized delivery people ({staff.length})</h3>
       {!staff.length ? <p className="seller-empty">No delivery accounts yet.</p> : staff.map(person =>
         <article className="seller-store-row" key={person.id}>
-          <span><b>{person.full_name || 'Delivery person'}</b><small>{person.phone || 'No phone'} · {person.id}</small></span>
-          <span className="seller-status approved">Active</span>
+          <span><b>{person.full_name || 'Delivery person'}</b><small>{person.email || 'No email'} · {person.phone || 'No phone'}</small><small>{person.id}</small></span>
+          <span className="seller-status approved">Active</span><button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove</button>
         </article>
       )}
     </section>

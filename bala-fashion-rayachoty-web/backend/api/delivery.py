@@ -20,7 +20,7 @@ def _valid_uuid(value):
         return None
 
 
-@api_view(["GET", "POST"])
+@api_view(["GET", "POST", "DELETE"])
 def delivery_staff(request):
     """Admins can list delivery staff and authorize an existing Supabase user."""
     user, profile, error = _role_user(request, {"admin"})
@@ -28,15 +28,18 @@ def delivery_staff(request):
         return error
 
     if request.method == "POST":
-        staff_id = _valid_uuid(request.data.get("user_id"))
-        if not staff_id:
-            return Response({"detail": "Enter a valid Supabase Auth user UUID."}, status=400)
+        staff_email = str(request.data.get("email") or "").strip().lower()[:320]
+        if not staff_email or "@" not in staff_email:
+            return Response({"detail": "Enter the email address of an existing website account."}, status=400)
+        staff_id = None
         try:
             with transaction.atomic():
                 with connection.cursor() as cursor:
-                    cursor.execute("select id from auth.users where id=%s", [staff_id])
-                    if not cursor.fetchone():
-                        return Response({"detail": "No Supabase Auth user exists for that UUID."}, status=404)
+                    cursor.execute("select id from auth.users where lower(email)=lower(%s) limit 1", [staff_email])
+                    auth_user = cursor.fetchone()
+                    if not auth_user:
+                        return Response({"detail": "No website account exists for this email. The person must register/sign in first."}, status=404)
+                    staff_id = str(auth_user[0])
                     cursor.execute("select role from public.profiles where id=%s for update", [staff_id])
                     existing_profile = cursor.fetchone()
                     if existing_profile and existing_profile[0] in {"admin", "vendor"}:
@@ -57,11 +60,28 @@ def delivery_staff(request):
         except Exception:
             return Response({"detail": "Delivery staff could not be authorized. Apply the delivery-role SQL migration first."}, status=503)
 
+    if request.method == "DELETE":
+        staff_id = _valid_uuid(request.data.get("id") or request.query_params.get("id"))
+        if not staff_id:
+            return Response({"detail": "Choose a valid delivery staff account."}, status=400)
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("select id from public.profiles where id=%s and role='delivery_boy' for update", [staff_id])
+                    if not cursor.fetchone():
+                        return Response({"detail": "Delivery staff account not found."}, status=404)
+                    cursor.execute("update public.orders set assigned_delivery_boy_id=NULL, updated_at=now() where assigned_delivery_boy_id=%s and status<>'delivered'", [staff_id])
+                    cursor.execute("update public.profiles set role='customer', updated_at=now() where id=%s and role='delivery_boy'", [staff_id])
+            return Response({"id": staff_id, "deleted": True, "role": "customer"})
+        except Exception:
+            return Response({"detail": "Delivery staff could not be removed. Retry after checking the database connection."}, status=503)
+
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                """select p.id, p.full_name, p.phone
+                """select p.id, p.full_name, p.phone, u.email
                    from public.profiles p
+                   left join auth.users u on u.id=p.id
                    where p.role='delivery_boy'
                    order by p.full_name, p.id
                    limit 200"""

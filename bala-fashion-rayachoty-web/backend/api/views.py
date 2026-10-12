@@ -278,7 +278,7 @@ def manage_category(request):
         return Response({"detail": "Category could not be saved. Check for duplicate category names or slugs and retry."}, status=503)
 
 
-@api_view(["GET", "POST", "PATCH"])
+@api_view(["GET", "POST", "PATCH", "DELETE"])
 def manage_vendors(request):
     user, prof, error = _role_user(request, {"admin"})
     if error:
@@ -302,14 +302,9 @@ def manage_vendors(request):
 
     if request.method == "POST":
         data = request.data
-        owner_id = str(data.get("owner_user_id") or data.get("owner_id") or "").strip()
         owner_email = str(data.get("owner_email") or "").strip().lower()[:320]
-        try:
-            owner_uuid = uuid.UUID(owner_id)
-        except (ValueError, TypeError, AttributeError):
-            return Response({"detail": "Enter the vendor owner's valid Supabase Auth UUID."}, status=400)
         if not owner_email or "@" not in owner_email:
-            return Response({"detail": "Enter the vendor owner's email address so it can be matched to the selected Auth account."}, status=400)
+            return Response({"detail": "Enter the email address of an existing website account."}, status=400)
         name = str(data.get("name", "")).strip()[:180]
         if not name:
             return Response({"detail": "Store/vendor name is required."}, status=400)
@@ -330,13 +325,12 @@ def manage_vendors(request):
         try:
             with transaction.atomic():
                 with connection.cursor() as c:
-                    # Check the UUID against Supabase Auth itself, not a Django integer ID.
-                    c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s", [str(owner_uuid)])
+                    # Resolve the owner from the exact email in Supabase Auth; never trust a client-supplied UUID.
+                    c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where lower(email)=lower(%s) limit 1", [owner_email])
                     auth_user = c.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No Supabase Auth user exists for that UUID. The vendor owner must sign in or register on the website first."}, status=400)
-                    if not auth_user[1] or str(auth_user[1]).strip().lower() != owner_email:
-                        return Response({"detail": "The Owner ID does not match the vendor email. Fetch website users, match the exact email, and copy that user's UUID."}, status=400)
+                        return Response({"detail": "No website account exists for this email. The owner must register/sign in first."}, status=404)
+                    owner_uuid = auth_user[0]
                     c.execute("select role from public.profiles where id=%s", [str(owner_uuid)])
                     existing_profile = c.fetchone()
                     if existing_profile and existing_profile[0] in {"admin", "delivery_boy"}:
@@ -382,11 +376,28 @@ def manage_vendors(request):
         except Exception:
             return Response({"detail": "Vendor could not be created. Confirm the UUID belongs to an existing Supabase Auth user and that the database schema is up to date."}, status=503)
 
-    vendor_id = str(request.data.get("id", "")).strip()
+    vendor_id = str(request.data.get("id") or request.query_params.get("id") or "").strip()
     try:
         uuid.UUID(vendor_id)
     except (ValueError, TypeError, AttributeError):
         return Response({"detail": "Choose a valid vendor."}, status=400)
+    if request.method == "DELETE":
+        try:
+            with transaction.atomic():
+                with connection.cursor() as c:
+                    c.execute("select id, owner_id, name from public.vendors where id=%s for update", [vendor_id])
+                    vendor = c.fetchone()
+                    if not vendor:
+                        return Response({"detail": "Vendor not found."}, status=404)
+                    c.execute("select 1 from public.orders where vendor_id=%s limit 1", [vendor_id])
+                    if c.fetchone():
+                        return Response({"detail": "This vendor has order history and cannot be permanently deleted. Set its status to suspended instead."}, status=409)
+                    c.execute("delete from public.products where vendor_id=%s", [vendor_id])
+                    c.execute("delete from public.vendors where id=%s", [vendor_id])
+                    c.execute("update public.profiles set role='customer', updated_at=now() where id=%s and role='vendor'", [str(vendor[1])])
+            return Response({"id": str(vendor[0]), "name": vendor[2], "deleted": True})
+        except Exception:
+            return Response({"detail": "Vendor could not be deleted. Suspend the vendor if it has dependent records."}, status=503)
     status_value = str(request.data.get("status", "")).strip().lower() if "status" in request.data else None
     if status_value is not None and status_value not in {"pending", "approved", "rejected", "suspended"}:
         return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
