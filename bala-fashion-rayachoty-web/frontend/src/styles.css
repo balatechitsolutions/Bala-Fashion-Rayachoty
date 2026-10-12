@@ -1255,7 +1255,7 @@ footer a,footer button{color:#f6dfe8}
 .location-picker-head .secondary{display:inline-flex;align-items:center;gap:6px;padding:8px 11px}
 .location-picker p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
 .location-map{height:250px;min-height:220px;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#eee;z-index:0}
-.location-map .leaflet-control-attribution{font-size:9px}
+
 .location-coordinates{display:flex;flex-wrap:wrap;gap:8px 16px;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
 .location-picker>small{color:var(--muted);font-size:10px}
 .location-error{color:#a32222!important}
