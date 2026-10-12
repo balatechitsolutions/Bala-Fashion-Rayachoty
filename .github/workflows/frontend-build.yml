@@ -1,0 +1,26 @@
+name: Frontend production build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bala-fashion-rayachoty-web/frontend/**"
+      - ".github/workflows/frontend-build.yml"
+  pull_request:
+    paths:
+      - "bala-fashion-rayachoty-web/frontend/**"
+      - ".github/workflows/frontend-build.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bala-fashion-rayachoty-web/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npm run build
