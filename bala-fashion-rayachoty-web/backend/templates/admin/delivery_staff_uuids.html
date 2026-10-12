@@ -26,29 +26,8 @@
   <h1>Delivery Staff Management</h1>
   <p><strong>Required workflow:</strong> the delivery staff member must first register or sign in on the website. Find their matching email in the Auth user list below, copy their Supabase Auth UUID, and select that account in the form. Authorization is rejected unless the UUID belongs to an existing eligible Auth user. This does not create a separate Django user or delivery-staff table.</p>
 
-  <h2>Existing website users — find by email and copy UUID</h2>
-  <div class="staff-tools">
-    <input id="auth-user-search" type="search" placeholder="Search email, name, UUID, or role…" aria-label="Search Supabase Auth users">
-    <span><strong>{{ auth_users|length }}</strong> Auth user(s) shown (latest 1,000)</span>
-  </div>
-  <div style="overflow-x:auto">
-    <table class="staff-uuid-table" id="auth-user-table">
-      <thead><tr><th>User name</th><th>Email</th><th>Role</th><th>Supabase Auth UUID</th><th>Registered</th></tr></thead>
-      <tbody>
-      {% for auth_user in auth_users %}
-        <tr>
-          <td>{{ auth_user.full_name|default:"—" }}</td>
-          <td>{{ auth_user.email|default:"No email" }}</td>
-          <td>{{ auth_user.role }}</td>
-          <td><span class="uuid-value">{{ auth_user.id }}</span><br><button class="copy-button" type="button" data-copy="{{ auth_user.id }}" data-label="Copy UUID">Copy UUID</button></td>
-          <td>{{ auth_user.created_at|default:"—" }}</td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="5">No Supabase Auth users found. Ask the staff member to register/sign in on the website first, then refresh.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <p><a class="action-link" href="{% url 'admin-auth-user-uuids' %}">Fetch website users / copy UUID</a></p>
+  <p class="staff-help">Use the shared UUID lookup page to find a person by email and copy their Auth UUID. You can also select an eligible existing user directly in the form below.</p>
 
   <form class="staff-form" method="post">
     {% csrf_token %}
