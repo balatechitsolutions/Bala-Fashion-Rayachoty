@@ -76,3 +76,28 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class DeliveryStaff(models.Model):
+    """Django-managed directory record linked to an existing Supabase Auth user."""
+
+    id = models.BigAutoField(primary_key=True)
+    supabase_user_id = models.UUIDField(
+        unique=True,
+        help_text="UUID of the existing user in Supabase Auth. This does not create a Supabase login.",
+    )
+    full_name = models.CharField(max_length=120)
+    email = models.EmailField(blank=True, default="")
+    phone = models.CharField(max_length=30, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "delivery_staff"
+        ordering = ("full_name", "id")
+        verbose_name = "Delivery staff"
+        verbose_name_plural = "Delivery staff"
+
+    def __str__(self):
+        return f"{self.full_name} ({self.supabase_user_id})"
