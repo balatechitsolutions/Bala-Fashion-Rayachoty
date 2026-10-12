@@ -101,10 +101,10 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!map)return
   const lat=Number(latitude),lng=Number(longitude)
   if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
-   if(!markerRef.current)markerRef.current=new Marker({draggable:true,color:'#7b1e3a'}).setLngLat([lng,lat]).addTo(map)
-   else markerRef.current.setLngLat([lng,lat])
-   markerRef.current.off('dragend')
-   markerRef.current.on('dragend',()=>{const p=markerRef.current.getLngLat();latest.current.onChange({latitude:p.lat.toFixed(6),longitude:p.lng.toFixed(6)});setLocationError('')})
+   if(!markerRef.current){
+    markerRef.current=new Marker({draggable:true,color:'#7b1e3a'}).setLngLat([lng,lat]).addTo(map)
+    markerRef.current.on('dragend',()=>{const p=markerRef.current.getLngLat();latest.current.onChange({latitude:p.lat.toFixed(6),longitude:p.lng.toFixed(6)});setLocationError('')})
+   }else markerRef.current.setLngLat([lng,lat])
   }else if(markerRef.current){markerRef.current.remove();markerRef.current=null}
  },[latitude,longitude])
 
