@@ -15,6 +15,20 @@ CLOUD_KEY=os.getenv("CLOUDINARY_API_KEY","")
 CLOUD_SECRET=os.getenv("CLOUDINARY_API_SECRET","")
 DELIVERY_FEE=Decimal(os.getenv("DELIVERY_FEE","0"))
 
+def delivery_fee_for_address(postal_code, state):
+    """Return low-cost delivery pricing from the destination PIN and state."""
+    pin = str(postal_code or "").strip()
+    normalized_state = str(state or "").strip().casefold()
+    if not re.fullmatch(r"\d{6}", pin):
+        raise ValueError("Enter a valid 6-digit PIN code to calculate delivery charges.")
+    if pin == "516269":
+        return Decimal("20.00")
+    if normalized_state in {"andhra pradesh", "ap"}:
+        return Decimal("35.00")
+    if normalized_state in {"telangana", "ts"}:
+        return Decimal("45.00")
+    return Decimal("60.00")
+
 def _rows(cursor):
     cols=[c[0] for c in cursor.description]
     out=[]
@@ -331,7 +345,14 @@ def orders(request):
     if not isinstance(address,dict) or not isinstance(items,list) or not 1<=len(items)<=30:return Response({"detail":"Provide a delivery address and 1–30 cart items."},status=400)
     recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
     if not recipient or not line1 or not re.fullmatch(r"[0-9+() \-]{10,16}",phone):return Response({"detail":"Enter recipient name, valid mobile number and street address."},status=400)
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":str(address.get("city","Rayachoty"))[:100],"state":str(address.get("state","Andhra Pradesh"))[:100],"postal_code":str(address.get("postal_code",""))[:12]}
+    postal_code=str(address.get("postal_code","")).strip()
+    state_name=str(address.get("state","Andhra Pradesh")).strip()[:100] or "Andhra Pradesh"
+    city_name=str(address.get("city","Rayachoty")).strip()[:100] or "Rayachoty"
+    try:
+        fee=delivery_fee_for_address(postal_code,state_name)
+    except ValueError as exc:
+        return Response({"detail":str(exc)},status=400)
+    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":city_name,"state":state_name,"postal_code":postal_code}
     try:
         with transaction.atomic():
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
@@ -357,7 +378,7 @@ def orders(request):
                 verified.append({"id":prod_id,"name":name,"price":price,"image":image or "","qty":qty,"size":size,"color":color,"line":line})
             if subtotal < Decimal("250.00"):
                 return Response({"detail":"Minimum order amount is ₹250. Add more items to continue."},status=400)
-            fee=max(Decimal("0.00"),DELIVERY_FEE);total=subtotal+fee;number="BFR-"+uuid.uuid4().hex[:10].upper()
+            total=subtotal+fee;number="BFR-"+uuid.uuid4().hex[:10].upper()
             with connection.cursor() as c:
                 c.execute("""insert into public.orders(order_number,customer_id,vendor_id,status,payment_method,payment_status,subtotal,delivery_fee,total,address_snapshot,notes) values(%s,%s,%s,'placed','cod','pending',%s,%s,%s,%s::jsonb,%s) returning id,order_number,status,payment_method,subtotal,delivery_fee,total,created_at""",[number,user["id"],vendor,subtotal,fee,total,json.dumps(snapshot),str(data.get("notes",""))[:500]])
                 order=c.fetchone();order_id=order[0]
