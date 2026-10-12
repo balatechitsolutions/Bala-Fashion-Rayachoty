@@ -12,7 +12,7 @@ import cloudinary
 import cloudinary.exceptions
 import cloudinary.uploader
 
-from .models import Category, Product, Vendor
+from .models import Category, DeliveryStaff, Product, Vendor
 
 logger = logging.getLogger(__name__)
 
@@ -398,3 +398,30 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     @admin.display(description="Image")
     def image_status(self, obj):
         return "Uploaded" if obj.image_url else "Missing"
+
+
+
+@admin.register(DeliveryStaff)
+class DeliveryStaffAdmin(admin.ModelAdmin):
+    """Read-only admin view of profiles authorized for delivery work."""
+
+    list_display = ("full_name", "id", "phone", "updated_at")
+    list_display_links = None
+    list_filter = ("role",)
+    search_fields = ("full_name", "phone", "id")
+    ordering = ("full_name", "id")
+    list_per_page = 50
+    readonly_fields = ("id", "full_name", "phone", "role", "updated_at")
+    fields = ("id", "full_name", "phone", "role", "updated_at")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(role="delivery_boy")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
