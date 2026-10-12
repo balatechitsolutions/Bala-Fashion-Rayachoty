@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, Check, MapPin, Package, RefreshCw, Truck, UserPlus } from 'lucide-react'
 import { api } from './api'
 
-const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}'
+const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
 export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify }) {
   const [staff, setStaff] = useState([])
