@@ -30,11 +30,15 @@ class DeliveryStaffUUIDAdminTests(SimpleTestCase):
     def test_superuser_can_view_delivery_staff_uuids_without_django_model(self, connection_mock):
         cursor = MagicMock()
         connection_mock.cursor.return_value.__enter__.return_value = cursor
-        cursor.description = [
-            ("id",), ("full_name",), ("phone",), ("updated_at",)
-        ]
-        cursor.fetchall.return_value = [
-            ("3db4b2df-77f9-4e25-93a6-32a50f8f70c1", "Delivery Worker", "9876543210", None)
+        def set_result_shape(sql, params=None):
+            if "FROM public.profiles p" in sql:
+                cursor.description = [("id",), ("full_name",), ("phone",), ("updated_at",), ("email",)]
+            else:
+                cursor.description = [("id",), ("email",), ("full_name",), ("created_at",), ("role",)]
+        cursor.execute.side_effect = set_result_shape
+        cursor.fetchall.side_effect = [
+            [("3db4b2df-77f9-4e25-93a6-32a50f8f70c1", "Delivery Worker", "9876543210", None, "delivery@example.com")],
+            [("3db4b2df-77f9-4e25-93a6-32a50f8f70c1", "delivery@example.com", "Delivery Worker", None, "delivery_boy")],
         ]
 
         response = urls.delivery_staff_uuids(self.admin_request())
@@ -43,9 +47,11 @@ class DeliveryStaffUUIDAdminTests(SimpleTestCase):
         body = response.content.decode()
         self.assertIn("Delivery Staff UUIDs", body)
         self.assertIn("3db4b2df-77f9-4e25-93a6-32a50f8f70c1", body)
-        cursor.execute.assert_called_once()
-        self.assertIn("public.profiles", cursor.execute.call_args.args[0])
-        self.assertEqual(cursor.execute.call_args.args[1], ["delivery_boy"])
+        self.assertIn("delivery@example.com", body)
+        self.assertEqual(cursor.execute.call_count, 2)
+        self.assertIn("public.profiles", cursor.execute.call_args_list[0].args[0])
+        self.assertEqual(cursor.execute.call_args_list[0].args[1], ["delivery_boy"])
+        self.assertIn("auth.users", cursor.execute.call_args_list[1].args[0])
 
     def test_non_superuser_staff_cannot_view_delivery_staff_uuids(self):
         with self.assertRaises(PermissionDenied):
