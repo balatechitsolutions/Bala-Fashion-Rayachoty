@@ -3,11 +3,15 @@ from types import SimpleNamespace
 
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.exceptions import PermissionDenied
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, override_settings
 
 from config import urls
 
 
+@override_settings(STORAGES={
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+})
 class DeliveryStaffUUIDAdminTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -22,10 +26,10 @@ class DeliveryStaffUUIDAdminTests(SimpleTestCase):
         )
         return request
 
-    @patch("config.urls.connection.cursor")
-    def test_superuser_can_view_delivery_staff_uuids_without_django_model(self, cursor_factory):
+    @patch("config.urls.connection")
+    def test_superuser_can_view_delivery_staff_uuids_without_django_model(self, connection_mock):
         cursor = MagicMock()
-        cursor_factory.return_value.__enter__.return_value = cursor
+        connection_mock.cursor.return_value.__enter__.return_value = cursor
         cursor.description = [
             ("id",), ("full_name",), ("phone",), ("updated_at",)
         ]
@@ -36,8 +40,9 @@ class DeliveryStaffUUIDAdminTests(SimpleTestCase):
         response = urls.delivery_staff_uuids(self.admin_request())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Delivery Staff UUIDs")
-        self.assertContains(response, "3db4b2df-77f9-4e25-93a6-32a50f8f70c1")
+        body = response.content.decode()
+        self.assertIn("Delivery Staff UUIDs", body)
+        self.assertIn("3db4b2df-77f9-4e25-93a6-32a50f8f70c1", body)
         cursor.execute.assert_called_once()
         self.assertIn("public.profiles", cursor.execute.call_args.args[0])
         self.assertEqual(cursor.execute.call_args.args[1], ["delivery_boy"])
