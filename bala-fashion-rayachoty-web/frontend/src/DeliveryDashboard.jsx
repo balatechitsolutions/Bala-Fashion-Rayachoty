@@ -4,7 +4,7 @@ import { api } from './api'
 
 const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
 
-export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify }) {
+export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify, authUsers = [] }) {
   const [staff, setStaff] = useState([])
   const [userId, setUserId] = useState('')
   const [fullName, setFullName] = useState('')
@@ -66,10 +66,21 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     </div>
     <form className="form admin-vendor-create" onSubmit={addStaff}>
       <h3><UserPlus size={17}/> Authorize delivery person</h3>
-      <label>Existing Supabase Auth user UUID
-        <input required value={userId} onChange={event => setUserId(event.target.value.trimStart())} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoCapitalize="off" autoCorrect="off" spellCheck="false"/>
+      <label>Existing website user (match delivery person's email)
+        <select required value={userId} onChange={event => {
+          const selected = authUsers.find(user => user.id === event.target.value)
+          setUserId(selected?.id || '')
+          setFullName(selected?.full_name || '')
+          setPhone(selected?.phone || '')
+        }}>
+          <option value="">Select existing website account by email</option>
+          {authUsers.filter(user => user.role === 'customer').map(user =>
+            <option key={user.id} value={user.id}>{user.email || 'No email'} — {user.full_name || 'Unnamed user'}</option>
+          )}
+        </select>
       </label>
-      <small>Create the user first in Supabase → Authentication → Users. This action grants only the delivery_boy role.</small>
+      {userId && <p className="staff-help">Selected Auth UUID: <code>{userId}</code></p>}
+      <small>First fetch users from the admin management dashboard. Only existing customer accounts are eligible; admin, vendor and already-authorized delivery accounts cannot be selected.</small>
       <label>Display name (optional)<input value={fullName} onChange={event => setFullName(event.target.value)} maxLength={120}/></label>
       <label>Phone (optional)<input value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} inputMode="tel"/></label>
       <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Enable delivery account'}</button>

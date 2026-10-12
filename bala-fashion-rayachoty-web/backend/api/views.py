@@ -66,6 +66,19 @@ def road_distance_meters(origin_latitude, origin_longitude, destination_latitude
         raise ValueError("Could not calculate the delivery distance.")
     return distance
 
+def _rows_from_dicts(rows):
+    """Normalize UUID/date values for JSON responses."""
+    normalized = []
+    for row in rows:
+        item = dict(row)
+        for key, value in item.items():
+            if isinstance(value, uuid.UUID):
+                item[key] = str(value)
+            elif hasattr(value, "isoformat"):
+                item[key] = value.isoformat()
+        normalized.append(item)
+    return normalized
+
 def _rows(cursor):
     cols=[c[0] for c in cursor.description]
     out=[]
@@ -128,6 +141,37 @@ def health(request):
         return Response({"status":"ok","service":"bala-fashion-api","database":"connected"})
     except Exception:
         return Response({"status":"degraded","database":"unavailable"},status=503)
+
+@api_view(["GET"])
+def manage_auth_users(request):
+    """List existing Supabase Auth accounts for admins to assign vendor/delivery roles."""
+    user, profile, error = _role_user(request, {"admin"})
+    if error:
+        return error
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT u.id, u.email,
+                       COALESCE(NULLIF(p.full_name, ''), u.raw_user_meta_data->>'full_name', '') AS full_name,
+                       COALESCE(p.phone, '') AS phone,
+                       COALESCE(p.role, 'customer') AS role,
+                       u.created_at
+                FROM auth.users u
+                LEFT JOIN public.profiles p ON p.id = u.id
+                ORDER BY u.created_at DESC
+                LIMIT 1000
+                """
+            )
+            columns = [column[0] for column in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return Response({"results": _rows_from_dicts(rows), "count": len(rows)})
+    except Exception:
+        return Response(
+            {"detail": "Website users could not be fetched. Verify the backend database connection and auth.users permissions."},
+            status=503,
+        )
+
 
 @api_view(["GET"])
 def categories(request):
@@ -244,9 +288,11 @@ def manage_vendors(request):
             with connection.cursor() as c:
                 c.execute(
                     """select v.id,v.owner_id,v.name,v.slug,v.description,v.logo_url,v.phone,v.address,
-                              v.latitude,v.longitude,v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone
+                              v.latitude,v.longitude,v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone,
+                              u.email as owner_email
                        from public.vendors v
                        left join public.profiles p on p.id=v.owner_id
+                       left join auth.users u on u.id=v.owner_id
                        order by case v.status when 'pending' then 0 when 'approved' then 1 else 2 end, v.created_at desc
                        limit 500"""
                 )
@@ -257,10 +303,13 @@ def manage_vendors(request):
     if request.method == "POST":
         data = request.data
         owner_id = str(data.get("owner_user_id") or data.get("owner_id") or "").strip()
+        owner_email = str(data.get("owner_email") or "").strip().lower()[:320]
         try:
             owner_uuid = uuid.UUID(owner_id)
         except (ValueError, TypeError, AttributeError):
             return Response({"detail": "Enter the vendor owner's valid Supabase Auth UUID."}, status=400)
+        if not owner_email or "@" not in owner_email:
+            return Response({"detail": "Enter the vendor owner's email address so it can be matched to the selected Auth account."}, status=400)
         name = str(data.get("name", "")).strip()[:180]
         if not name:
             return Response({"detail": "Store/vendor name is required."}, status=400)
@@ -282,19 +331,28 @@ def manage_vendors(request):
             with transaction.atomic():
                 with connection.cursor() as c:
                     # Check the UUID against Supabase Auth itself, not a Django integer ID.
-                    c.execute("select id, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s", [str(owner_uuid)])
+                    c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s", [str(owner_uuid)])
                     auth_user = c.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No Supabase Auth user exists for that UUID. Copy the user's UUID from Supabase Authentication."}, status=400)
+                        return Response({"detail": "No Supabase Auth user exists for that UUID. The vendor owner must sign in or register on the website first."}, status=400)
+                    if not auth_user[1] or str(auth_user[1]).strip().lower() != owner_email:
+                        return Response({"detail": "The Owner ID does not match the vendor email. Fetch website users, match the exact email, and copy that user's UUID."}, status=400)
+                    c.execute("select role from public.profiles where id=%s", [str(owner_uuid)])
+                    existing_profile = c.fetchone()
+                    if existing_profile and existing_profile[0] in {"admin", "delivery_boy"}:
+                        return Response({"detail": "This account has an admin or delivery role. Select a separate customer account that matches the vendor email."}, status=400)
+                    c.execute("select id from public.vendors where owner_id=%s limit 1", [str(owner_uuid)])
+                    if c.fetchone():
+                        return Response({"detail": "This Supabase account already owns a vendor. Each vendor must use a separate owner account."}, status=400)
                     c.execute(
                         """insert into public.profiles(id,full_name,phone,role)
                            values(%s,%s,%s,'vendor')
                            on conflict(id) do update set
                              full_name=case when excluded.full_name<>'' then excluded.full_name else public.profiles.full_name end,
                              phone=case when excluded.phone<>'' then excluded.phone else public.profiles.phone end,
-                             role=case when public.profiles.role='customer' then 'vendor' else public.profiles.role end,
+                             role='vendor',
                              updated_at=now()""",
-                        [str(owner_uuid), str(auth_user[1] or "")[:120], phone],
+                        [str(owner_uuid), str(auth_user[2] or "")[:120], phone],
                     )
                     slug = base_slug
                     suffix = 2
@@ -315,7 +373,9 @@ def manage_vendors(request):
                 ["id","owner_id","name","slug","description","logo_url","phone","address","latitude","longitude","status","created_at"], row
             )}
             result["id"] = str(result["id"])
-            result["owner_id"] = str(result["owner_id"])\n            result["vendor_id"] = result["id"]\n            result["owner_user_id"] = result["owner_id"]
+            result["owner_id"] = str(result["owner_id"])
+            result["vendor_id"] = result["id"]
+            result["owner_user_id"] = result["owner_id"]
             if hasattr(result["created_at"], "isoformat"):
                 result["created_at"] = result["created_at"].isoformat()
             return Response(result, status=201)

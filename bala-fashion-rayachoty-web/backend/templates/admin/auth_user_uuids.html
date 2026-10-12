@@ -1,0 +1,71 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .user-tools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:16px 0}
+  .user-tools input{min-width:260px;max-width:100%;padding:9px 12px}
+  .user-table{width:100%;border-collapse:collapse;background:var(--body-bg,#fff)}
+  .user-table th,.user-table td{padding:10px;border-bottom:1px solid var(--hairline-color,#ddd);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+  .user-table th{background:var(--darkened-bg,#f5f5f5)}
+  .uuid-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+  .copy-button{margin:4px 0;padding:6px 10px;cursor:pointer}
+  .action-link{display:inline-block;padding:8px 12px;margin:4px 8px 12px 0;border:1px solid var(--hairline-color,#aaa);border-radius:4px;text-decoration:none}
+  @media(max-width:760px){.user-table{font-size:12px}.user-table th,.user-table td{padding:7px}.user-tools input{min-width:0;width:100%}}
+</style>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p><a href="{% url 'admin:index' %}">← Back to Django Admin</a></p>
+  <h1>Website User UUIDs</h1>
+  <p>Use this shared list for both <strong>vendor owner linking</strong> and <strong>delivery staff authorization</strong>. Ask the person to register or sign in on the website first. Find the exact matching email, copy the Supabase Auth UUID, and paste/select it in the relevant admin workflow. This page does not create accounts.</p>
+  <p>
+    <a class="action-link" href="{% url 'admin-vendor-uuids' %}">Vendor owner management</a>
+    <a class="action-link" href="{% url 'admin-delivery-staff-uuids' %}">Delivery staff management</a>
+  </p>
+  <form method="get" class="user-tools">
+    <button type="submit" class="default">Fetch / Refresh Users</button>
+    <input id="user-search" type="search" placeholder="Search email, name, role, or UUID…" aria-label="Search website users">
+    <span><strong>{{ auth_users|length }}</strong> users fetched (maximum 1,000)</span>
+  </form>
+  <div style="overflow-x:auto">
+    <table class="user-table" id="user-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Supabase Auth UUID</th><th>Registered</th></tr></thead>
+      <tbody>
+      {% for auth_user in auth_users %}
+        <tr>
+          <td>{{ auth_user.full_name|default:"—" }}</td>
+          <td>{{ auth_user.email|default:"No email" }}</td>
+          <td>{{ auth_user.role }}</td>
+          <td><span class="uuid-value">{{ auth_user.id }}</span><br><button class="copy-button" type="button" data-copy="{{ auth_user.id }}">Copy UUID</button></td>
+          <td>{{ auth_user.created_at|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No Supabase Auth users found. Ask the person to register/sign in on the website, then press Fetch / Refresh Users.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+(function(){
+  const search=document.getElementById('user-search');
+  const rows=Array.from(document.querySelectorAll('#user-table tbody tr'));
+  search.addEventListener('input',function(){
+    const q=search.value.trim().toLowerCase();
+    rows.forEach(row=>{row.hidden=!row.innerText.toLowerCase().includes(q);});
+  });
+  document.querySelectorAll('[data-copy]').forEach(button=>{
+    button.addEventListener('click',async function(){
+      const value=button.getAttribute('data-copy');
+      try{await navigator.clipboard.writeText(value);button.textContent='Copied!';}
+      catch(error){
+        const area=document.createElement('textarea');area.value=value;document.body.appendChild(area);area.select();
+        const copied=document.execCommand('copy');area.remove();button.textContent=copied?'Copied!':'Copy failed';
+      }
+      window.setTimeout(()=>{button.textContent='Copy UUID';},1600);
+    });
+  });
+})();
+</script>
+{% endblock %}
