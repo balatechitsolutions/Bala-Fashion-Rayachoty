@@ -19,7 +19,7 @@
 <div id="content-main">
   <p><a href="{% url 'admin:index' %}">← Back to Django Admin</a></p>
   <h1>Vendor UUIDs</h1>
-  <p>Read-only listing from <code>public.vendors</code>. The vendor UUID identifies the store; the owner UUID identifies its Supabase Auth user.</p>
+  <p><strong>These UUIDs are different.</strong> <strong>Vendor record UUID</strong> (<code>public.vendors.id</code>) identifies the store. <strong>Owner Supabase Auth UUID</strong> (<code>public.vendors.owner_id</code>) identifies the user who signs in. Use the owner UUID for account identity and permissions; use the vendor record UUID for store/product references.</p>
 
   <div class="vendor-tools">
     <input id="vendor-search" type="search" placeholder="Search vendor name, status, or UUID…" aria-label="Search vendors">
@@ -29,20 +29,19 @@
   <div style="overflow-x:auto">
     <table class="vendor-uuid-table" id="vendor-table">
       <thead><tr>
-        <th>Vendor</th><th>Vendor record UUID</th><th>Supabase Auth owner UUID</th><th>Status</th><th>Phone</th><th>Created</th>
+        <th>Vendor record UUID <small>(public.vendors.id)</small></th><th>Owner Supabase Auth UUID <small>(public.vendors.owner_id)</small></th><th>Status</th><th>Phone</th><th>Created</th>
       </tr></thead>
       <tbody>
       {% for vendor in vendors %}
         <tr>
-          <td>{{ vendor.name|default:"—" }}</td>
-          <td><span class="uuid-value">{{ vendor.id|default:"—" }}</span>{% if vendor.id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.id }}">Copy vendor UUID</button>{% endif %}</td>
-          <td><span class="uuid-value">{{ vendor.owner_id|default:"—" }}</span>{% if vendor.owner_id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.owner_id }}">Copy owner UUID</button>{% endif %}</td>
+          <td>{{ vendor.name|default:"—" }}<br><span class="uuid-value">{{ vendor.id|default:"—" }}</span>{% if vendor.id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.id }}" data-label="Copy vendor record UUID">Copy vendor record UUID</button>{% endif %}</td>
+          <td><span class="uuid-value">{{ vendor.owner_id|default:"—" }}</span>{% if vendor.owner_id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.owner_id }}" data-label="Copy owner Auth UUID">Copy owner Auth UUID</button>{% endif %}</td>
           <td>{{ vendor.status|default:"—" }}</td>
           <td>{{ vendor.phone|default:"—" }}</td>
           <td>{{ vendor.created_at|default:"—" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="6">No vendors found, or the vendor table could not be queried. Check any admin error message above.</td></tr>
+        <tr><td colspan="5">No vendors found, or the vendor table could not be queried. Check any admin error message above.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -74,9 +73,7 @@
         button.textContent = copied ? 'Copied!' : 'Copy failed';
       }
       window.setTimeout(function () {
-        button.textContent = button.getAttribute('data-copy') === value
-          ? (button.textContent.includes('owner') ? 'Copy owner UUID' : 'Copy UUID')
-          : 'Copy UUID';
+        button.textContent = button.getAttribute('data-label') || 'Copy UUID';
       }, 1600);
     });
   });
