@@ -7,15 +7,33 @@ from . import views
 
 class EndpointTests(SimpleTestCase):
     def setUp(self): self.factory=APIRequestFactory()
-    def test_delivery_fee_uses_low_cost_location_tiers(self):
-        self.assertEqual(views.delivery_fee_for_address("516269", "Andhra Pradesh"), Decimal("20.00"))
-        self.assertEqual(views.delivery_fee_for_address("516270", "Andhra Pradesh"), Decimal("35.00"))
-        self.assertEqual(views.delivery_fee_for_address("500001", "Telangana"), Decimal("45.00"))
-        self.assertEqual(views.delivery_fee_for_address("110001", "Delhi"), Decimal("60.00"))
+    def test_delivery_fee_rounds_up_to_next_500_metre_block(self):
+        self.assertEqual(views.delivery_fee_for_distance(0), Decimal("0.00"))
+        self.assertEqual(views.delivery_fee_for_distance(1), Decimal("5.00"))
+        self.assertEqual(views.delivery_fee_for_distance(500), Decimal("5.00"))
+        self.assertEqual(views.delivery_fee_for_distance(501), Decimal("10.00"))
+        self.assertEqual(views.delivery_fee_for_distance(1000), Decimal("10.00"))
+        self.assertEqual(views.delivery_fee_for_distance(5000), Decimal("50.00"))
 
-    def test_delivery_fee_requires_six_digit_pin(self):
-        with self.assertRaises(ValueError):
-            views.delivery_fee_for_address("123", "Andhra Pradesh")
+    def test_delivery_fee_rejects_negative_or_non_numeric_distance(self):
+        for distance in (-1, "not-a-distance"):
+            with self.subTest(distance=distance), self.assertRaises(ValueError):
+                views.delivery_fee_for_distance(distance)
+
+    def test_coordinates_are_validated(self):
+        self.assertEqual(views._coordinate("14.05", "latitude"), 14.05)
+        for value in ("bad", "91", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                views._coordinate(value, "latitude")
+
+    @patch.object(views.requests, "get")
+    def test_road_distance_uses_osrm_route_distance(self, get):
+        response = MagicMock()
+        response.json.return_value = {"code": "Ok", "routes": [{"distance": 1250.5}]}
+        get.return_value = response
+        distance = views.road_distance_meters(14.05, 78.75, 14.06, 78.76)
+        self.assertEqual(distance, 1250.5)
+        self.assertIn("/route/v1/driving/78.75,14.05;78.76,14.06", get.call_args.args[0])
 
     def test_health_without_database_is_ok_but_not_configured(self):
         req=self.factory.get("/api/health/")
