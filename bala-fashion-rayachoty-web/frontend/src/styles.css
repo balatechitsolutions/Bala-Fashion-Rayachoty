@@ -1239,3 +1239,10 @@ footer a,footer button{color:#f6dfe8}
 .order-detail-link:hover{text-decoration:underline;text-underline-offset:3px}
 .order-detail-link:focus-visible{outline:2px solid #b47b90;outline-offset:3px;border-radius:4px}
 .drawer-body.account-orders-panel,.drawer-body.order-detail-page{display:flex;flex-direction:column}
+
+
+/* PIN-based low-cost delivery estimate at checkout */
+.delivery-fee-preview{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--line,#e5e5e5);border-radius:12px;background:var(--surface-soft,#faf8f5);font-size:13px;color:var(--muted,#666)}
+.delivery-fee-preview>div{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--ink,#222);font-size:14px}
+.delivery-fee-preview>div b{font-size:16px}
+.delivery-fee-preview small{font-size:12px}
