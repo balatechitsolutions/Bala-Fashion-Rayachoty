@@ -232,6 +232,6 @@ class EndpointTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "delivered")
         self.assertEqual(response.data["payment_status"], "paid")
-        update_call = cursor.execute.call_args_list[-1]
-        self.assertIn("payment_status=case", update_call.args[0].lower())
-        self.assertEqual(update_call.args[1], ["delivered", "delivered", order_id])
+        update_calls = [call for call in cursor.execute.call_args_list if "payment_status=case" in call.args[0].lower()]
+        self.assertTrue(update_calls)
+        self.assertEqual(update_calls[0].args[1], ["delivered", "delivered", order_id])
