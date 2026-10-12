@@ -12,7 +12,7 @@ import cloudinary
 import cloudinary.exceptions
 import cloudinary.uploader
 
-from .models import Category, Product, Vendor
+from .models import Category, DeliveryStaff, Product, Vendor
 
 logger = logging.getLogger(__name__)
 
@@ -398,3 +398,13 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     @admin.display(description="Image")
     def image_status(self, obj):
         return "Uploaded" if obj.image_url else "Missing"
+
+
+@admin.register(DeliveryStaff)
+class DeliveryStaffAdmin(admin.ModelAdmin):
+    list_display = ("full_name", "email", "phone", "supabase_user_id", "is_active", "updated_at")
+    list_filter = ("is_active",)
+    search_fields = ("full_name", "email", "phone", "supabase_user_id")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("full_name",)
+    list_per_page = 50
