@@ -1,9 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, Clock3, CreditCard, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, MapPin, Menu, Minus, Package, Pencil, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
@@ -19,6 +14,26 @@ L.Icon.Default.mergeOptions({
  shadowUrl: markerShadow,
 })
 
+let googleMapsPromise
+
+function loadGoogleMaps() {
+ if(window.google?.maps)return Promise.resolve(window.google)
+ const apiKey=import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+ if(!apiKey)return Promise.reject(new Error('Google Maps is not configured yet. Add VITE_GOOGLE_MAPS_API_KEY in Vercel environment variables.'))
+ if(!googleMapsPromise){
+  googleMapsPromise=new Promise((resolve,reject)=>{
+   const script=document.createElement('script')
+   script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`
+   script.async=true
+   script.defer=true
+   script.onload=()=>window.google?.maps?resolve(window.google):reject(new Error('Google Maps JavaScript API did not initialize.'))
+   script.onerror=()=>{googleMapsPromise=null;reject(new Error('Google Maps failed to load. Check the API key and enabled APIs.'))}
+   document.head.appendChild(script)
+  })
+ }
+ return googleMapsPromise
+}
+
 function LocationPicker({latitude,longitude,onChange,label}) {
  const mapNode=useRef(null), mapRef=useRef(null), markerRef=useRef(null)
  const latest=useRef({latitude,longitude,onChange})
@@ -31,32 +46,57 @@ function LocationPicker({latitude,longitude,onChange,label}) {
    latest.current.onChange({latitude:Number(lat).toFixed(6),longitude:Number(lng).toFixed(6)})
    setLocationError('')
   }
-  const init=()=>{
+  const init=async()=>{
    if(cancelled||!mapNode.current||mapRef.current)return
-   const current=latest.current
-   const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
-   const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
-   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
-   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:19,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
-   }).addTo(map)
-   const setMarker=(lat,lng)=>{
-    if(!markerRef.current){
-     markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
-     markerRef.current.on('dragend',event=>{const p=event.target.getLatLng();addPoint(p.lat,p.lng)})
-    }else markerRef.current.setLatLng([lat,lng])
+   try{
+    const google=await loadGoogleMaps()
+    if(cancelled||!mapNode.current)return
+    const current=latest.current
+    const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
+    const center=hasPoint
+     ?{lat:Number(current.latitude),lng:Number(current.longitude)}
+     :{lat:RAYACHOTY_MAP_CENTER[0],lng:RAYACHOTY_MAP_CENTER[1]}
+    const map=new google.maps.Map(mapNode.current,{
+     center,
+     zoom:hasPoint?16:13,
+     mapTypeControl:false,
+     streetViewControl:false,
+     fullscreenControl:true,
+     clickableIcons:false,
+     gestureHandling:'cooperative'
+    })
+    const setMarker=(lat,lng)=>{
+     const position={lat:Number(lat),lng:Number(lng)}
+     if(!markerRef.current){
+      markerRef.current=new google.maps.Marker({position,map,draggable:true,title:label})
+      markerRef.current.addListener('dragend',event=>{
+       if(event.latLng)addPoint(event.latLng.lat(),event.latLng.lng())
+      })
+     }else{
+      markerRef.current.setPosition(position)
+      markerRef.current.setMap(map)
+     }
+    }
+    if(hasPoint)setMarker(center.lat,center.lng)
+    map.addListener('click',event=>{
+     if(!event.latLng)return
+     setMarker(event.latLng.lat(),event.latLng.lng())
+     addPoint(event.latLng.lat(),event.latLng.lng())
+    })
+    mapRef.current=map
+    map.__setMarker=setMarker
+   }catch(error){
+    if(!cancelled)setLocationError(error.message||'Google Maps could not be loaded.')
    }
-   if(hasPoint)setMarker(center[0],center[1])
-   map.on('click',event=>{setMarker(event.latlng.lat,event.latlng.lng);addPoint(event.latlng.lat,event.latlng.lng)})
-   mapRef.current=map
-   map.__setMarker=setMarker
-   map.whenReady(()=>{if(!cancelled)map.invalidateSize()})
   }
   init()
   return ()=>{
    cancelled=true
-   if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null}
+   if(window.google?.maps?.event&&mapRef.current)window.google.maps.event.clearInstanceListeners(mapRef.current)
+   if(window.google?.maps?.event&&markerRef.current)window.google.maps.event.clearInstanceListeners(markerRef.current)
+   if(markerRef.current)markerRef.current.setMap(null)
+   markerRef.current=null
+   mapRef.current=null
   }
  },[])
 
@@ -65,8 +105,13 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!map)return
   const lat=Number(latitude),lng=Number(longitude)
   if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
-   map.__setMarker?.(lat,lng);map.setView([lat,lng],16)
-  }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
+   map.__setMarker?.(lat,lng)
+   map.setCenter({lat,lng})
+   map.setZoom(16)
+  }else if(markerRef.current){
+   markerRef.current.setMap(null)
+   markerRef.current=null
+  }
  },[latitude,longitude])
 
  function useCurrentLocation(){
@@ -80,11 +125,11 @@ function LocationPicker({latitude,longitude,onChange,label}) {
  }
  return <section className="location-picker">
   <div className="location-picker-head"><b>{label}</b><button type="button" className="secondary" onClick={useCurrentLocation}><MapPin size={15}/> Use my location</button></div>
-  <p>Tap the map or drag the pin to the exact location. Only Rayachoty local deliveries are supported.</p>
+  <p>Tap Google Maps or drag the pin to the exact location. Only Rayachoty local deliveries are supported.</p>
   <div ref={mapNode} className="location-map" role="application" aria-label={label+' map'} />
   <div className="location-coordinates"><span>Latitude: {latitude||'Not selected'}</span><span>Longitude: {longitude||'Not selected'}</span></div>
   {locationError&&<small className="location-error">{locationError}</small>}
-  <small>Map data &copy; OpenStreetMap contributors.</small>
+  <small>Map powered by Google Maps.</small>
  </section>
 }
 
@@ -444,7 +489,7 @@ export default function App() {
     <div className="local-service-note"><MapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from the selling vendor</div>
     <LocationPicker label="Your delivery location" latitude={address.latitude} longitude={address.longitude} onChange={({latitude,longitude})=>setAddress(p=>({...p,latitude,longitude}))}/>
     <div className="delivery-fee-preview">
-     {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>Select a map location to calculate the delivery charge.</span>}
+     {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · road-distance routing</small></>:<span>Select a map location to calculate the delivery charge.</span>}
     </div>
     <label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label>
     <div className="cod"><Check size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div>
