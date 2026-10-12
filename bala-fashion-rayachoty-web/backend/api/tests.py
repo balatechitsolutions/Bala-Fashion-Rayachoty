@@ -199,10 +199,12 @@ class EndpointTests(SimpleTestCase):
             res=views.orders(req)
         self.assertEqual(res.status_code,400)
 
-    def test_django_admin_uuid_page_is_registered(self):
+    def test_standard_django_admin_dashboard_is_registered(self):
         from django.urls import resolve
-        match = resolve('/admin/vendor-uuids/')
-        self.assertEqual(match.url_name, 'admin-vendor-uuids')
+        match = resolve('/admin/')
+        self.assertEqual(match.url_name, 'index')
+        custom_page = resolve('/admin/vendor-uuids/')
+        self.assertNotEqual(custom_page.url_name, 'admin-vendor-uuids')
 
     def test_delivered_cod_order_marks_payment_paid(self):
         from contextlib import nullcontext

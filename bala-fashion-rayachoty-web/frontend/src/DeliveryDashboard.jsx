@@ -6,7 +6,8 @@ const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximu
 
 export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify, authUsers = [] }) {
   const [staff, setStaff] = useState([])
-  const [userEmail, setUserEmail] = useState('')
+  const [userId, setUserId] = useState('')
+  const [userSearch, setUserSearch] = useState('')
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [assignments, setAssignments] = useState({})
@@ -33,9 +34,9 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     try {
       await api('/delivery/staff/', {
         method: 'POST', token: session.access_token,
-        body: JSON.stringify({ email: userEmail.trim().toLowerCase(), full_name: fullName.trim(), phone: phone.trim() }),
+        body: JSON.stringify({ user_id: userId, full_name: fullName.trim(), phone: phone.trim() }),
       })
-      setUserEmail(''); setFullName(''); setPhone('')
+      setUserId(''); setUserSearch(''); setFullName(''); setPhone('')
       await loadStaff()
       notify('Delivery-boy role enabled. The user can now sign in.')
     } catch (err) {
@@ -78,8 +79,12 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     </div>
     <form className="form admin-vendor-create" onSubmit={addStaff}>
       <h3><UserPlus size={17}/> Authorize delivery person</h3>
-      <label>Existing website account email<input type="email" required value={userEmail} onChange={event => setUserEmail(event.target.value)} placeholder="Enter delivery person's registered email" autoCapitalize="off" autoCorrect="off" spellCheck={false}/></label>
-      <small>The backend matches this email to an existing Supabase Auth account. Admin and vendor accounts cannot be converted to delivery staff. No dropdown or UUID entry is needed.</small>
+      <label>Search website users by email<input type="search" value={userSearch} onChange={event=>setUserSearch(event.target.value)} placeholder="Search registered email…" autoComplete="off"/></label>
+      <label>Delivery staff account<select required value={userId} onChange={event=>setUserId(event.target.value)}>
+        <option value="">Choose an existing customer account</option>
+        {authUsers.filter(person=>person.email&&(!person.role||person.role==='customer')&&person.email.toLowerCase().includes(userSearch.trim().toLowerCase())).map(person=><option key={person.id} value={person.id}>{person.email}{person.full_name?' — '+person.full_name:''}</option>)}
+      </select></label>
+      <small>The selected option submits the user's Supabase Auth UUID. Admin, vendor and existing delivery accounts are excluded.</small>
       <label>Display name (optional)<input value={fullName} onChange={event => setFullName(event.target.value)} maxLength={120}/></label>
       <label>Phone (optional)<input value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} inputMode="tel"/></label>
       <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Enable delivery account'}</button>

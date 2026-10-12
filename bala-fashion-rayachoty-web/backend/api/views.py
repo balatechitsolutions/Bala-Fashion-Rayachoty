@@ -302,9 +302,11 @@ def manage_vendors(request):
 
     if request.method == "POST":
         data = request.data
-        owner_email = str(data.get("owner_email") or "").strip().lower()[:320]
-        if not owner_email or "@" not in owner_email:
-            return Response({"detail": "Enter the email address of an existing website account."}, status=400)
+        owner_user_id = str(data.get("owner_user_id") or "").strip()
+        try:
+            owner_user_id = str(uuid.UUID(owner_user_id))
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Search for and select a valid existing website user."}, status=400)
         name = str(data.get("name", "")).strip()[:180]
         if not name:
             return Response({"detail": "Store/vendor name is required."}, status=400)
@@ -325,11 +327,11 @@ def manage_vendors(request):
         try:
             with transaction.atomic():
                 with connection.cursor() as c:
-                    # Resolve the owner from the exact email in Supabase Auth; never trust a client-supplied UUID.
-                    c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where lower(email)=lower(%s) limit 1", [owner_email])
+                    # Resolve the selected UUID against Supabase Auth and verify the account exists.
+                    c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s limit 1", [owner_user_id])
                     auth_user = c.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No website account exists for this email. The owner must register/sign in first."}, status=404)
+                        return Response({"detail": "No website account exists for this UUID. The owner must register/sign in first."}, status=404)
                     owner_uuid = auth_user[0]
                     c.execute("select role from public.profiles where id=%s", [str(owner_uuid)])
                     existing_profile = c.fetchone()
@@ -374,7 +376,7 @@ def manage_vendors(request):
                 result["created_at"] = result["created_at"].isoformat()
             return Response(result, status=201)
         except Exception:
-            return Response({"detail": "Vendor could not be created. Confirm the UUID belongs to an existing Supabase Auth user and that the database schema is up to date."}, status=503)
+            return Response({"detail": "Vendor could not be created. Confirm the selected user exists in Supabase Auth and that the database schema is up to date."}, status=503)
 
     vendor_id = str(request.data.get("id") or request.query_params.get("id") or "").strip()
     try:
