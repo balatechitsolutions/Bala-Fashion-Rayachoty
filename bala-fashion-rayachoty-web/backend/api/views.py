@@ -288,9 +288,11 @@ def manage_vendors(request):
             with connection.cursor() as c:
                 c.execute(
                     """select v.id,v.owner_id,v.name,v.slug,v.description,v.logo_url,v.phone,v.address,
-                              v.latitude,v.longitude,v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone
+                              v.latitude,v.longitude,v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone,
+                              u.email as owner_email
                        from public.vendors v
                        left join public.profiles p on p.id=v.owner_id
+                       left join auth.users u on u.id=v.owner_id
                        order by case v.status when 'pending' then 0 when 'approved' then 1 else 2 end, v.created_at desc
                        limit 500"""
                 )
