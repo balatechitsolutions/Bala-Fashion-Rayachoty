@@ -28,17 +28,18 @@ def delivery_staff(request):
         return error
 
     if request.method == "POST":
-        staff_email = str(request.data.get("email") or "").strip().lower()[:320]
-        if not staff_email or "@" not in staff_email:
-            return Response({"detail": "Enter the email address of an existing website account."}, status=400)
-        staff_id = None
+        staff_id = str(request.data.get("user_id") or "").strip()
+        try:
+            staff_id = str(uuid.UUID(staff_id))
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Search for and select a valid existing website user."}, status=400)
         try:
             with transaction.atomic():
                 with connection.cursor() as cursor:
-                    cursor.execute("select id from auth.users where lower(email)=lower(%s) limit 1", [staff_email])
+                    cursor.execute("select id from auth.users where id=%s limit 1", [staff_id])
                     auth_user = cursor.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No website account exists for this email. The person must register/sign in first."}, status=404)
+                        return Response({"detail": "No website account exists for this UUID. The person must register/sign in first."}, status=404)
                     staff_id = str(auth_user[0])
                     cursor.execute("select role from public.profiles where id=%s for update", [staff_id])
                     existing_profile = cursor.fetchone()
