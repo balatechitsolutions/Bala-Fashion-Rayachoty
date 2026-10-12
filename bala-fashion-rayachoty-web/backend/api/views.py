@@ -282,19 +282,26 @@ def manage_vendors(request):
             with transaction.atomic():
                 with connection.cursor() as c:
                     # Check the UUID against Supabase Auth itself, not a Django integer ID.
-                    c.execute("select id, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s", [str(owner_uuid)])
+                    c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s", [str(owner_uuid)])
                     auth_user = c.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No Supabase Auth user exists for that UUID. Copy the user's UUID from Supabase Authentication."}, status=400)
+                        return Response({"detail": "No Supabase Auth user exists for that UUID. The vendor owner must sign in or register on the website first."}, status=400)
+                    c.execute("select role from public.profiles where id=%s", [str(owner_uuid)])
+                    existing_profile = c.fetchone()
+                    if existing_profile and existing_profile[0] in {"admin", "delivery_boy"}:
+                        return Response({"detail": "This account has an admin or delivery role. Select a separate customer account that matches the vendor email."}, status=400)
+                    c.execute("select id from public.vendors where owner_id=%s limit 1", [str(owner_uuid)])
+                    if c.fetchone():
+                        return Response({"detail": "This Supabase account already owns a vendor. Each vendor must use a separate owner account."}, status=400)
                     c.execute(
                         """insert into public.profiles(id,full_name,phone,role)
                            values(%s,%s,%s,'vendor')
                            on conflict(id) do update set
                              full_name=case when excluded.full_name<>'' then excluded.full_name else public.profiles.full_name end,
                              phone=case when excluded.phone<>'' then excluded.phone else public.profiles.phone end,
-                             role=case when public.profiles.role='customer' then 'vendor' else public.profiles.role end,
+                             role='vendor',
                              updated_at=now()""",
-                        [str(owner_uuid), str(auth_user[1] or "")[:120], phone],
+                        [str(owner_uuid), str(auth_user[2] or "")[:120], phone],
                     )
                     slug = base_slug
                     suffix = 2
