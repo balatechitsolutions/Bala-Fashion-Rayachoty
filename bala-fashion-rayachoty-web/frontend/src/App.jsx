@@ -89,6 +89,18 @@ function LocationPicker({latitude,longitude,onChange,label}) {
  </section>
 }
 
+function SearchableUserSelect({users,value,onChange,label,placeholder,excludeRoles=[]}) {
+ const [query,setQuery]=useState('')
+ const eligible=users.filter(user=>user.email&&!excludeRoles.includes(user.role)&&String(user.email).toLowerCase().includes(query.trim().toLowerCase()))
+ return <div className="searchable-user-select">
+  <label>Search {label.toLowerCase()} by email<input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search registered email…" autoComplete="off"/></label>
+  <label>{label} account<select required value={value} onChange={event=>onChange(event.target.value)}>
+   <option value="">{placeholder||'Choose website user'}</option>
+   {eligible.map(user=><option key={user.id} value={user.id}>{user.email}{user.full_name?' — '+user.full_name:''}</option>)}
+  </select></label>
+  {!eligible.length&&<small>No eligible users match this email search.</small>}
+ </div>
+}
 function WebsiteUserDirectory({authUsers,authUsersLoading,authUsersFetched,authUserSearch,setAuthUserSearch,fetchAuthUsers,notify}) {
  return <section className="seller-dashboard-section">
   <div className="seller-section-title"><h3>Website users &amp; UUIDs</h3><button className="secondary" onClick={fetchAuthUsers} disabled={authUsersLoading}>{authUsersLoading?'Fetching…':authUsersFetched?'Fetch / Refresh users':'Fetch users'}</button></div>
@@ -111,7 +123,7 @@ export default function App() {
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
  const [authUsers,setAuthUsers]=useState([]),[authUsersLoading,setAuthUsersLoading]=useState(false),[authUsersFetched,setAuthUsersFetched]=useState(false),[authUserSearch,setAuthUserSearch]=useState('')
- const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
+ const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase){sessionRef.current=null;setSession(null);return}let active=true,initialEventSeen=false;const applySession=nextSession=>{if(!active)return;const value=nextSession||null;sessionRef.current=value;setSession(value);if(!value)setProfile(null)};const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){if(!initialEventSeen&&!sessionRef.current)applySession(null);return}if(data?.session)applySession(data.session);else if(!initialEventSeen&&!sessionRef.current)applySession(null)}catch{if(active&&!initialEventSeen&&!sessionRef.current)applySession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{if(!active)return;if(event==='INITIAL_SESSION'){initialEventSeen=true;if(nextSession||!sessionRef.current)applySession(nextSession);return}if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}if(event==='SIGNED_IN'){applySession(nextSession);setDrawer('');return}if(event==='SIGNED_OUT'){applySession(null);setAuthUsers([]);setAuthUsersFetched(false);setAuthUserSearch('');setDrawer('');return}if(nextSession)applySession(nextSession)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';const isVercelPreview=location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical;if(isVercelPreview){const callbackHash=location.hash;const callbackQuery=location.search;const isOAuthCallback=callbackHash.includes('access_token=')||callbackHash.includes('refresh_token=')||callbackQuery.includes('code=')||callbackQuery.includes('error=');if(!isOAuthCallback)location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
@@ -293,17 +305,17 @@ export default function App() {
  async function createVendor(e){
   e.preventDefault();if(busy)return;if(!session)return login()
   const editing=Boolean(vendorForm.id)
-  const ownerEmail=vendorForm.owner_email.trim().toLowerCase()
-  if(!editing&&!ownerEmail)return notify('Enter the email address of an existing website account.')
+  const ownerUserId=vendorForm.owner_user_id.trim()
+  if(!editing&&!ownerUserId)return notify('Search for and select an existing website user by email.')
   if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
   if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
-   const payload={...vendorForm,owner_email:ownerEmail,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
+   const payload={...vendorForm,owner_user_id:ownerUserId,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
    await api('/vendors/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const data=await api('/vendors/manage/',{token:session.access_token})
    setAdminVendors(data.results||[])
-   setVendorForm({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
+   setVendorForm({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
    await refreshSellerDashboard()
    notify(editing?'Vendor delivery location updated':'Vendor created with delivery location')
   }catch(e){notify(e.message)}finally{setBusy(false)}
@@ -504,8 +516,7 @@ export default function App() {
    {drawer==='seller-dashboard'&&<div className="drawer-body seller-dashboard">
     <div className="seller-dashboard-head"><div><b>{profile?.role==='admin'?'Management dashboard':'Seller dashboard'}</b><small>{sellerDashboard?.stores?.length||0} store(s) available to your account</small></div><div className="seller-dashboard-head-actions"><button className="secondary" onClick={refreshSellerDashboard} disabled={dashboardLoading}>{dashboardLoading?'Refreshing…':'Refresh'}</button><button className="secondary" onClick={logout}>Sign out</button></div></div>
     {dashboardLoading&&!sellerDashboard?<p>Loading your dashboard…</p>:<>
-     {profile?.role==='admin'&&<><div className="seller-admin-actions"><button className="primary" onClick={openCategoryManagement}><Grid2X2 size={16}/> Manage categories</button><button className="secondary" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button><button className="secondary" onClick={openDeliveryManagement}><Truck size={16}/> Delivery staff</button></div>
-     <WebsiteUserDirectory authUsers={authUsers} authUsersLoading={authUsersLoading} authUsersFetched={authUsersFetched} authUserSearch={authUserSearch} setAuthUserSearch={setAuthUserSearch} fetchAuthUsers={fetchAuthUsers} notify={notify}/></>}
+     {profile?.role==='admin'&&<><div className="seller-admin-actions"><button className="primary" onClick={openCategoryManagement}><Grid2X2 size={16}/> Manage categories</button><button className="secondary" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button><button className="secondary" onClick={openDeliveryManagement}><Truck size={16}/> Delivery staff</button></div></>}
      <div className="seller-stat-grid"><div><b>{sellerDashboard?.stats?.products??0}</b><small>Products</small></div><div><b>{sellerDashboard?.stats?.active_products??0}</b><small>Published</small></div><div><b>{sellerDashboard?.stats?.low_stock??0}</b><small>Low stock</small></div><div><b>{sellerDashboard?.stats?.orders??0}</b><small>Recent orders</small></div></div>
      {sellerDashboard?.stores?.length>0&&<section className="seller-dashboard-section"><h3>{profile?.role==='admin'?'Stores you can manage':'Your store'}</h3>{sellerDashboard.stores.map(store=><div className="seller-store-row" key={store.id}><span><b>{store.name}</b><small>{store.slug}</small></span><span className={'seller-status '+store.status}>{store.status}</span></div>)}</section>}
      <section className="seller-dashboard-section"><div className="seller-section-title"><h3>Product inventory</h3><button className="primary" onClick={startNewProduct} disabled={!sellerDashboard?.stores?.some(s=>s.status==='approved')}> <Plus size={15}/> Add product</button></div>
@@ -514,7 +525,7 @@ export default function App() {
      <section className="seller-dashboard-section"><h3>Order management</h3>{!sellerDashboard?.orders?.length?<p className="seller-empty">No orders yet.</p>:sellerDashboard.orders.slice(0,50).map(order=><article className="seller-order-row" key={order.id}><span><button type="button" className="order-detail-link" onClick={()=>openOrderDetails(order,'seller-dashboard')}>{order.order_number} <ArrowRight size={12}/></button><small>{order.vendor_name} · {new Date(order.created_at).toLocaleDateString('en-IN')}</small><small>{order.payment_method?.toUpperCase()||'COD'} · Payment: {order.payment_status==='paid'?'Successful':(order.payment_status||'Pending')}</small></span><span><b>{money(order.total)}</b><small>{String(order.status||'').replaceAll('_',' ')}</small><div className="seller-product-actions">{(({placed:['confirmed','cancelled'],confirmed:['packed','cancelled'],packed:['out_for_delivery'],out_for_delivery:['delivered']})[order.status]||[]).map(next=><button key={next} className="secondary" disabled={busy} onClick={()=>updateOrderStatus(order,next)}>{next.replaceAll('_',' ')}</button>)}{profile?.role==='admin'&&<button className="secondary" aria-label={`Delete order ${order.order_number}`} title="Permanently delete order" disabled={busy} onClick={()=>deleteOrder(order)}><Trash2 size={15}/><span>Delete</span></button>}</div></span></article>)}</section>
     </>}
    </div>}
-   {drawer==='delivery-management'&&profile?.role==='admin'&&<div className="drawer-body seller-dashboard"><WebsiteUserDirectory authUsers={authUsers} authUsersLoading={authUsersLoading} authUsersFetched={authUsersFetched} authUserSearch={authUserSearch} setAuthUserSearch={setAuthUserSearch} fetchAuthUsers={fetchAuthUsers} notify={notify}/><DeliveryManagement session={session} orders={sellerDashboard?.orders||[]} busy={busy} onRefresh={refreshSellerDashboard} notify={notify} authUsers={authUsers}/></div>}
+   {drawer==='delivery-management'&&profile?.role==='admin'&&<div className="drawer-body seller-dashboard"><DeliveryManagement session={session} orders={sellerDashboard?.orders||[]} busy={busy} onRefresh={refreshSellerDashboard} notify={notify} authUsers={authUsers}/></div>}
    {drawer==='delivery-dashboard'&&profile?.role==='delivery_boy'&&<DeliveryDashboard session={session} notify={notify} onSignOut={logout}/>}
    {drawer==='categories-manage'&&<div className="drawer-body form">
     <p>Create categories, edit their names and sort order, update category images, or deactivate categories. Existing product references are preserved.</p>
@@ -528,14 +539,12 @@ export default function App() {
     </form>
     <section className="seller-dashboard-section"><h3>All categories</h3>{!adminCategories.length?<p className="seller-empty">No categories found.</p>:adminCategories.map(cat=><article className="seller-store-row" key={cat.id}><span><b>{cat.name}</b><small>{cat.slug} · sort {cat.sort_order} · {cat.is_active?'Active':'Inactive'}</small></span><span className="seller-product-actions"><button className="secondary" onClick={()=>setCategoryForm({category_id:cat.id,name:cat.name,image_url:cat.image_url||'',sort_order:String(cat.sort_order??0)})}><Pencil size={15}/></button>{cat.is_active&&<button className="secondary" disabled={busy} onClick={()=>deactivateCategory(cat)}>Deactivate</button>}</span></article>)}</section>
    </div>}
-   {drawer==='vendors-manage'&&<div className="drawer-body seller-dashboard">
-    <WebsiteUserDirectory authUsers={authUsers} authUsersLoading={authUsersLoading} authUsersFetched={authUsersFetched} authUserSearch={authUserSearch} setAuthUserSearch={setAuthUserSearch} fetchAuthUsers={fetchAuthUsers} notify={notify}/><div className="seller-section-title"><h3>Vendor management</h3><button className="secondary" onClick={openVendorManagement}>Refresh</button></div>
-    <p>Create a store for an existing Supabase Auth user. The owner UUID is the Supabase Auth user ID, not a Django numeric ID. New vendor stores start pending unless you choose another status.</p>
+   {drawer==='vendors-manage'&&<div className="drawer-body seller-dashboard"><div className="seller-section-title"><h3>Vendor management</h3><button className="secondary" onClick={openVendorManagement}>Refresh</button></div>
+    <p>Select the existing website user by email. The selected account's Supabase UUID is verified by the backend before the vendor is created.</p>
     <form className="form admin-vendor-create" onSubmit={createVendor}>
      <h3>{vendorForm.id?'Update vendor delivery location':'Create vendor / store'}</h3>
-     {!vendorForm.id&&<label>Existing website account email<input type="email" required value={vendorForm.owner_email} onChange={e=>setVendorForm(p=>({...p,owner_email:e.target.value,owner_id:''}))} placeholder="Enter the vendor's registered email" autoCapitalize="off" autoCorrect="off" spellCheck="false"/></label>}
+     {!vendorForm.id&&<SearchableUserSelect users={authUsers} value={vendorForm.owner_user_id} onChange={id=>setVendorForm(p=>({...p,owner_user_id:id}))} label="Vendor owner" placeholder="Select a customer account" excludeRoles={['admin','vendor','delivery_boy']}/>}
      {vendorForm.id&&<label>Vendor owner email<input type="email" value={vendorForm.owner_email} readOnly/></label>}
-     {!vendorForm.id&&<small>The backend matches this email against existing Supabase Auth accounts and resolves the UUID securely. No dropdown or UUID entry is needed.</small>}
      <label>Vendor / store name<input required maxLength="180" value={vendorForm.name} onChange={e=>setVendorForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Bala Fashion Store" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Contact phone<input value={vendorForm.phone} onChange={e=>setVendorForm(p=>({...p,phone:e.target.value}))} placeholder="Mobile number" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Store address<textarea rows="2" value={vendorForm.address} onChange={e=>setVendorForm(p=>({...p,address:e.target.value}))} placeholder="Store address"/></label>
@@ -543,9 +552,9 @@ export default function App() {
      <label>Initial status<select value={vendorForm.status} onChange={e=>setVendorForm(p=>({...p,status:e.target.value}))}><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></>}
      <LocationPicker label="Vendor store location" latitude={vendorForm.latitude} longitude={vendorForm.longitude} onChange={({latitude,longitude})=>setVendorForm(p=>({...p,latitude,longitude}))}/>
      <button className="primary full" disabled={busy}>{busy?'Saving…':vendorForm.id?'Save vendor location':'Create vendor with map location'}</button>
-     {vendorForm.id&&<button type="button" className="secondary full" onClick={()=>setVendorForm({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})}>Cancel location edit</button>}
+     {vendorForm.id&&<button type="button" className="secondary full" onClick={()=>setVendorForm({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})}>Cancel location edit</button>}
     </form>
-    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug} · {v.latitude!=null&&v.longitude!=null?'Map pin set':'Map pin required'}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>{setVendorForm({id:v.id,owner_id:v.owner_id||'',owner_email:v.owner_email||'',name:v.name||'',phone:v.phone||'',address:v.address||'',description:v.description||'',latitude:v.latitude==null?'':String(v.latitude),longitude:v.longitude==null?'':String(v.longitude),status:v.status||'pending'});document.querySelector('.admin-vendor-create')?.scrollIntoView({behavior:'smooth',block:'start'})}}>Set map pin</button>{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}<button type="button" className="secondary" disabled={busy} onClick={()=>deleteVendor(v)}><Trash2 size={15}/><span>Delete vendor</span></button></div></article>)}
+    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug} · {v.latitude!=null&&v.longitude!=null?'Map pin set':'Map pin required'}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>{setVendorForm({id:v.id,owner_id:v.owner_id||'',owner_email:v.owner_email||'',owner_user_id:'',name:v.name||'',phone:v.phone||'',address:v.address||'',description:v.description||'',latitude:v.latitude==null?'':String(v.latitude),longitude:v.longitude==null?'':String(v.longitude),status:v.status||'pending'});document.querySelector('.admin-vendor-create')?.scrollIntoView({behavior:'smooth',block:'start'})}}>Set map pin</button>{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}<button type="button" className="secondary" disabled={busy} onClick={()=>deleteVendor(v)}><Trash2 size={15}/><span>Delete vendor</span></button></div></article>)}
    </div>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
