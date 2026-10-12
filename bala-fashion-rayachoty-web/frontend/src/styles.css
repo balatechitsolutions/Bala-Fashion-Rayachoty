@@ -1246,3 +1246,22 @@ footer a,footer button{color:#f6dfe8}
 .delivery-fee-preview>div{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--ink,#222);font-size:14px}
 .delivery-fee-preview>div b{font-size:16px}
 .delivery-fee-preview small{font-size:12px}
+
+
+/* Rayachoty-only road-distance delivery map picker */
+.location-picker{display:grid;gap:8px;padding:13px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.72)}
+.location-picker-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.location-picker-head>b{font-size:14px}
+.location-picker-head .secondary{display:inline-flex;align-items:center;gap:6px;padding:8px 11px}
+.location-picker p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+.location-map{height:250px;min-height:220px;overflow:hidden;border:1px solid var(--line);border-radius:10px;background:#eee;z-index:0}
+.location-map .leaflet-control-attribution{font-size:9px}
+.location-coordinates{display:flex;flex-wrap:wrap;gap:8px 16px;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.location-picker>small{color:var(--muted);font-size:10px}
+.location-error{color:#a32222!important}
+.local-service-note{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:10px;background:#f1e8dc;color:var(--ink);font-size:12px;line-height:1.5}
+.local-service-note svg{flex-shrink:0}
+.delivery-fee-preview .location-error{font-size:12px;line-height:1.5}
+.seller-vendor-actions{display:flex;flex-wrap:wrap;gap:6px}
+.seller-vendor-actions button{font-size:11px}
+@media(max-width:560px){.location-map{height:220px}.location-picker{padding:10px}.location-picker-head{align-items:flex-start}.seller-vendor-actions button{padding:7px 9px}}
