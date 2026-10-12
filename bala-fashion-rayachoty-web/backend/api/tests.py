@@ -235,3 +235,22 @@ class EndpointTests(SimpleTestCase):
         update_calls = [call for call in cursor.execute.call_args_list if "payment_status=case" in call.args[0].lower()]
         self.assertTrue(update_calls)
         self.assertEqual(update_calls[0].args[1], ["delivered", "delivered", order_id])
+
+
+    def test_customer_cannot_access_delivery_staff_orders(self):
+        from . import delivery
+        req = self.factory.get("/api/delivery/orders/", HTTP_AUTHORIZATION="Bearer test")
+        user = {"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}
+        profile = {"id": user["id"], "full_name": "Customer", "phone": "", "role": "customer"}
+        with patch.object(views, "_user", return_value=(user, None)), patch.object(views, "_profile", return_value=profile):
+            response = delivery.my_delivery_orders(req)
+        self.assertEqual(response.status_code, 403)
+
+    def test_vendor_cannot_authorize_delivery_staff(self):
+        from . import delivery
+        req = self.factory.post("/api/delivery/staff/", {"user_id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}, format="json", HTTP_AUTHORIZATION="Bearer test")
+        user = {"id": "52c1edcc-bc32-44f7-b37b-f3a454617265"}
+        profile = {"id": user["id"], "full_name": "Seller", "phone": "", "role": "vendor"}
+        with patch.object(views, "_user", return_value=(user, None)), patch.object(views, "_profile", return_value=profile):
+            response = delivery.delivery_staff(req)
+        self.assertEqual(response.status_code, 403)
