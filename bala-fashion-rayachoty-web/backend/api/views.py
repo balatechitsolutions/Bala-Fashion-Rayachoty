@@ -301,10 +301,13 @@ def manage_vendors(request):
     if request.method == "POST":
         data = request.data
         owner_id = str(data.get("owner_user_id") or data.get("owner_id") or "").strip()
+        owner_email = str(data.get("owner_email") or "").strip().lower()[:320]
         try:
             owner_uuid = uuid.UUID(owner_id)
         except (ValueError, TypeError, AttributeError):
             return Response({"detail": "Enter the vendor owner's valid Supabase Auth UUID."}, status=400)
+        if not owner_email or "@" not in owner_email:
+            return Response({"detail": "Enter the vendor owner's email address so it can be matched to the selected Auth account."}, status=400)
         name = str(data.get("name", "")).strip()[:180]
         if not name:
             return Response({"detail": "Store/vendor name is required."}, status=400)
@@ -330,6 +333,8 @@ def manage_vendors(request):
                     auth_user = c.fetchone()
                     if not auth_user:
                         return Response({"detail": "No Supabase Auth user exists for that UUID. The vendor owner must sign in or register on the website first."}, status=400)
+                    if not auth_user[1] or str(auth_user[1]).strip().lower() != owner_email:
+                        return Response({"detail": "The Owner ID does not match the vendor email. Fetch website users, match the exact email, and copy that user's UUID."}, status=400)
                     c.execute("select role from public.profiles where id=%s", [str(owner_uuid)])
                     existing_profile = c.fetchone()
                     if existing_profile and existing_profile[0] in {"admin", "delivery_boy"}:
