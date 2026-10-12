@@ -15,6 +15,37 @@ def _is_admin_superuser(request):
 
 
 @staff_member_required
+def auth_user_uuids(request):
+    """Shared searchable list of existing Supabase Auth users for vendor and delivery workflows."""
+    _is_admin_superuser(request)
+    auth_users = []
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT u.id, u.email, COALESCE(u.raw_user_meta_data->>'full_name', '') AS full_name,
+                       u.created_at, COALESCE(p.role, 'customer') AS role
+                FROM auth.users u
+                LEFT JOIN public.profiles p ON p.id = u.id
+                ORDER BY u.created_at DESC
+                LIMIT 1000
+                """
+            )
+            columns = [column[0] for column in cursor.description]
+            auth_users = [dict(zip(columns, row)) for row in cursor.fetchall()]
+    except DatabaseError:
+        messages.error(
+            request,
+            "Could not fetch website users from Supabase Auth. Verify Render DATABASE_URL permissions and the auth.users/public.profiles tables.",
+        )
+    return render(
+        request,
+        "admin/auth_user_uuids.html",
+        {"title": "Website User UUIDs", "auth_users": auth_users},
+    )
+
+
+@staff_member_required
 def vendor_uuids(request):
     """List vendor/store UUIDs and securely link each store to its Supabase Auth owner."""
     if not (request.user.is_superuser or request.user.has_perm("api.view_vendor")):
@@ -229,6 +260,7 @@ def delivery_staff_uuids(request):
 urlpatterns = [
     # Keep custom admin routes before Django Admin's catch-all route.
     path("admin/vendor-id/", manage_vendors, name="admin-vendor-id"),
+    path("admin/auth-user-uuids/", auth_user_uuids, name="admin-auth-user-uuids"),
     path("admin/vendor-uuids/", vendor_uuids, name="admin-vendor-uuids"),
     path("admin/delivery-staff-uuids/", delivery_staff_uuids, name="admin-delivery-staff-uuids"),
     path("admin/", admin.site.urls),
