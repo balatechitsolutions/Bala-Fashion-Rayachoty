@@ -355,6 +355,8 @@ def orders(request):
                 if colors and color and color not in colors:return Response({"detail":f"Colour is unavailable for {name}."},status=409)
                 line=(price*qty).quantize(Decimal("0.01"));subtotal+=line
                 verified.append({"id":prod_id,"name":name,"price":price,"image":image or "","qty":qty,"size":size,"color":color,"line":line})
+            if subtotal < Decimal("250.00"):
+                return Response({"detail":"Minimum order amount is ₹250. Add more items to continue."},status=400)
             fee=max(Decimal("0.00"),DELIVERY_FEE);total=subtotal+fee;number="BFR-"+uuid.uuid4().hex[:10].upper()
             with connection.cursor() as c:
                 c.execute("""insert into public.orders(order_number,customer_id,vendor_id,status,payment_method,payment_status,subtotal,delivery_fee,total,address_snapshot,notes) values(%s,%s,%s,'placed','cod','pending',%s,%s,%s,%s::jsonb,%s) returning id,order_number,status,payment_method,subtotal,delivery_fee,total,created_at""",[number,user["id"],vendor,subtotal,fee,total,json.dumps(snapshot),str(data.get("notes",""))[:500]])
