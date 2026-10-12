@@ -23,7 +23,7 @@
 {% block content %}
 <div id="content-main">
   <p><a href="{% url 'admin:index' %}">← Back to Django Admin</a></p>
-  <h1>Delivery Staff Management</h1>
+  <h1>Delivery Staff UUIDs &amp; Management</h1>
   <p><strong>Required workflow:</strong> the delivery staff member must first register or sign in on the website. Find their matching email in the Auth user list below, copy their Supabase Auth UUID, and select that account in the form. Authorization is rejected unless the UUID belongs to an existing eligible Auth user. This does not create a separate Django user or delivery-staff table.</p>
 
   <p><a class="action-link" href="{% url 'admin-auth-user-uuids' %}">Fetch website users / copy UUID</a></p>
