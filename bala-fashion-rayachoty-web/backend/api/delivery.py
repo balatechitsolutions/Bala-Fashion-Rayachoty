@@ -37,10 +37,17 @@ def delivery_staff(request):
                     cursor.execute("select id from auth.users where id=%s", [staff_id])
                     if not cursor.fetchone():
                         return Response({"detail": "No Supabase Auth user exists for that UUID."}, status=404)
+                    cursor.execute("select role from public.profiles where id=%s for update", [staff_id])
+                    existing_profile = cursor.fetchone()
+                    if existing_profile and existing_profile[0] in {"admin", "vendor"}:
+                        return Response({"detail": "This user already has an admin/vendor role. Use a separate customer account for delivery work."}, status=409)
                     cursor.execute(
                         """insert into public.profiles(id, full_name, phone, role)
                            values (%s, %s, %s, 'delivery_boy')
-                           on conflict (id) do update set role='delivery_boy', updated_at=now()
+                           on conflict (id) do update set
+                             full_name=case when excluded.full_name<>'' then excluded.full_name else public.profiles.full_name end,
+                             phone=case when excluded.phone<>'' then excluded.phone else public.profiles.phone end,
+                             role='delivery_boy', updated_at=now()
                            returning id, full_name, phone, role""",
                         [staff_id, str(request.data.get("full_name") or "").strip()[:120],
                          str(request.data.get("phone") or "").strip()[:30]],
