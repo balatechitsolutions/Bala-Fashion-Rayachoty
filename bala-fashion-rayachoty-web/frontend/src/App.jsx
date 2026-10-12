@@ -356,6 +356,7 @@ export default function App() {
   e.preventDefault();if(busy)return
   if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}
   if(address.latitude===''||address.longitude==='')return notify('Select your delivery location on the map or use your current location.')
+  if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote before placing the order.')
   if(!session)return login()
   if(vendors.length>1)return notify('Checkout one seller at a time.')
   setBusy(true)
