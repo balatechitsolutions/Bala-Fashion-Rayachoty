@@ -97,6 +97,7 @@ def vendor_uuids(request):
         return redirect("admin-vendor-uuids")
 
     vendors = []
+    auth_users = []
     try:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -108,17 +109,29 @@ def vendor_uuids(request):
             )
             columns = [column[0] for column in cursor.description]
             vendors = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            # The owner must already exist in Supabase Auth (normally after website sign-in).
+            # Show email next to Auth UUID so an admin can match the vendor's email correctly.
+            cursor.execute(
+                """
+                SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', '') AS full_name, created_at
+                FROM auth.users
+                ORDER BY created_at DESC
+                LIMIT 1000
+                """
+            )
+            columns = [column[0] for column in cursor.description]
+            auth_users = [dict(zip(columns, row)) for row in cursor.fetchall()]
     except DatabaseError:
         messages.error(
             request,
-            "Could not load vendor UUIDs from the connected database. "
-            "Verify the Render DATABASE_URL and public.vendors table.",
+            "Could not load vendor or Supabase Auth users from the connected database. "
+            "Verify Render DATABASE_URL permissions and the public.vendors/auth.users tables.",
         )
 
     return render(
         request,
         "admin/vendor_uuids.html",
-        {"title": "Vendor UUIDs", "vendors": vendors},
+        {"title": "Vendor Owner UUIDs", "vendors": vendors, "auth_users": auth_users},
     )
 
 
