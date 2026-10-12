@@ -25,28 +25,8 @@
   <p><strong>Required workflow:</strong> the vendor must first register or sign in on the website using the vendor's email. Find that email in the existing Supabase Auth users list below, copy its Auth UUID, and paste it into the Owner ID field when creating the vendor. Vendor creation is rejected if the UUID is missing, invalid, or does not belong to an existing eligible Supabase Auth user. This page does not create login accounts.</p>
   <p>Only Django superusers can link an owner or use this page to manage owner UUIDs.</p>
 
-  <h2>Existing website users — copy the matching owner's UUID</h2>
-  <div class="vendor-tools">
-    <input id="auth-user-search" type="search" placeholder="Search by vendor email, user name, or UUID…" aria-label="Search Supabase Auth users">
-    <span><strong>{{ auth_users|length }}</strong> Auth user(s) shown (latest 1,000)</span>
-  </div>
-  <div style="overflow-x:auto">
-    <table class="vendor-uuid-table" id="auth-user-table">
-      <thead><tr><th>User name</th><th>Email</th><th>Supabase Auth UUID (Owner ID)</th><th>Registered</th></tr></thead>
-      <tbody>
-      {% for auth_user in auth_users %}
-        <tr>
-          <td>{{ auth_user.full_name|default:"—" }}</td>
-          <td>{{ auth_user.email|default:"No email" }}</td>
-          <td><span class="uuid-value">{{ auth_user.id }}</span><br><button class="copy-button" type="button" data-copy="{{ auth_user.id }}" data-label="Copy owner UUID">Copy owner UUID</button></td>
-          <td>{{ auth_user.created_at|default:"—" }}</td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="4">No Supabase Auth users found. Ask the vendor to register/sign in on the website first, then refresh this page.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <p><a class="button" href="{% url 'admin-auth-user-uuids' %}">Fetch website users / copy UUID</a></p>
+
   <h2>Existing vendors</h2>
   <p>Use the owner-link form only to attach an existing vendor record to an existing Auth user. For a new shop, use the vendor creation form in the admin dashboard and provide the copied Owner ID before submitting.</p>
 
