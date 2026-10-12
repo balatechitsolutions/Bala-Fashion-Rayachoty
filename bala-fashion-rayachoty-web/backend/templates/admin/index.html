@@ -3,10 +3,17 @@
 
 {% block content %}
 <div id="content-main">
-  <div style="margin:0 0 20px;padding:16px 18px;background:var(--darkened-bg,#f8f8f8);border:1px solid var(--hairline-color,#ddd);border-radius:6px;">
-    <h2 style="margin:0 0 8px;">Vendor tools</h2>
-    <p style="margin:0 0 12px;">View the store UUID and Supabase Auth owner UUID for every vendor.</p>
-    <a href="{% url 'admin-vendor-uuids' %}" class="button" style="display:inline-block;">View Vendor UUIDs</a>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;margin:0 0 24px;">
+    <section style="padding:16px 18px;background:var(--darkened-bg,#f8f8f8);border:1px solid var(--hairline-color,#ddd);border-radius:6px;">
+      <h2 style="margin:0 0 8px;">Vendor tools</h2>
+      <p style="margin:0 0 12px;">View the store UUID and Supabase Auth owner UUID for every vendor.</p>
+      <a href="{% url 'admin-vendor-uuids' %}" class="button" style="display:inline-block;">View Vendor UUIDs</a>
+    </section>
+    <section style="padding:16px 18px;background:var(--darkened-bg,#f8f8f8);border:1px solid var(--hairline-color,#ddd);border-radius:6px;">
+      <h2 style="margin:0 0 8px;">Delivery staff tools</h2>
+      <p style="margin:0 0 12px;">View authorized delivery staff and copy each Supabase Auth UUID. This uses the existing profiles table; no DeliveryStaff model or table is created.</p>
+      <a href="{% url 'admin-delivery-staff-uuids' %}" class="button" style="display:inline-block;">View Delivery Staff UUIDs</a>
+    </section>
   </div>
 
   {% if app_list %}
