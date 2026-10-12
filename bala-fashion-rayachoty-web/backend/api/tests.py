@@ -7,15 +7,33 @@ from . import views
 
 class EndpointTests(SimpleTestCase):
     def setUp(self): self.factory=APIRequestFactory()
-    def test_delivery_fee_uses_low_cost_location_tiers(self):
-        self.assertEqual(views.delivery_fee_for_address("516269", "Andhra Pradesh"), Decimal("20.00"))
-        self.assertEqual(views.delivery_fee_for_address("516270", "Andhra Pradesh"), Decimal("35.00"))
-        self.assertEqual(views.delivery_fee_for_address("500001", "Telangana"), Decimal("45.00"))
-        self.assertEqual(views.delivery_fee_for_address("110001", "Delhi"), Decimal("60.00"))
+    def test_delivery_fee_rounds_up_to_next_500_metre_block(self):
+        self.assertEqual(views.delivery_fee_for_distance(0), Decimal("0.00"))
+        self.assertEqual(views.delivery_fee_for_distance(1), Decimal("5.00"))
+        self.assertEqual(views.delivery_fee_for_distance(500), Decimal("5.00"))
+        self.assertEqual(views.delivery_fee_for_distance(501), Decimal("10.00"))
+        self.assertEqual(views.delivery_fee_for_distance(1000), Decimal("10.00"))
+        self.assertEqual(views.delivery_fee_for_distance(5000), Decimal("50.00"))
 
-    def test_delivery_fee_requires_six_digit_pin(self):
-        with self.assertRaises(ValueError):
-            views.delivery_fee_for_address("123", "Andhra Pradesh")
+    def test_delivery_fee_rejects_negative_or_non_numeric_distance(self):
+        for distance in (-1, "not-a-distance"):
+            with self.subTest(distance=distance), self.assertRaises(ValueError):
+                views.delivery_fee_for_distance(distance)
+
+    def test_coordinates_are_validated(self):
+        self.assertEqual(views._coordinate("14.05", "latitude"), 14.05)
+        for value in ("bad", "91", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                views._coordinate(value, "latitude")
+
+    @patch.object(views.requests, "get")
+    def test_road_distance_uses_osrm_route_distance(self, get):
+        response = MagicMock()
+        response.json.return_value = {"code": "Ok", "routes": [{"distance": 1250.5}]}
+        get.return_value = response
+        distance = views.road_distance_meters(14.05, 78.75, 14.06, 78.76)
+        self.assertEqual(distance, 1250.5)
+        self.assertIn("/route/v1/driving/78.75,14.05;78.76,14.06", get.call_args.args[0])
 
     def test_health_without_database_is_ok_but_not_configured(self):
         req=self.factory.get("/api/health/")
@@ -137,6 +155,44 @@ class EndpointTests(SimpleTestCase):
             response = views.manage_orders(req)
         self.assertEqual(response.status_code, 403)
 
+    @patch.object(views, "_user", return_value=({"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}, None))
+    @patch.object(views, "road_distance_meters", return_value=1250.5)
+    def test_delivery_quote_uses_road_distance_and_fee(self, road_distance, auth):
+        vendor_id = "a2e4b2d8-2b77-4b84-a420-0e30e2a7d6aa"
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.return_value = ("Rayachoty Store", 14.05, 78.75)
+        req = self.factory.post(
+            "/api/delivery/quote/",
+            {"vendor_id": vendor_id, "latitude": 14.06, "longitude": 78.76},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+            response = views.delivery_quote(req)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["delivery_fee"], "15.00")
+        self.assertEqual(response.data["distance_meters"], 1250)
+        road_distance.assert_called_once()
+
+    @patch.object(views, "_user", return_value=({"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}, None))
+    @patch.object(views, "road_distance_meters", return_value=5200)
+    def test_delivery_quote_rejects_routes_over_five_kilometres(self, road_distance, auth):
+        vendor_id = "a2e4b2d8-2b77-4b84-a420-0e30e2a7d6aa"
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.return_value = ("Rayachoty Store", 14.05, 78.75)
+        req = self.factory.post(
+            "/api/delivery/quote/",
+            {"vendor_id": vendor_id, "latitude": 14.06, "longitude": 78.76},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+            response = views.delivery_quote(req)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("5 km", response.data["detail"])
+
     def test_order_requires_address_and_items(self):
         req=self.factory.post("/api/orders/",{"items":[]},format="json",HTTP_AUTHORIZATION="Bearer test")
         with patch.object(views,"_user",return_value=({"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"},None)):
@@ -164,7 +220,7 @@ class EndpointTests(SimpleTestCase):
         cursor = MagicMock()
         cursor.__enter__.return_value = cursor
         cursor.fetchone.side_effect = [
-            (order_id, "out_for_delivery", "cod", "pending"),
+            (order_id, "out_for_delivery", "cod", "pending", "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11", "BFR-TEST123"),
             (order_id, "BFR-TEST123", "delivered", "paid", "1499.00", datetime.now(timezone.utc)),
         ]
         with patch.object(views, "_user", return_value=(user, None)):
@@ -176,6 +232,6 @@ class EndpointTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "delivered")
         self.assertEqual(response.data["payment_status"], "paid")
-        update_call = cursor.execute.call_args_list[-1]
-        self.assertIn("payment_status=case", update_call.args[0].lower())
-        self.assertEqual(update_call.args[1], ["delivered", "delivered", order_id])
+        update_calls = [call for call in cursor.execute.call_args_list if "payment_status=case" in call.args[0].lower()]
+        self.assertTrue(update_calls)
+        self.assertEqual(update_calls[0].args[1], ["delivered", "delivered", order_id])

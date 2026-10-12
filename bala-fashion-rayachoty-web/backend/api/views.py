@@ -1,5 +1,5 @@
 import json, os, re, uuid
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_CEILING
 import requests
 from django.db import connection, transaction
 from django.utils.text import slugify
@@ -13,21 +13,56 @@ SUPABASE_KEY=os.getenv("SUPABASE_PUBLISHABLE_KEY","")
 CLOUD_NAME=os.getenv("CLOUDINARY_CLOUD_NAME","")
 CLOUD_KEY=os.getenv("CLOUDINARY_API_KEY","")
 CLOUD_SECRET=os.getenv("CLOUDINARY_API_SECRET","")
-DELIVERY_FEE=Decimal(os.getenv("DELIVERY_FEE","0"))
+MAX_DELIVERY_DISTANCE_METERS = 5000
+DELIVERY_BLOCK_METERS = 500
+DELIVERY_BLOCK_FEE = Decimal("5.00")
+DEFAULT_OSRM_BASE_URL = "https://router.project-osrm.org"
 
-def delivery_fee_for_address(postal_code, state):
-    """Return low-cost delivery pricing from the destination PIN and state."""
-    pin = str(postal_code or "").strip()
-    normalized_state = str(state or "").strip().casefold()
-    if not re.fullmatch(r"\d{6}", pin):
-        raise ValueError("Enter a valid 6-digit PIN code to calculate delivery charges.")
-    if pin == "516269":
-        return Decimal("20.00")
-    if normalized_state in {"andhra pradesh", "ap"}:
-        return Decimal("35.00")
-    if normalized_state in {"telangana", "ts"}:
-        return Decimal("45.00")
-    return Decimal("60.00")
+def _coordinate(value, name):
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"Choose a valid map location for {name}.")
+    limit = 90 if name == "latitude" else 180
+    if not (-limit <= result <= limit):
+        raise ValueError(f"Choose a valid map location for {name}.")
+    return result
+
+def delivery_fee_for_distance(distance_meters):
+    """Charge ₹5 for each started 500-metre road-distance block."""
+    try:
+        distance = Decimal(str(distance_meters))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError("Could not calculate the delivery distance.")
+    if not distance.is_finite() or distance < 0:
+        raise ValueError("Could not calculate the delivery distance.")
+    blocks = (distance / Decimal(DELIVERY_BLOCK_METERS)).to_integral_value(rounding=ROUND_CEILING)
+    return (blocks * DELIVERY_BLOCK_FEE).quantize(Decimal("0.01"))
+
+def road_distance_meters(origin_latitude, origin_longitude, destination_latitude, destination_longitude):
+    """Ask OSRM for driving-route distance; straight-line distance is never used for pricing."""
+    base_url = os.getenv("OSRM_BASE_URL", DEFAULT_OSRM_BASE_URL).rstrip("/")
+    url = (
+        f"{base_url}/route/v1/driving/"
+        f"{origin_longitude},{origin_latitude};{destination_longitude},{destination_latitude}"
+    )
+    try:
+        response = requests.get(
+            url,
+            params={"overview": "false", "alternatives": "false", "steps": "false"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise RuntimeError("Road-distance service is temporarily unavailable. Please retry.") from exc
+    routes = payload.get("routes") or []
+    if payload.get("code") != "Ok" or not routes or routes[0].get("distance") is None:
+        raise ValueError("A drivable route could not be found for this delivery location.")
+    distance = float(routes[0]["distance"])
+    if not distance >= 0 or distance != distance or distance == float("inf"):
+        raise ValueError("Could not calculate the delivery distance.")
+    return distance
 
 def _rows(cursor):
     cols=[c[0] for c in cursor.description]
@@ -207,7 +242,7 @@ def manage_vendors(request):
             with connection.cursor() as c:
                 c.execute(
                     """select v.id,v.owner_id,v.name,v.slug,v.description,v.logo_url,v.phone,v.address,
-                              v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone
+                              v.latitude,v.longitude,v.status,v.created_at,p.full_name as owner_name,p.phone as owner_phone
                        from public.vendors v
                        left join public.profiles p on p.id=v.owner_id
                        order by case v.status when 'pending' then 0 when 'approved' then 1 else 2 end, v.created_at desc
@@ -233,6 +268,11 @@ def manage_vendors(request):
         requested_status = str(data.get("status", "pending")).strip().lower()
         if requested_status not in {"pending", "approved", "rejected", "suspended"}:
             return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
+        try:
+            latitude = _coordinate(data.get("latitude"), "latitude")
+            longitude = _coordinate(data.get("longitude"), "longitude")
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
         base_slug = slugify(name)[:240].strip("-")
         if not base_slug:
             return Response({"detail": "Enter a valid vendor/store name."}, status=400)
@@ -263,14 +303,14 @@ def manage_vendors(request):
                         slug = f"{base_slug[:245]}-{suffix}"
                         suffix += 1
                     c.execute(
-                        """insert into public.vendors(owner_id,name,slug,description,phone,address,status)
-                           values(%s,%s,%s,%s,%s,%s,%s)
-                           returning id,owner_id,name,slug,description,logo_url,phone,address,status,created_at""",
-                        [str(owner_uuid), name, slug, description, phone, address, requested_status],
+                        """insert into public.vendors(owner_id,name,slug,description,phone,address,latitude,longitude,status)
+                           values(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           returning id,owner_id,name,slug,description,logo_url,phone,address,latitude,longitude,status,created_at""",
+                        [str(owner_uuid), name, slug, description, phone, address, latitude, longitude, requested_status],
                     )
                     row = c.fetchone()
             result = {key: value for key, value in zip(
-                ["id","owner_id","name","slug","description","logo_url","phone","address","status","created_at"], row
+                ["id","owner_id","name","slug","description","logo_url","phone","address","latitude","longitude","status","created_at"], row
             )}
             result["id"] = str(result["id"])
             result["owner_id"] = str(result["owner_id"])
@@ -285,18 +325,37 @@ def manage_vendors(request):
         uuid.UUID(vendor_id)
     except (ValueError, TypeError, AttributeError):
         return Response({"detail": "Choose a valid vendor."}, status=400)
-    status_value = str(request.data.get("status", "")).strip().lower()
-    if status_value not in {"pending", "approved", "rejected", "suspended"}:
+    status_value = str(request.data.get("status", "")).strip().lower() if "status" in request.data else None
+    if status_value is not None and status_value not in {"pending", "approved", "rejected", "suspended"}:
         return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
+    updates = []
+    params = []
+    if status_value is not None:
+        updates.append("status=%s"); params.append(status_value)
+    if "latitude" in request.data or "longitude" in request.data:
+        try:
+            latitude = _coordinate(request.data.get("latitude"), "latitude")
+            longitude = _coordinate(request.data.get("longitude"), "longitude")
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        updates.extend(["latitude=%s", "longitude=%s"]); params.extend([latitude, longitude])
+    if "address" in request.data:
+        updates.append("address=%s"); params.append(str(request.data.get("address") or "").strip()[:500])
+    if not updates:
+        return Response({"detail": "Provide a vendor status, address or map location to update."}, status=400)
+    params.append(vendor_id)
     try:
         with connection.cursor() as c:
-            c.execute("update public.vendors set status=%s where id=%s returning id,name,slug,status,owner_id", [status_value, vendor_id])
+            c.execute(
+                f"update public.vendors set {', '.join(updates)} where id=%s returning id,name,slug,status,owner_id,latitude,longitude,address",
+                params,
+            )
             row = c.fetchone()
         if not row:
             return Response({"detail": "Vendor not found."}, status=404)
-        return Response({"id": str(row[0]), "name": row[1], "slug": row[2], "status": row[3], "owner_id": str(row[4]) if row[4] else None})
+        return Response({"id": str(row[0]), "name": row[1], "slug": row[2], "status": row[3], "owner_id": str(row[4]) if row[4] else None, "latitude": row[5], "longitude": row[6], "address": row[7]})
     except Exception:
-        return Response({"detail": "Vendor status could not be updated."}, status=503)
+        return Response({"detail": "Vendor could not be updated. Confirm the delivery-location database migration has been applied."}, status=503)
 
 @api_view(["GET"])
 def products(request):
@@ -330,6 +389,57 @@ def profile(request):
         return Response(_profile(user["id"]))
     except Exception:return Response({"detail":"Profile is unavailable."},status=503)
 
+@api_view(["POST"])
+def delivery_quote(request):
+    """Return a server-calculated OSRM route quote for a single approved vendor."""
+    user, error = _user(request)
+    if error:
+        return error
+    vendor_id = str(request.data.get("vendor_id", "")).strip()
+    try:
+        uuid.UUID(vendor_id)
+        customer_latitude = _coordinate(request.data.get("latitude"), "latitude")
+        customer_longitude = _coordinate(request.data.get("longitude"), "longitude")
+    except (ValueError, TypeError, AttributeError) as exc:
+        return Response({"detail": str(exc) or "Choose a valid vendor and customer map location."}, status=400)
+    try:
+        with connection.cursor() as c:
+            c.execute(
+                "select name,latitude,longitude from public.vendors where id=%s and status='approved'",
+                [vendor_id],
+            )
+            vendor = c.fetchone()
+        if not vendor:
+            return Response({"detail": "This vendor is not available for delivery."}, status=404)
+        if vendor[1] is None or vendor[2] is None:
+            return Response({"detail": "This vendor has not set a delivery map location yet."}, status=409)
+        distance_meters = road_distance_meters(
+            _coordinate(vendor[1], "latitude"),
+            _coordinate(vendor[2], "longitude"),
+            customer_latitude,
+            customer_longitude,
+        )
+        if distance_meters > MAX_DELIVERY_DISTANCE_METERS:
+            return Response({
+                "detail": f"This address is outside the 5 km road-delivery radius ({distance_meters / 1000:.2f} km). Choose a nearer location."
+            }, status=400)
+        return Response({
+            "vendor_id": vendor_id,
+            "vendor_name": vendor[0],
+            "distance_meters": int(round(distance_meters)),
+            "distance_km": round(distance_meters / 1000, 2),
+            "delivery_fee": str(delivery_fee_for_distance(distance_meters)),
+            "max_distance_km": MAX_DELIVERY_DISTANCE_METERS / 1000,
+            "fee_per_500m": str(DELIVERY_BLOCK_FEE),
+        })
+    except RuntimeError as exc:
+        return Response({"detail": str(exc)}, status=503)
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    except Exception:
+        return Response({"detail": "Could not calculate the delivery quote. Please retry."}, status=503)
+
+
 @api_view(["GET","POST"])
 def orders(request):
     user,error=_user(request)
@@ -345,14 +455,15 @@ def orders(request):
     if not isinstance(address,dict) or not isinstance(items,list) or not 1<=len(items)<=30:return Response({"detail":"Provide a delivery address and 1–30 cart items."},status=400)
     recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
     if not recipient or not line1 or not re.fullmatch(r"[0-9+() \-]{10,16}",phone):return Response({"detail":"Enter recipient name, valid mobile number and street address."},status=400)
-    postal_code=str(address.get("postal_code","")).strip()
-    state_name=str(address.get("state","Andhra Pradesh")).strip()[:100] or "Andhra Pradesh"
-    city_name=str(address.get("city","Rayachoty")).strip()[:100] or "Rayachoty"
+    city_name = str(address.get("city", "Rayachoty")).strip()[:100] or "Rayachoty"
+    if city_name.casefold() not in {"rayachoty", "rayachoti"}:
+        return Response({"detail": "Bala Fashion currently delivers only within the Rayachoty local service area."}, status=400)
     try:
-        fee=delivery_fee_for_address(postal_code,state_name)
+        customer_latitude = _coordinate(address.get("latitude"), "latitude")
+        customer_longitude = _coordinate(address.get("longitude"), "longitude")
     except ValueError as exc:
-        return Response({"detail":str(exc)},status=400)
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":city_name,"state":state_name,"postal_code":postal_code}
+        return Response({"detail": str(exc)}, status=400)
+    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","latitude":customer_latitude,"longitude":customer_longitude}
     try:
         with transaction.atomic():
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
@@ -378,6 +489,26 @@ def orders(request):
                 verified.append({"id":prod_id,"name":name,"price":price,"image":image or "","qty":qty,"size":size,"color":color,"line":line})
             if subtotal < Decimal("250.00"):
                 return Response({"detail":"Minimum order amount is ₹250. Add more items to continue."},status=400)
+            with connection.cursor() as c:
+                c.execute("select latitude,longitude from public.vendors where id=%s and status='approved'", [str(vendor)])
+                vendor_location = c.fetchone()
+            if not vendor_location or vendor_location[0] is None or vendor_location[1] is None:
+                return Response({"detail":"This vendor has not set a delivery map location yet. Please contact the store."},status=409)
+            try:
+                distance_meters = road_distance_meters(
+                    _coordinate(vendor_location[0], "latitude"),
+                    _coordinate(vendor_location[1], "longitude"),
+                    customer_latitude,
+                    customer_longitude,
+                )
+            except RuntimeError as exc:
+                return Response({"detail": str(exc)}, status=503)
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=400)
+            if distance_meters > MAX_DELIVERY_DISTANCE_METERS:
+                return Response({"detail": f"Sorry, this order is outside the 5 km road-delivery radius for this vendor ({distance_meters / 1000:.2f} km). Choose a nearer delivery location."}, status=400)
+            fee = delivery_fee_for_distance(distance_meters)
+            snapshot["delivery_distance_meters"] = int(round(distance_meters))
             total=subtotal+fee;number="BFR-"+uuid.uuid4().hex[:10].upper()
             with connection.cursor() as c:
                 c.execute("""insert into public.orders(order_number,customer_id,vendor_id,status,payment_method,payment_status,subtotal,delivery_fee,total,address_snapshot,notes) values(%s,%s,%s,'placed','cod','pending',%s,%s,%s,%s::jsonb,%s) returning id,order_number,status,payment_method,subtotal,delivery_fee,total,created_at""",[number,user["id"],vendor,subtotal,fee,total,json.dumps(snapshot),str(data.get("notes",""))[:500]])

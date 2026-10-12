@@ -6,13 +6,77 @@ import { api } from './api'
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const MINIMUM_ORDER_AMOUNT = 250
-const deliveryFeeFor = (postalCode, state) => {
- const pin=String(postalCode||'').trim(), normalized=String(state||'').trim().toLowerCase()
- if(!/^\d{6}$/.test(pin))return null
- if(pin==='516269')return 20
- if(['andhra pradesh','ap'].includes(normalized))return 35
- if(['telangana','ts'].includes(normalized))return 45
- return 60
+const RAYACHOTY_MAP_CENTER = [14.057, 78.75]
+
+function LocationPicker({latitude,longitude,onChange,label}) {
+ const mapNode=useRef(null), mapRef=useRef(null), markerRef=useRef(null)
+ const latest=useRef({latitude,longitude,onChange})
+ const [locationError,setLocationError]=useState('')
+ latest.current={latitude,longitude,onChange}
+
+ useEffect(()=>{
+  let cancelled=false
+  const addPoint=(lat,lng)=>{
+   latest.current.onChange({latitude:Number(lat).toFixed(6),longitude:Number(lng).toFixed(6)})
+   setLocationError('')
+  }
+  const init=()=>{
+   if(cancelled||!mapNode.current||!window.L||mapRef.current)return
+   const L=window.L, current=latest.current
+   const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
+   const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
+   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map)
+   const setMarker=(lat,lng)=>{
+    if(!markerRef.current){
+     markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
+     markerRef.current.on('dragend',event=>{const p=event.target.getLatLng();addPoint(p.lat,p.lng)})
+    }else markerRef.current.setLatLng([lat,lng])
+   }
+   if(hasPoint)setMarker(center[0],center[1])
+   map.on('click',event=>{setMarker(event.latlng.lat,event.latlng.lng);addPoint(event.latlng.lat,event.latlng.lng)})
+   mapRef.current=map
+   map.__setMarker=setMarker
+  }
+  if(!document.getElementById('bala-leaflet-css')){
+   const css=document.createElement('link');css.id='bala-leaflet-css';css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css)
+  }
+  if(window.L)init()
+  else{
+   let script=document.getElementById('bala-leaflet-js')
+   if(!script){script=document.createElement('script');script.id='bala-leaflet-js';script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';script.async=true;document.head.appendChild(script)}
+   script.addEventListener('load',init)
+   if(window.L)init()
+  }
+  return ()=>{cancelled=true;if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null}}
+ },[])
+
+ useEffect(()=>{
+  const map=mapRef.current
+  if(!map)return
+  const lat=Number(latitude),lng=Number(longitude)
+  if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
+   map.__setMarker?.(lat,lng);map.setView([lat,lng],16)
+  }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
+ },[latitude,longitude])
+
+ function useCurrentLocation(){
+  if(!navigator.geolocation){setLocationError('Location is not supported by this browser. Tap the map to place a pin.');return}
+  setLocationError('Finding your current location…')
+  navigator.geolocation.getCurrentPosition(
+   position=>{latest.current.onChange({latitude:position.coords.latitude.toFixed(6),longitude:position.coords.longitude.toFixed(6)});setLocationError('')},
+   ()=>setLocationError('Could not get your location. Allow location access or tap the map to place a pin.'),
+   {enableHighAccuracy:true,timeout:12000,maximumAge:30000}
+  )
+ }
+ return <section className="location-picker">
+  <div className="location-picker-head"><b>{label}</b><button type="button" className="secondary" onClick={useCurrentLocation}><MapPin size={15}/> Use my location</button></div>
+  <p>Tap the map or drag the pin to the exact location. Only Rayachoty local deliveries are supported.</p>
+  <div ref={mapNode} className="location-map" role="application" aria-label={label+' map'} />
+  <div className="location-coordinates"><span>Latitude: {latitude||'Not selected'}</span><span>Longitude: {longitude||'Not selected'}</span></div>
+  {locationError&&<small className="location-error">{locationError}</small>}
+  <small>Map data &copy; OpenStreetMap contributors.</small>
+ </section>
 }
 
 export default function App() {
@@ -22,14 +86,32 @@ export default function App() {
  const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState('')
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([]),[selectedOrder,setSelectedOrder]=useState(null),[orderReturnDrawer,setOrderReturnDrawer]=useState('orders')
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
- const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',notes:''})
+ const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',latitude:'',longitude:'',notes:''}),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
- const [vendorForm,setVendorForm]=useState({owner_id:'',name:'',phone:'',address:'',description:'',status:'pending'})
+ const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase){sessionRef.current=null;setSession(null);return}let active=true,initialEventSeen=false;const applySession=nextSession=>{if(!active)return;const value=nextSession||null;sessionRef.current=value;setSession(value);if(!value)setProfile(null)};const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){if(!initialEventSeen&&!sessionRef.current)applySession(null);return}if(data?.session)applySession(data.session);else if(!initialEventSeen&&!sessionRef.current)applySession(null)}catch{if(active&&!initialEventSeen&&!sessionRef.current)applySession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{if(!active)return;if(event==='INITIAL_SESSION'){initialEventSeen=true;if(nextSession||!sessionRef.current)applySession(nextSession);return}if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}if(event==='SIGNED_IN'){applySession(nextSession);setDrawer('');return}if(event==='SIGNED_OUT'){applySession(null);setDrawer('');return}if(nextSession)applySession(nextSession)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';if(location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical){location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
+ useEffect(()=>{
+  const vendorId=cart[0]?.vendor_id
+  const lat=address.latitude,lng=address.longitude
+  if(drawer!=='checkout'||!session?.access_token||!vendorId||lat===''||lng===''){
+   setDeliveryQuote(null);setDeliveryQuoteError('');setDeliveryQuoteLoading(false);return
+  }
+  let active=true
+  setDeliveryQuote(null);setDeliveryQuoteError('');setDeliveryQuoteLoading(true)
+  const timer=window.setTimeout(async()=>{
+   try{
+    const quote=await api('/delivery/quote/',{method:'POST',token:session.access_token,body:JSON.stringify({vendor_id:vendorId,latitude:Number(lat),longitude:Number(lng)})})
+    if(active)setDeliveryQuote(quote)
+   }catch(error){if(active)setDeliveryQuoteError(error.message||'Could not calculate the road delivery route.')}
+   finally{if(active)setDeliveryQuoteLoading(false)}
+  },450)
+  return ()=>{active=false;window.clearTimeout(timer)}
+ },[drawer,session?.access_token,address.latitude,address.longitude,cart[0]?.vendor_id])
+
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
  useEffect(()=>{
   if(!session?.user?.id){setNotifications([]);setNotificationOpen(false);return}
@@ -171,18 +253,21 @@ export default function App() {
  }
  async function createVendor(e){
   e.preventDefault();if(busy)return;if(!session)return login()
+  const editing=Boolean(vendorForm.id)
   const ownerId=vendorForm.owner_id.trim()
   const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if(!uuidPattern.test(ownerId))return notify('Enter a valid Supabase Auth user UUID (not a Django ID or email).')
+  if(!editing&&!uuidPattern.test(ownerId))return notify('Enter a valid Supabase Auth user UUID (not a Django ID or email).')
   if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
+  if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
-   await api('/vendors/manage/',{method:'POST',token:session.access_token,body:JSON.stringify({...vendorForm,owner_id:ownerId,name:vendorForm.name.trim()})})
+   const payload={...vendorForm,owner_id:ownerId,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
+   await api('/vendors/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const data=await api('/vendors/manage/',{token:session.access_token})
    setAdminVendors(data.results||[])
-   setVendorForm({owner_id:'',name:'',phone:'',address:'',description:'',status:'pending'})
+   setVendorForm({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
    await refreshSellerDashboard()
-   notify('Vendor created and linked to the Supabase user UUID')
+   notify(editing?'Vendor delivery location updated':'Vendor created with delivery location')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function updateVendorStatus(vendor,status){
@@ -267,7 +352,20 @@ export default function App() {
    await load();await refreshSellerDashboard();setDrawer('seller-dashboard');notify(productForm.id?'Product updated':'Product created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
- async function place(e){e.preventDefault();if(busy)return;if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}if(!/^\d{6}$/.test(String(address.postal_code||'').trim()))return notify('Enter a valid 6-digit PIN code to calculate delivery charges.');if(!session)return login();if(vendors.length>1)return notify('Checkout one seller at a time.');setBusy(true);try{const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})});setCart([]);setOrders(o=>[r,...o]);setDrawer('orders');notify(`Order ${r.order_number} placed`)}catch(err){notify(err.message)}finally{setBusy(false)}}
+ async function place(e){
+  e.preventDefault();if(busy)return
+  if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}
+  if(address.latitude===''||address.longitude==='')return notify('Select your delivery location on the map or use your current location.')
+  if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote before placing the order.')
+  if(!session)return login()
+  if(vendors.length>1)return notify('Checkout one seller at a time.')
+  setBusy(true)
+  try{
+   const payload={...address,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(address.latitude),longitude:Number(address.longitude)}
+   const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
+   setCart([]);setOrders(o=>[r,...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed`)
+  }catch(err){notify(err.message)}finally{setBusy(false)}
+ }
  const catalogContent = <>
   {error&&<div className="notice">{error}<button onClick={()=>load(new AbortController().signal)}>Retry</button></div>}
   <div className="grid">{loading?Array.from({length:6},(_,i)=><div className="skeleton" key={i}><div/></div>):products.map((p,i)=><article className="product" key={p.id}><button className="photo" onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}}>{p.image_url?<img src={p.image_url} alt={p.name} loading={i>2?'lazy':'eager'} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<small className="sale">SPECIAL PRICE</small>}<span className="quick">Quick view <ArrowRight size={13}/></span></button><div className="product-info"><div className="meta"><span>{p.category_name||'Curated style'}</span><span>{p.vendor_name||'Local seller'}</span></div><button className="product-name" onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}}>{p.name}</button><div className="price"><b>{money(p.price)}</b>{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<del>{money(p.compare_at_price)}</del>}<button onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}} aria-label={'Choose options for '+p.name}><Plus size={18}/></button></div></div></article>)}</div>
@@ -331,7 +429,24 @@ export default function App() {
   </div>
   {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'||drawer==='order-details'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders','order-details':'Order details',account:'Account','categories-manage':'Manage categories','vendors-manage':'Manage vendors'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><ShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><Minus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><Plus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}{subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1||subtotal<MINIMUM_ORDER_AMOUNT} onClick={()=>session?setDrawer('checkout'):setDrawer('account')}>Continue to checkout <ArrowRight size={16}/></button></div></>}</div>}
-   {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}><p>Where should we deliver your order?</p>{[['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark'],['city','City'],['state','State'],['postal_code','6-digit PIN code']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark'].includes(key)} inputMode={key==='postal_code'?'numeric':undefined} maxLength={key==='postal_code'?6:undefined} value={address[key]} onChange={e=>setAddress({...address,[key]:key==='postal_code'?e.target.value.replace(/\D/g,'').slice(0,6):e.target.value})}/></label>)}<div className="delivery-fee-preview">{deliveryFeeFor(address.postal_code,address.state)===null?<span>Enter a valid PIN code to calculate your delivery charge.</span>:<><div><span>Delivery charge</span><b>{money(deliveryFeeFor(address.postal_code,address.state))}</b></div><small>{String(address.postal_code).trim()==='516269'?'Local Rayachoty delivery rate':String(address.state).trim().toLowerCase()==='andhra pradesh'?'Andhra Pradesh delivery rate':String(address.state).trim().toLowerCase()==='telangana'?'Telangana delivery rate':'India delivery rate'} · low-cost shipping</small></>}</div><label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label><div className="cod"><Check size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div><div className="summary">{subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to place your order.</div>}<div><span>Items subtotal</span><b>{money(subtotal)}</b></div><div><span>Delivery charge</span><b>{deliveryFeeFor(address.postal_code,address.state)===null?'Enter PIN':money(deliveryFeeFor(address.postal_code,address.state))}</b></div><div><span>Total</span><b>{deliveryFeeFor(address.postal_code,address.state)===null?'—':money(subtotal+deliveryFeeFor(address.postal_code,address.state))}</b></div><button className="primary full" disabled={busy||subtotal<MINIMUM_ORDER_AMOUNT||deliveryFeeFor(address.postal_code,address.state)===null}>{busy?'Placing order…':'Place COD order'} <ArrowRight size={16}/></button></div></form>}
+   {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}>
+    <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from this store.</p>
+    { [['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}
+    <div className="local-service-note"><MapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from the selling vendor</div>
+    <LocationPicker label="Your delivery location" latitude={address.latitude} longitude={address.longitude} onChange={({latitude,longitude})=>setAddress(p=>({...p,latitude,longitude}))}/>
+    <div className="delivery-fee-preview">
+     {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>Select a map location to calculate the delivery charge.</span>}
+    </div>
+    <label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label>
+    <div className="cod"><Check size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div>
+    <div className="summary">
+     {subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to place your order.</div>}
+     <div><span>Items subtotal</span><b>{money(subtotal)}</b></div>
+     <div><span>Delivery charge</span><b>{deliveryQuote?money(deliveryQuote.delivery_fee):'Calculate route first'}</b></div>
+     <div><span>Total</span><b>{deliveryQuote?money(subtotal+Number(deliveryQuote.delivery_fee)):'—'}</b></div>
+     <button className="primary full" disabled={busy||subtotal<MINIMUM_ORDER_AMOUNT||!deliveryQuote||deliveryQuoteLoading}>{busy?'Placing order…':'Place COD order'} <ArrowRight size={16}/></button>
+    </div>
+   </form>}
    {drawer==='orders'&&<div className="drawer-body account-orders-panel">{!session?<div className="empty"><p>Sign in to see your orders.</p><button className="primary" onClick={()=>setDrawer('account')}>Sign in to continue</button></div>:!orders.length?<div className="empty"><Package size={28}/><h3>No orders yet</h3><p>Your orders will appear here after checkout.</p><button className="secondary" onClick={getOrders}>Refresh orders</button></div>:<><div className="orders-intro"><span className="orders-intro-icon"><Package size={20}/></span><div><b>Your order history</b><small>{orders.length} order{orders.length===1?'':'s'} · Latest first</small></div><button className="secondary" onClick={getOrders}>Refresh</button></div>{orders.map(o=><button type="button" className="account-order-card" key={o.id} onClick={()=>openOrderDetails(o)}><span className="account-order-thumb">{o.items?.[0]?.image_url?<img src={o.items[0].image_url} alt=""/>:<Package size={21}/>}</span><span className="account-order-main"><b>{o.order_number}</b><small>{new Date(o.created_at).toLocaleDateString('en-IN',{dateStyle:'medium'})} · {o.items?.length||0} item line{(o.items?.length||0)===1?'':'s'}</small><span className={'order-status-chip status-'+String(o.status||'placed').replaceAll('_','-')}>{String(o.status||'placed').replaceAll('_',' ')}</span></span><span className="account-order-total"><b>{money(o.total)}</b><small>View details <ArrowRight size={12}/></small></span></button>)}</>}</div>}
    {drawer==='order-details'&&<div className="drawer-body order-detail-page">{!selectedOrder?<div className="empty"><p>Choose an order to view its details.</p><button className="secondary" onClick={getOrders}>Back to orders</button></div>:<><button className="order-back" onClick={()=>setDrawer(orderReturnDrawer)}><ChevronLeft size={17}/> Back</button><div className="order-detail-hero"><div className="order-detail-mark"><Package size={23}/></div><div><span className={'order-status-chip status-'+String(selectedOrder.status||'placed').replaceAll('_','-')}>{String(selectedOrder.status||'placed').replaceAll('_',' ')}</span><h3>{selectedOrder.order_number}</h3><p><CalendarDays size={14}/> Placed {new Date(selectedOrder.created_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}</p></div></div><section className="order-detail-section"><div className="order-detail-section-title"><h3>Items in this order</h3><span>{selectedOrder.items?.reduce((sum,item)=>sum+Number(item.quantity||0),0)||0} pieces</span></div>{(selectedOrder.items||[]).map((item,index)=><div className="order-detail-item" key={item.product_id||item.product_name+index}><div className="order-detail-image">{item.image_url?<img src={item.image_url} alt={item.product_name||'Product'} onError={e=>{e.currentTarget.style.display='none'}}/>:<Package size={19}/>}</div><div className="order-detail-item-copy"><b>{item.product_name||'Fashion item'}</b><small>{[item.size&&'Size '+item.size,item.color&&'Colour '+item.color].filter(Boolean).join(' · ')||'Standard option'}</small><small>Qty: {item.quantity} × {money(item.unit_price??(Number(item.line_total||0)/Math.max(1,Number(item.quantity||1))))}</small></div><strong>{money(item.line_total)}</strong></div>)}</section><section className="order-detail-section"><div className="order-detail-section-title"><h3><MapPin size={17}/> Delivery address</h3></div>{selectedOrder.address_snapshot&&typeof selectedOrder.address_snapshot==='object'?<div className="delivery-address-card"><b>{selectedOrder.address_snapshot.recipient_name||'Recipient'}</b><p>{[selectedOrder.address_snapshot.line1,selectedOrder.address_snapshot.line2,selectedOrder.address_snapshot.landmark].filter(Boolean).join(', ')}</p><p>{[selectedOrder.address_snapshot.city,selectedOrder.address_snapshot.state,selectedOrder.address_snapshot.postal_code].filter(Boolean).join(', ')}</p>{selectedOrder.address_snapshot.phone&&<span><Phone size={14}/> {selectedOrder.address_snapshot.phone}</span>}</div>:<p className="order-detail-muted">No saved address is available for this order.</p>}{selectedOrder.notes&&<p className="order-delivery-notes"><b>Delivery notes:</b> {selectedOrder.notes}</p>}</section><section className="order-detail-section"><div className="order-detail-section-title"><h3><CreditCard size={17}/> Payment & summary</h3></div><div className="order-payment-card"><div><span>Payment method</span><b>{String(selectedOrder.payment_method||'cod').toUpperCase()==='COD'?'Cash on delivery':String(selectedOrder.payment_method||'').toUpperCase()}</b></div><div><span>Payment status</span><b className={selectedOrder.payment_status==='paid'?'payment-success':'payment-pending'}>{selectedOrder.payment_status==='paid'?'Successful':String(selectedOrder.payment_status||'Pending').replaceAll('_',' ')}</b></div><div><span>Items subtotal</span><b>{money(selectedOrder.subtotal)}</b></div><div><span>Delivery fee</span><b>{money(selectedOrder.delivery_fee)}</b></div><div className="order-grand-total"><span>Total paid / due</span><b>{money(selectedOrder.total)}</b></div></div></section><section className="order-detail-section order-tracking-section"><div className="order-detail-section-title"><h3><Clock3 size={17}/> Order progress</h3></div><div className="order-progress">{['placed','confirmed','packed','out_for_delivery','delivered'].map((status,index)=>{const states=['placed','confirmed','packed','out_for_delivery','delivered'];const current=states.indexOf(selectedOrder.status);const done=current>=index;return <div className={'order-progress-step'+(done?' done':'')+(selectedOrder.status==='cancelled'?' cancelled':'')} key={status}><span className="order-progress-dot">{done?<Check size={12}/>:index+1}</span><div><b>{status.replaceAll('_',' ')}</b><small>{index===0?'Order received':index===1?'Seller confirmed':index===2?'Packed for dispatch':index===3?'On the way':'Delivered'}</small></div></div>})}{selectedOrder.status==='cancelled'&&<div className="order-cancelled-note">This order was cancelled.</div>}</div></section></>}</div>}
    {drawer==='account'&&(!session?<div className="drawer-body form auth-panel"><div className="auth-intro"><span className="auth-mark"><UserRound size={22}/></span><div className="eyebrow muted">BALA FASHION ACCOUNT</div><h3>{authMode==='forgot'?'Reset your password':authMode==='reset'?'Choose a new password':authMode==='signup'?'Create your account':'Welcome back'}</h3><p>{authMode==='forgot'?'We’ll email you a secure link to choose a new password.':authMode==='reset'?'Create a new password for your Bala Fashion account.':authMode==='signup'?'Join us to track orders and enjoy a smoother checkout.':'Sign in to track orders, save your details and shop your favourite styles.'}</p></div>{authMode!=='forgot'&&<><button className="primary full auth-google" type="button" onClick={login}><span className="google-g">G</span> Continue with Google <ArrowRight size={16}/></button><div className="auth-divider"><span>or continue with email</span></div></>}<form className="form auth-form" onSubmit={authMode==='forgot'?sendPasswordReset:submitEmailAuth}><label>Email address<input className="auth-input" type="email" autoComplete="email" required value={authEmail} onChange={e=>setAuthEmail(e.target.value)} placeholder="you@example.com"/></label>{authMode!=='forgot'&&<label>Password<input className="auth-input" type="password" autoComplete={authMode==='signup'||authMode==='reset'?'new-password':'current-password'} minLength={6} required value={authPassword} onChange={e=>setAuthPassword(e.target.value)} placeholder="At least 6 characters"/></label>}{authMode==='signin'&&<button className="text auth-forgot" type="button" onClick={()=>setAuthMode('forgot')}>Forgot password?</button>}<button className="primary full auth-submit" disabled={authSubmitting}>{authSubmitting?'Please wait…':authMode==='forgot'?'Send reset link':authMode==='reset'?'Update password':authMode==='signup'?'Create account':'Sign in with email'} <ArrowRight size={16}/></button>{authMode==='forgot'||authMode==='reset'?<button className="text full" type="button" onClick={()=>{setAuthMode('signin');setAuthPassword('')}}>Back to sign in</button>:<button className="text full auth-switch" type="button" onClick={()=>setAuthMode(m=>m==='signin'?'signup':'signin')}>{authMode==='signin'?"New to Bala Fashion? Create an account":'Already registered? Sign in'}</button>}</form><div className="auth-secure"><Check size={14}/> Secure sign-in powered by Supabase</div></div>:<div className="drawer-body"><p>{session?.user?.user_metadata?.full_name||session?.user?.user_metadata?.name||session?.user?.email}</p><p className="muted">{profile?.role||'customer'}</p><button className="secondary full" onClick={getOrders}>View my orders</button>{['vendor','admin'].includes(profile?.role)&&<button className="primary full" onClick={openSellerDashboard}><LayoutDashboard size={16}/> Seller dashboard</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={openCategoryManagement}>Manage categories</button>}{profile?.role==='admin'&&<button className="secondary full" onClick={openVendorManagement}><Store size={16}/> Manage vendors</button>}<button className="text" onClick={logout}>Sign out</button></div>)}
@@ -363,17 +478,19 @@ export default function App() {
     <div className="seller-section-title"><h3>Vendor management</h3><button className="secondary" onClick={openVendorManagement}>Refresh</button></div>
     <p>Create a store for an existing Supabase Auth user. The owner UUID is the Supabase Auth user ID, not a Django numeric ID. New vendor stores start pending unless you choose another status.</p>
     <form className="form admin-vendor-create" onSubmit={createVendor}>
-     <h3>Create vendor / store</h3>
-     <label>Supabase Auth user UUID<input required value={vendorForm.owner_id} onChange={e=>setVendorForm(p=>({...p,owner_id:e.target.value.trimStart()}))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoCapitalize="off" autoCorrect="off" spellCheck="false"/></label>
-     <small>Find this UUID in Supabase → Authentication → Users → select the user → User ID. The user must already exist.</small>
-     <label>Vendor / store name<input required maxLength="180" value={vendorForm.name} onChange={e=>setVendorForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Bala Fashion Store"/></label>
-     <label>Contact phone<input value={vendorForm.phone} onChange={e=>setVendorForm(p=>({...p,phone:e.target.value}))} placeholder="Mobile number"/></label>
+     <h3>{vendorForm.id?'Update vendor delivery location':'Create vendor / store'}</h3>
+     <label>Supabase Auth user UUID<input required value={vendorForm.owner_id} onChange={e=>setVendorForm(p=>({...p,owner_id:e.target.value.trimStart()}))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoCapitalize="off" autoCorrect="off" spellCheck="false" readOnly={Boolean(vendorForm.id)}/></label>
+     {!vendorForm.id&&<small>Find this UUID in Supabase → Authentication → Users → select the user → User ID. The user must already exist.</small>}
+     <label>Vendor / store name<input required maxLength="180" value={vendorForm.name} onChange={e=>setVendorForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Bala Fashion Store" readOnly={Boolean(vendorForm.id)}/></label>
+     <label>Contact phone<input value={vendorForm.phone} onChange={e=>setVendorForm(p=>({...p,phone:e.target.value}))} placeholder="Mobile number" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Store address<textarea rows="2" value={vendorForm.address} onChange={e=>setVendorForm(p=>({...p,address:e.target.value}))} placeholder="Store address"/></label>
-     <label>Description<textarea rows="2" value={vendorForm.description} onChange={e=>setVendorForm(p=>({...p,description:e.target.value}))} placeholder="Optional store description"/></label>
-     <label>Initial status<select value={vendorForm.status} onChange={e=>setVendorForm(p=>({...p,status:e.target.value}))}><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
-     <button className="primary full" disabled={busy}>{busy?'Creating vendor…':'Create vendor'}</button>
+     {!vendorForm.id&&<><label>Description<textarea rows="2" value={vendorForm.description} onChange={e=>setVendorForm(p=>({...p,description:e.target.value}))} placeholder="Optional store description"/></label>
+     <label>Initial status<select value={vendorForm.status} onChange={e=>setVendorForm(p=>({...p,status:e.target.value}))}><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></>}
+     <LocationPicker label="Vendor store location" latitude={vendorForm.latitude} longitude={vendorForm.longitude} onChange={({latitude,longitude})=>setVendorForm(p=>({...p,latitude,longitude}))}/>
+     <button className="primary full" disabled={busy}>{busy?'Saving…':vendorForm.id?'Save vendor location':'Create vendor with map location'}</button>
+     {vendorForm.id&&<button type="button" className="secondary full" onClick={()=>setVendorForm({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})}>Cancel location edit</button>}
     </form>
-    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions">{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}</div></article>)}
+    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug} · {v.latitude!=null&&v.longitude!=null?'Map pin set':'Map pin required'}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>{setVendorForm({id:v.id,owner_id:v.owner_id||'',name:v.name||'',phone:v.phone||'',address:v.address||'',description:v.description||'',latitude:v.latitude==null?'':String(v.latitude),longitude:v.longitude==null?'':String(v.longitude),status:v.status||'pending'});document.querySelector('.admin-vendor-create')?.scrollIntoView({behavior:'smooth',block:'start'})}}>Set map pin</button>{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}</div></article>)}
    </div>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
