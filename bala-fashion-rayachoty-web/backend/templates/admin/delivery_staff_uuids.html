@@ -5,12 +5,17 @@
 {{ block.super }}
 <style>
   .staff-tools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:16px 0}
-  .staff-tools input{min-width:260px;max-width:100%;padding:9px 12px}
+  .staff-tools input{min-width:240px;max-width:100%;padding:9px 12px}
+  .staff-form{max-width:760px;margin:18px 0;padding:18px;border:1px solid var(--hairline-color,#ddd);border-radius:6px;background:var(--body-bg,#fff)}
+  .staff-form label{display:block;font-weight:600;margin:12px 0 5px}
+  .staff-form input{box-sizing:border-box;width:100%;padding:10px;border:1px solid var(--border-color,#bbb);border-radius:4px}
+  .staff-form button{margin-top:16px;padding:10px 16px;cursor:pointer}
   .staff-uuid-table{width:100%;border-collapse:collapse;background:var(--body-bg,#fff)}
   .staff-uuid-table th,.staff-uuid-table td{padding:10px;border-bottom:1px solid var(--hairline-color,#ddd);text-align:left;vertical-align:top;overflow-wrap:anywhere}
   .staff-uuid-table th{background:var(--darkened-bg,#f5f5f5)}
   .uuid-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
   .copy-button{margin:4px 0;padding:4px 8px;cursor:pointer}
+  .staff-help{color:var(--body-quiet-color,#666)}
   @media(max-width:760px){.staff-uuid-table{font-size:12px}.staff-uuid-table th,.staff-uuid-table td{padding:7px}.staff-tools input{min-width:0;width:100%}}
 </style>
 {% endblock %}
@@ -18,12 +23,25 @@
 {% block content %}
 <div id="content-main">
   <p><a href="{% url 'admin:index' %}">← Back to Django Admin</a></p>
-  <h1>Delivery Staff UUIDs</h1>
-  <p>Read-only list of Supabase-backed delivery staff profiles. The UUID shown here is the Supabase Auth user ID used for delivery authorization and order assignment.</p>
+  <h1>Delivery Staff Management</h1>
+  <p>Add delivery staff using the same workflow as vendor creation: first create the account in <strong>Supabase → Authentication → Users</strong>, then copy that user's Supabase Auth UUID and authorize it below. This page does not create a separate Django user or delivery-staff table.</p>
+
+  <form class="staff-form" method="post">
+    {% csrf_token %}
+    <h2>Authorize delivery staff</h2>
+    <label for="delivery-user-id">Supabase Auth UUID *</label>
+    <input id="delivery-user-id" name="user_id" type="text" required autocomplete="off" placeholder="Paste the UUID from Supabase Authentication → Users">
+    <p class="staff-help">Use the Auth user UUID, not a vendor/store UUID. The account must already exist in Supabase Auth. Admin and vendor accounts cannot be converted to delivery staff.</p>
+    <label for="delivery-full-name">Full name (optional)</label>
+    <input id="delivery-full-name" name="full_name" type="text" maxlength="120" autocomplete="name" placeholder="Delivery staff name">
+    <label for="delivery-phone">Phone (optional)</label>
+    <input id="delivery-phone" name="phone" type="tel" maxlength="30" autocomplete="tel" placeholder="Contact phone">
+    <button type="submit" class="default">Authorize delivery staff</button>
+  </form>
 
   <div class="staff-tools">
     <input id="staff-search" type="search" placeholder="Search name, phone, or UUID…" aria-label="Search delivery staff">
-    <span><strong>{{ delivery_staff|length }}</strong> delivery staff account(s)</span>
+    <span><strong>{{ delivery_staff|length }}</strong> authorized delivery staff account(s)</span>
   </div>
 
   <div style="overflow-x:auto">
@@ -38,7 +56,7 @@
           <td>{{ staff.updated_at|default:"—" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="4">No authorized delivery staff found yet. Add a Supabase Auth user, then authorize that UUID in the storefront admin Delivery staff section.</td></tr>
+        <tr><td colspan="4">No authorized delivery staff found yet. Create the account in Supabase Authentication, then paste its UUID into the form above.</td></tr>
       {% endfor %}
       </tbody>
     </table>
