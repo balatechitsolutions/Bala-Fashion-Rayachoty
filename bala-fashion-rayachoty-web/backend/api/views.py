@@ -66,6 +66,19 @@ def road_distance_meters(origin_latitude, origin_longitude, destination_latitude
         raise ValueError("Could not calculate the delivery distance.")
     return distance
 
+def _rows_from_dicts(rows):
+    """Normalize UUID/date values for JSON responses."""
+    normalized = []
+    for row in rows:
+        item = dict(row)
+        for key, value in item.items():
+            if isinstance(value, uuid.UUID):
+                item[key] = str(value)
+            elif hasattr(value, "isoformat"):
+                item[key] = value.isoformat()
+        normalized.append(item)
+    return normalized
+
 def _rows(cursor):
     cols=[c[0] for c in cursor.description]
     out=[]
@@ -128,6 +141,37 @@ def health(request):
         return Response({"status":"ok","service":"bala-fashion-api","database":"connected"})
     except Exception:
         return Response({"status":"degraded","database":"unavailable"},status=503)
+
+@api_view(["GET"])
+def manage_auth_users(request):
+    """List existing Supabase Auth accounts for admins to assign vendor/delivery roles."""
+    user, profile, error = _role_user(request, {"admin"})
+    if error:
+        return error
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT u.id, u.email,
+                       COALESCE(NULLIF(p.full_name, ''), u.raw_user_meta_data->>'full_name', '') AS full_name,
+                       COALESCE(p.phone, '') AS phone,
+                       COALESCE(p.role, 'customer') AS role,
+                       u.created_at
+                FROM auth.users u
+                LEFT JOIN public.profiles p ON p.id = u.id
+                ORDER BY u.created_at DESC
+                LIMIT 1000
+                """
+            )
+            columns = [column[0] for column in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return Response({"results": _rows_from_dicts(rows), "count": len(rows)})
+    except Exception:
+        return Response(
+            {"detail": "Website users could not be fetched. Verify the backend database connection and auth.users permissions."},
+            status=503,
+        )
+
 
 @api_view(["GET"])
 def categories(request):
