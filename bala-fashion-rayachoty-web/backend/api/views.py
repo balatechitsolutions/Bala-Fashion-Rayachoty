@@ -14,6 +14,8 @@ CLOUD_NAME=os.getenv("CLOUDINARY_CLOUD_NAME","")
 CLOUD_KEY=os.getenv("CLOUDINARY_API_KEY","")
 CLOUD_SECRET=os.getenv("CLOUDINARY_API_SECRET","")
 MAX_DELIVERY_DISTANCE_METERS = 5000
+RAYACHOTI_BUS_STAND_LATITUDE = 14.05742
+RAYACHOTI_BUS_STAND_LONGITUDE = 78.74865
 DELIVERY_BLOCK_METERS = 500
 DELIVERY_BLOCK_FEE = Decimal("5.00")
 DEFAULT_OSRM_BASE_URL = "https://router.project-osrm.org"
@@ -391,7 +393,7 @@ def profile(request):
 
 @api_view(["POST"])
 def delivery_quote(request):
-    """Return a server-calculated OSRM route quote for a single approved vendor."""
+    """Return an OSRM quote measured from Rayachoti Bus Stand for an approved vendor's products."""
     user, error = _user(request)
     if error:
         return error
@@ -405,27 +407,26 @@ def delivery_quote(request):
     try:
         with connection.cursor() as c:
             c.execute(
-                "select name,latitude,longitude from public.vendors where id=%s and status='approved'",
+                "select name from public.vendors where id=%s and status='approved'",
                 [vendor_id],
             )
             vendor = c.fetchone()
         if not vendor:
             return Response({"detail": "This vendor is not available for delivery."}, status=404)
-        if vendor[1] is None or vendor[2] is None:
-            return Response({"detail": "This vendor has not set a delivery map location yet."}, status=409)
         distance_meters = road_distance_meters(
-            _coordinate(vendor[1], "latitude"),
-            _coordinate(vendor[2], "longitude"),
+            RAYACHOTI_BUS_STAND_LATITUDE,
+            RAYACHOTI_BUS_STAND_LONGITUDE,
             customer_latitude,
             customer_longitude,
         )
         if distance_meters > MAX_DELIVERY_DISTANCE_METERS:
             return Response({
-                "detail": f"This address is outside the 5 km road-delivery radius ({distance_meters / 1000:.2f} km). Choose a nearer location."
+                "detail": f"This address is outside the 5 km road-delivery area from Rayachoti Bus Stand ({distance_meters / 1000:.2f} km by road). Choose a nearer location."
             }, status=400)
         return Response({
             "vendor_id": vendor_id,
             "vendor_name": vendor[0],
+            "delivery_origin": "Rayachoti Bus Stand",
             "distance_meters": int(round(distance_meters)),
             "distance_km": round(distance_meters / 1000, 2),
             "delivery_fee": str(delivery_fee_for_distance(distance_meters)),
@@ -489,15 +490,10 @@ def orders(request):
                 verified.append({"id":prod_id,"name":name,"price":price,"image":image or "","qty":qty,"size":size,"color":color,"line":line})
             if subtotal < Decimal("250.00"):
                 return Response({"detail":"Minimum order amount is ₹250. Add more items to continue."},status=400)
-            with connection.cursor() as c:
-                c.execute("select latitude,longitude from public.vendors where id=%s and status='approved'", [str(vendor)])
-                vendor_location = c.fetchone()
-            if not vendor_location or vendor_location[0] is None or vendor_location[1] is None:
-                return Response({"detail":"This vendor has not set a delivery map location yet. Please contact the store."},status=409)
             try:
                 distance_meters = road_distance_meters(
-                    _coordinate(vendor_location[0], "latitude"),
-                    _coordinate(vendor_location[1], "longitude"),
+                    RAYACHOTI_BUS_STAND_LATITUDE,
+                    RAYACHOTI_BUS_STAND_LONGITUDE,
                     customer_latitude,
                     customer_longitude,
                 )
@@ -506,7 +502,7 @@ def orders(request):
             except ValueError as exc:
                 return Response({"detail": str(exc)}, status=400)
             if distance_meters > MAX_DELIVERY_DISTANCE_METERS:
-                return Response({"detail": f"Sorry, this order is outside the 5 km road-delivery radius for this vendor ({distance_meters / 1000:.2f} km). Choose a nearer delivery location."}, status=400)
+                return Response({"detail": f"Sorry, this order is outside the 5 km road-delivery area from Rayachoti Bus Stand ({distance_meters / 1000:.2f} km by road). Choose a nearer delivery location."}, status=400)
             fee = delivery_fee_for_distance(distance_meters)
             snapshot["delivery_distance_meters"] = int(round(distance_meters))
             total=subtotal+fee;number="BFR-"+uuid.uuid4().hex[:10].upper()
