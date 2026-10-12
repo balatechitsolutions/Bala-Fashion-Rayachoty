@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import PermissionDenied
-from django.db import DatabaseError, connection
+from django.db import DatabaseError, connection, transaction
 from django.shortcuts import redirect, render
 import uuid
 from django.urls import include, path
@@ -16,9 +16,85 @@ def _is_admin_superuser(request):
 
 @staff_member_required
 def vendor_uuids(request):
-    """Read-only staff page showing vendor record UUIDs and Supabase Auth owner UUIDs."""
+    """List vendor/store UUIDs and securely link each store to its Supabase Auth owner."""
     if not (request.user.is_superuser or request.user.has_perm("api.view_vendor")):
         raise PermissionDenied
+
+    if request.method == "POST":
+        _is_admin_superuser(request)
+        vendor_id_raw = request.POST.get("vendor_id", "").strip()
+        owner_id_raw = request.POST.get("owner_user_id", "").strip()
+        try:
+            vendor_id = str(uuid.UUID(vendor_id_raw))
+            owner_id = str(uuid.UUID(owner_id_raw))
+        except (ValueError, TypeError, AttributeError):
+            messages.error(request, "Enter valid vendor and Supabase Auth UUIDs.")
+            return redirect("admin-vendor-uuids")
+
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT id, name FROM public.vendors WHERE id = %s FOR UPDATE", [vendor_id])
+                    vendor = cursor.fetchone()
+                    if not vendor:
+                        messages.error(request, "Vendor record not found.")
+                        return redirect("admin-vendor-uuids")
+
+                    cursor.execute(
+                        "SELECT id, COALESCE(raw_user_meta_data->>'full_name', '') FROM auth.users WHERE id = %s",
+                        [owner_id],
+                    )
+                    auth_user = cursor.fetchone()
+                    if not auth_user:
+                        messages.error(
+                            request,
+                            "No Supabase Auth user exists for that UUID. Create the account in Supabase Authentication → Users first.",
+                        )
+                        return redirect("admin-vendor-uuids")
+
+                    cursor.execute("SELECT role FROM public.profiles WHERE id = %s", [owner_id])
+                    profile = cursor.fetchone()
+                    if profile and profile[0] == "admin":
+                        messages.error(request, "An admin account cannot be assigned as a vendor owner. Use a separate vendor account.")
+                        return redirect("admin-vendor-uuids")
+                    if profile and profile[0] == "delivery_boy":
+                        messages.error(request, "A delivery staff account cannot also be a vendor owner. Use a separate vendor account.")
+                        return redirect("admin-vendor-uuids")
+
+                    cursor.execute(
+                        "SELECT id FROM public.vendors WHERE owner_id = %s AND id <> %s LIMIT 1",
+                        [owner_id, vendor_id],
+                    )
+                    other_vendor = cursor.fetchone()
+                    if other_vendor:
+                        messages.error(request, "This Supabase user already owns another vendor record. Use the existing store or a different account.")
+                        return redirect("admin-vendor-uuids")
+
+                    cursor.execute(
+                        """INSERT INTO public.profiles (id, full_name, role)
+                           VALUES (%s, %s, 'vendor')
+                           ON CONFLICT (id) DO UPDATE SET
+                             full_name = CASE
+                               WHEN COALESCE(public.profiles.full_name, '') = ''
+                                    AND EXCLUDED.full_name <> ''
+                               THEN EXCLUDED.full_name
+                               ELSE public.profiles.full_name
+                             END,
+                             role = 'vendor',
+                             updated_at = now()""",
+                        [owner_id, str(auth_user[1] or "")[:120]],
+                    )
+                    cursor.execute(
+                        "UPDATE public.vendors SET owner_id = %s WHERE id = %s",
+                        [owner_id, vendor_id],
+                    )
+            messages.success(request, f"Linked Supabase Auth user to vendor '{vendor[1]}'. The owner UUID is now saved.")
+        except DatabaseError:
+            messages.error(
+                request,
+                "Could not link the owner. Verify that public.vendors.owner_id references the Supabase Auth user UUID and that public.profiles has the expected columns.",
+            )
+        return redirect("admin-vendor-uuids")
 
     vendors = []
     try:
@@ -48,7 +124,7 @@ def vendor_uuids(request):
 
 @staff_member_required
 def delivery_staff_uuids(request):
-    """Read-only list of delivery staff from Supabase-backed profiles; no Django model/table."""
+    """Manage delivery staff from Supabase-backed profiles; no Django model/table."""
     _is_admin_superuser(request)
 
     if request.method == "POST":
