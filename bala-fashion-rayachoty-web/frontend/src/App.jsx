@@ -1,4 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, Clock3, CreditCard, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, MapPin, Menu, Minus, Package, Pencil, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
@@ -7,6 +12,12 @@ const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const MINIMUM_ORDER_AMOUNT = 250
 const RAYACHOTY_MAP_CENTER = [14.057, 78.75]
+
+L.Icon.Default.mergeOptions({
+ iconRetinaUrl: markerIcon2x,
+ iconUrl: markerIcon,
+ shadowUrl: markerShadow,
+})
 
 function LocationPicker({latitude,longitude,onChange,label}) {
  const mapNode=useRef(null), mapRef=useRef(null), markerRef=useRef(null)
@@ -21,12 +32,15 @@ function LocationPicker({latitude,longitude,onChange,label}) {
    setLocationError('')
   }
   const init=()=>{
-   if(cancelled||!mapNode.current||!window.L||mapRef.current)return
-   const L=window.L, current=latest.current
+   if(cancelled||!mapNode.current||mapRef.current)return
+   const current=latest.current
    const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
    const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
    const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
-   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map)
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
+   }).addTo(map)
    const setMarker=(lat,lng)=>{
     if(!markerRef.current){
      markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
@@ -37,18 +51,13 @@ function LocationPicker({latitude,longitude,onChange,label}) {
    map.on('click',event=>{setMarker(event.latlng.lat,event.latlng.lng);addPoint(event.latlng.lat,event.latlng.lng)})
    mapRef.current=map
    map.__setMarker=setMarker
+   map.whenReady(()=>{if(!cancelled)map.invalidateSize()})
   }
-  if(!document.getElementById('bala-leaflet-css')){
-   const css=document.createElement('link');css.id='bala-leaflet-css';css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css)
+  init()
+  return ()=>{
+   cancelled=true
+   if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null}
   }
-  if(window.L)init()
-  else{
-   let script=document.getElementById('bala-leaflet-js')
-   if(!script){script=document.createElement('script');script.id='bala-leaflet-js';script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';script.async=true;document.head.appendChild(script)}
-   script.addEventListener('load',init)
-   if(window.L)init()
-  }
-  return ()=>{cancelled=true;if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null}}
  },[])
 
  useEffect(()=>{
