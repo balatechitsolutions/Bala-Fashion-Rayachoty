@@ -390,6 +390,57 @@ def profile(request):
     except Exception:return Response({"detail":"Profile is unavailable."},status=503)
 
 @api_view(["GET","POST"])
+@api_view(["POST"])
+def delivery_quote(request):
+    """Return a server-calculated OSRM route quote for a single approved vendor."""
+    user, error = _user(request)
+    if error:
+        return error
+    vendor_id = str(request.data.get("vendor_id", "")).strip()
+    try:
+        uuid.UUID(vendor_id)
+        customer_latitude = _coordinate(request.data.get("latitude"), "latitude")
+        customer_longitude = _coordinate(request.data.get("longitude"), "longitude")
+    except (ValueError, TypeError, AttributeError) as exc:
+        return Response({"detail": str(exc) or "Choose a valid vendor and customer map location."}, status=400)
+    try:
+        with connection.cursor() as c:
+            c.execute(
+                "select name,latitude,longitude from public.vendors where id=%s and status='approved'",
+                [vendor_id],
+            )
+            vendor = c.fetchone()
+        if not vendor:
+            return Response({"detail": "This vendor is not available for delivery."}, status=404)
+        if vendor[1] is None or vendor[2] is None:
+            return Response({"detail": "This vendor has not set a delivery map location yet."}, status=409)
+        distance_meters = road_distance_meters(
+            _coordinate(vendor[1], "latitude"),
+            _coordinate(vendor[2], "longitude"),
+            customer_latitude,
+            customer_longitude,
+        )
+        if distance_meters > MAX_DELIVERY_DISTANCE_METERS:
+            return Response({
+                "detail": f"This address is outside the 5 km road-delivery radius ({distance_meters / 1000:.2f} km). Choose a nearer location."
+            }, status=400)
+        return Response({
+            "vendor_id": vendor_id,
+            "vendor_name": vendor[0],
+            "distance_meters": int(round(distance_meters)),
+            "distance_km": round(distance_meters / 1000, 2),
+            "delivery_fee": str(delivery_fee_for_distance(distance_meters)),
+            "max_distance_km": MAX_DELIVERY_DISTANCE_METERS / 1000,
+            "fee_per_500m": str(DELIVERY_BLOCK_FEE),
+        })
+    except RuntimeError as exc:
+        return Response({"detail": str(exc)}, status=503)
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    except Exception:
+        return Response({"detail": "Could not calculate the delivery quote. Please retry."}, status=503)
+
+
 def orders(request):
     user,error=_user(request)
     if error:return error
