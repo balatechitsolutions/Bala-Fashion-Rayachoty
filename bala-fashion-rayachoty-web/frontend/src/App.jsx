@@ -64,7 +64,7 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!navigator.geolocation){setLocationError('Location is not supported by this browser. Tap the map to place a pin.');return}
   setLocationError('Finding your current location…')
   navigator.geolocation.getCurrentPosition(
-   position=>latest.current.onChange({latitude:position.coords.latitude.toFixed(6),longitude:position.coords.longitude.toFixed(6)}),
+   position=>{latest.current.onChange({latitude:position.coords.latitude.toFixed(6),longitude:position.coords.longitude.toFixed(6)});setLocationError('')},
    ()=>setLocationError('Could not get your location. Allow location access or tap the map to place a pin.'),
    {enableHighAccuracy:true,timeout:12000,maximumAge:30000}
   )
