@@ -11,7 +11,8 @@ import { api } from './api'
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const MINIMUM_ORDER_AMOUNT = 250
-const RAYACHOTY_MAP_CENTER = [14.057, 78.75]
+const RAYACHOTY_MAP_CENTER = [14.05742, 78.74865]
+const RAYACHOTY_DELIVERY_RADIUS_METERS = 5000
 
 L.Icon.Default.mergeOptions({
  iconRetinaUrl: markerIcon2x,
@@ -41,6 +42,12 @@ function LocationPicker({latitude,longitude,onChange,label}) {
     maxZoom:19,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
    }).addTo(map)
+   const coverageCircle=L.circle(RAYACHOTY_MAP_CENTER,{
+    radius:RAYACHOTY_DELIVERY_RADIUS_METERS,
+    color:'#7b1e3a',weight:2,opacity:0.95,
+    fillColor:'#7b1e3a',fillOpacity:0.12,interactive:false
+   }).addTo(map)
+   map.fitBounds(coverageCircle.getBounds(),{padding:[18,18]})
    const setMarker=(lat,lng)=>{
     if(!markerRef.current){
      markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
@@ -65,7 +72,7 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!map)return
   const lat=Number(latitude),lng=Number(longitude)
   if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
-   map.__setMarker?.(lat,lng);map.setView([lat,lng],16)
+   map.__setMarker?.(lat,lng)
   }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
  },[latitude,longitude])
 
@@ -80,11 +87,11 @@ function LocationPicker({latitude,longitude,onChange,label}) {
  }
  return <section className="location-picker">
   <div className="location-picker-head"><b>{label}</b><button type="button" className="secondary" onClick={useCurrentLocation}><MapPin size={15}/> Use my location</button></div>
-  <p>Tap the map or drag the pin to the exact location. Only Rayachoty local deliveries are supported.</p>
+  <p>5 km delivery coverage from Rayachoti Bus Stand. Tap inside the circle or drag the pin to select your address.</p>
   <div ref={mapNode} className="location-map" role="application" aria-label={label+' map'} />
   <div className="location-coordinates"><span>Latitude: {latitude||'Not selected'}</span><span>Longitude: {longitude||'Not selected'}</span></div>
   {locationError&&<small className="location-error">{locationError}</small>}
-  <small>Map data &copy; OpenStreetMap contributors.</small>
+  <small>Maroon circle: 5 km from Rayachoti Bus Stand. Final eligibility is checked using road distance. Map data &copy; OpenStreetMap contributors.</small>
  </section>
 }
 
@@ -439,9 +446,9 @@ export default function App() {
   {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'||drawer==='order-details'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders','order-details':'Order details',account:'Account','categories-manage':'Manage categories','vendors-manage':'Manage vendors'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><ShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><Minus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><Plus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}{subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1||subtotal<MINIMUM_ORDER_AMOUNT} onClick={()=>session?setDrawer('checkout'):setDrawer('account')}>Continue to checkout <ArrowRight size={16}/></button></div></>}</div>}
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}>
-    <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from this store.</p>
+    <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from Rayachoti Bus Stand.</p>
     { [['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}
-    <div className="local-service-note"><MapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from the selling vendor</div>
+    <div className="local-service-note"><MapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from Rayachoti Bus Stand</div>
     <LocationPicker label="Your delivery location" latitude={address.latitude} longitude={address.longitude} onChange={({latitude,longitude})=>setAddress(p=>({...p,latitude,longitude}))}/>
     <div className="delivery-fee-preview">
      {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>Select a map location to calculate the delivery charge.</span>}
