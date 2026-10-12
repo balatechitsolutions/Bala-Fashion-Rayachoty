@@ -283,22 +283,30 @@ export default function App() {
  async function createVendor(e){
   e.preventDefault();if(busy)return;if(!session)return login()
   const editing=Boolean(vendorForm.id)
-  const ownerId=vendorForm.owner_id.trim()
   const ownerEmail=vendorForm.owner_email.trim().toLowerCase()
-  const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if(!editing&&!uuidPattern.test(ownerId))return notify('Select a website user or enter a valid Supabase Auth UUID.')
-  if(!editing&&!ownerEmail)return notify('Enter the vendor email and match it to the selected website user.')
+  if(!editing&&!ownerEmail)return notify('Enter the email address of an existing website account.')
   if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
   if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
-   const payload={...vendorForm,owner_id:ownerId,owner_email:ownerEmail,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
+   const payload={...vendorForm,owner_email:ownerEmail,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
    await api('/vendors/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const data=await api('/vendors/manage/',{token:session.access_token})
    setAdminVendors(data.results||[])
    setVendorForm({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
    await refreshSellerDashboard()
    notify(editing?'Vendor delivery location updated':'Vendor created with delivery location')
+  }catch(e){notify(e.message)}finally{setBusy(false)}
+ }
+ async function deleteVendor(vendor){
+  if(profile?.role!=='admin')return notify('Only administrators can delete vendors.')
+  if(!window.confirm('Permanently delete vendor '+vendor.name+'? Products will also be deleted. Vendors with order history cannot be deleted.'))return
+  setBusy(true)
+  try{
+   await api('/vendors/manage/',{method:'DELETE',token:session.access_token,body:JSON.stringify({id:vendor.id})})
+   setAdminVendors(old=>old.filter(item=>item.id!==vendor.id))
+   await Promise.all([refreshSellerDashboard(),load()])
+   notify('Vendor deleted')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function updateVendorStatus(vendor,status){
@@ -522,10 +530,9 @@ export default function App() {
     <p>Create a store for an existing Supabase Auth user. The owner UUID is the Supabase Auth user ID, not a Django numeric ID. New vendor stores start pending unless you choose another status.</p>
     <form className="form admin-vendor-create" onSubmit={createVendor}>
      <h3>{vendorForm.id?'Update vendor delivery location':'Create vendor / store'}</h3>
-     {!vendorForm.id&&<label>Choose existing website user by email<select required value={vendorForm.owner_id} onChange={e=>{const selectedUser=authUsers.find(user=>user.id===e.target.value);setVendorForm(p=>({...p,owner_id:selectedUser?.id||'',owner_email:selectedUser?.email||''}))}}><option value="">Select the account matching the vendor email</option>{authUsers.filter(user=>user.role==='customer').map(user=><option key={user.id} value={user.id}>{user.email||'No email'} — {user.full_name||'Unnamed user'}</option>)}</select></label>}
-     <label>Vendor owner email<input type="email" required={!vendorForm.id} value={vendorForm.owner_email} onChange={e=>setVendorForm(p=>({...p,owner_email:e.target.value}))} placeholder="Must exactly match the selected website account" readOnly={Boolean(vendorForm.id)}/></label>
-     <label>Owner ID (Supabase Auth UUID)<input required value={vendorForm.owner_id} onChange={e=>setVendorForm(p=>({...p,owner_id:e.target.value.trimStart()}))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autoCapitalize="off" autoCorrect="off" spellCheck="false" readOnly={Boolean(vendorForm.id)}/></label>
-     {!vendorForm.id&&<small>The backend checks that this UUID exists and its Auth email matches the vendor owner email. Use Fetch / Refresh users above, or select the account to fill both fields.</small>}
+     {!vendorForm.id&&<label>Existing website account email<input type="email" required value={vendorForm.owner_email} onChange={e=>setVendorForm(p=>({...p,owner_email:e.target.value,owner_id:''}))} placeholder="Enter the vendor's registered email" autoCapitalize="off" autoCorrect="off" spellCheck="false"/></label>}
+     {vendorForm.id&&<label>Vendor owner email<input type="email" value={vendorForm.owner_email} readOnly/></label>}
+     {!vendorForm.id&&<small>The backend matches this email against existing Supabase Auth accounts and resolves the UUID securely. No dropdown or UUID entry is needed.</small>}
      <label>Vendor / store name<input required maxLength="180" value={vendorForm.name} onChange={e=>setVendorForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Bala Fashion Store" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Contact phone<input value={vendorForm.phone} onChange={e=>setVendorForm(p=>({...p,phone:e.target.value}))} placeholder="Mobile number" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Store address<textarea rows="2" value={vendorForm.address} onChange={e=>setVendorForm(p=>({...p,address:e.target.value}))} placeholder="Store address"/></label>
@@ -535,7 +542,7 @@ export default function App() {
      <button className="primary full" disabled={busy}>{busy?'Saving…':vendorForm.id?'Save vendor location':'Create vendor with map location'}</button>
      {vendorForm.id&&<button type="button" className="secondary full" onClick={()=>setVendorForm({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})}>Cancel location edit</button>}
     </form>
-    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug} · {v.latitude!=null&&v.longitude!=null?'Map pin set':'Map pin required'}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>{setVendorForm({id:v.id,owner_id:v.owner_id||'',owner_email:v.owner_email||'',name:v.name||'',phone:v.phone||'',address:v.address||'',description:v.description||'',latitude:v.latitude==null?'':String(v.latitude),longitude:v.longitude==null?'':String(v.longitude),status:v.status||'pending'});document.querySelector('.admin-vendor-create')?.scrollIntoView({behavior:'smooth',block:'start'})}}>Set map pin</button>{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}</div></article>)}
+    {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug} · {v.latitude!=null&&v.longitude!=null?'Map pin set':'Map pin required'}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>{setVendorForm({id:v.id,owner_id:v.owner_id||'',owner_email:v.owner_email||'',name:v.name||'',phone:v.phone||'',address:v.address||'',description:v.description||'',latitude:v.latitude==null?'':String(v.latitude),longitude:v.longitude==null?'':String(v.longitude),status:v.status||'pending'});document.querySelector('.admin-vendor-create')?.scrollIntoView({behavior:'smooth',block:'start'})}}>Set map pin</button>{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}<button type="button" className="secondary" disabled={busy} onClick={()=>deleteVendor(v)}><Trash2 size={15}/><span>Delete vendor</span></button></div></article>)}
    </div>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
