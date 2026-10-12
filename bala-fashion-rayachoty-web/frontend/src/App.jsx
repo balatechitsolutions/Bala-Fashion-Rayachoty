@@ -6,13 +6,77 @@ import { api } from './api'
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const MINIMUM_ORDER_AMOUNT = 250
-const deliveryFeeFor = (postalCode, state) => {
- const pin=String(postalCode||'').trim(), normalized=String(state||'').trim().toLowerCase()
- if(!/^\d{6}$/.test(pin))return null
- if(pin==='516269')return 20
- if(['andhra pradesh','ap'].includes(normalized))return 35
- if(['telangana','ts'].includes(normalized))return 45
- return 60
+const RAYACHOTY_MAP_CENTER = [14.057, 78.75]
+
+function LocationPicker({latitude,longitude,onChange,label}) {
+ const mapNode=useRef(null), mapRef=useRef(null), markerRef=useRef(null)
+ const latest=useRef({latitude,longitude,onChange})
+ const [locationError,setLocationError]=useState('')
+ latest.current={latitude,longitude,onChange}
+
+ useEffect(()=>{
+  let cancelled=false
+  const addPoint=(lat,lng)=>{
+   latest.current.onChange({latitude:Number(lat).toFixed(6),longitude:Number(lng).toFixed(6)})
+   setLocationError('')
+  }
+  const init=()=>{
+   if(cancelled||!mapNode.current||!window.L||mapRef.current)return
+   const L=window.L, current=latest.current
+   const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
+   const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
+   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map)
+   const setMarker=(lat,lng)=>{
+    if(!markerRef.current){
+     markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
+     markerRef.current.on('dragend',event=>{const p=event.target.getLatLng();addPoint(p.lat,p.lng)})
+    }else markerRef.current.setLatLng([lat,lng])
+   }
+   if(hasPoint)setMarker(center[0],center[1])
+   map.on('click',event=>{setMarker(event.latlng.lat,event.latlng.lng);addPoint(event.latlng.lat,event.latlng.lng)})
+   mapRef.current=map
+   map.__setMarker=setMarker
+  }
+  if(!document.getElementById('bala-leaflet-css')){
+   const css=document.createElement('link');css.id='bala-leaflet-css';css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css)
+  }
+  if(window.L)init()
+  else{
+   let script=document.getElementById('bala-leaflet-js')
+   if(!script){script=document.createElement('script');script.id='bala-leaflet-js';script.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';script.async=true;document.head.appendChild(script)}
+   script.addEventListener('load',init)
+   if(window.L)init()
+  }
+  return ()=>{cancelled=true;if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null}}
+ },[])
+
+ useEffect(()=>{
+  const map=mapRef.current
+  if(!map)return
+  const lat=Number(latitude),lng=Number(longitude)
+  if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
+   map.__setMarker?.(lat,lng);map.setView([lat,lng],16)
+  }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
+ },[latitude,longitude])
+
+ function useCurrentLocation(){
+  if(!navigator.geolocation){setLocationError('Location is not supported by this browser. Tap the map to place a pin.');return}
+  setLocationError('Finding your current location…')
+  navigator.geolocation.getCurrentPosition(
+   position=>latest.current.onChange({latitude:position.coords.latitude.toFixed(6),longitude:position.coords.longitude.toFixed(6)}),
+   ()=>setLocationError('Could not get your location. Allow location access or tap the map to place a pin.'),
+   {enableHighAccuracy:true,timeout:12000,maximumAge:30000}
+  )
+ }
+ return <section className="location-picker">
+  <div className="location-picker-head"><b>{label}</b><button type="button" className="secondary" onClick={useCurrentLocation}><MapPin size={15}/> Use my location</button></div>
+  <p>Tap the map or drag the pin to the exact location. Only Rayachoty local deliveries are supported.</p>
+  <div ref={mapNode} className="location-map" role="application" aria-label={label+' map'} />
+  <div className="location-coordinates"><span>Latitude: {latitude||'Not selected'}</span><span>Longitude: {longitude||'Not selected'}</span></div>
+  {locationError&&<small className="location-error">{locationError}</small>}
+  <small>Map data &copy; OpenStreetMap contributors.</small>
+ </section>
 }
 
 export default function App() {
@@ -22,14 +86,32 @@ export default function App() {
  const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState('')
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([]),[selectedOrder,setSelectedOrder]=useState(null),[orderReturnDrawer,setOrderReturnDrawer]=useState('orders')
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
- const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',notes:''})
+ const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',latitude:'',longitude:'',notes:''}),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
- const [vendorForm,setVendorForm]=useState({owner_id:'',name:'',phone:'',address:'',description:'',status:'pending'})
+ const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase){sessionRef.current=null;setSession(null);return}let active=true,initialEventSeen=false;const applySession=nextSession=>{if(!active)return;const value=nextSession||null;sessionRef.current=value;setSession(value);if(!value)setProfile(null)};const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){if(!initialEventSeen&&!sessionRef.current)applySession(null);return}if(data?.session)applySession(data.session);else if(!initialEventSeen&&!sessionRef.current)applySession(null)}catch{if(active&&!initialEventSeen&&!sessionRef.current)applySession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{if(!active)return;if(event==='INITIAL_SESSION'){initialEventSeen=true;if(nextSession||!sessionRef.current)applySession(nextSession);return}if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}if(event==='SIGNED_IN'){applySession(nextSession);setDrawer('');return}if(event==='SIGNED_OUT'){applySession(null);setDrawer('');return}if(nextSession)applySession(nextSession)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';if(location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical){location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
+ useEffect(()=>{
+  const vendorId=cart[0]?.vendor_id
+  const lat=address.latitude,lng=address.longitude
+  if(drawer!=='checkout'||!session?.access_token||!vendorId||lat===''||lng===''){
+   setDeliveryQuote(null);setDeliveryQuoteError('');setDeliveryQuoteLoading(false);return
+  }
+  let active=true
+  setDeliveryQuote(null);setDeliveryQuoteError('');setDeliveryQuoteLoading(true)
+  const timer=window.setTimeout(async()=>{
+   try{
+    const quote=await api('/delivery/quote/',{method:'POST',token:session.access_token,body:JSON.stringify({vendor_id:vendorId,latitude:Number(lat),longitude:Number(lng)})})
+    if(active)setDeliveryQuote(quote)
+   }catch(error){if(active)setDeliveryQuoteError(error.message||'Could not calculate the road delivery route.')}
+   finally{if(active)setDeliveryQuoteLoading(false)}
+  },450)
+  return ()=>{active=false;window.clearTimeout(timer)}
+ },[drawer,session?.access_token,address.latitude,address.longitude,cart[0]?.vendor_id])
+
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
  useEffect(()=>{
   if(!session?.user?.id){setNotifications([]);setNotificationOpen(false);return}
@@ -171,18 +253,21 @@ export default function App() {
  }
  async function createVendor(e){
   e.preventDefault();if(busy)return;if(!session)return login()
+  const editing=Boolean(vendorForm.id)
   const ownerId=vendorForm.owner_id.trim()
   const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if(!uuidPattern.test(ownerId))return notify('Enter a valid Supabase Auth user UUID (not a Django ID or email).')
+  if(!editing&&!uuidPattern.test(ownerId))return notify('Enter a valid Supabase Auth user UUID (not a Django ID or email).')
   if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
+  if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
-   await api('/vendors/manage/',{method:'POST',token:session.access_token,body:JSON.stringify({...vendorForm,owner_id:ownerId,name:vendorForm.name.trim()})})
+   const payload={...vendorForm,owner_id:ownerId,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
+   await api('/vendors/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const data=await api('/vendors/manage/',{token:session.access_token})
    setAdminVendors(data.results||[])
-   setVendorForm({owner_id:'',name:'',phone:'',address:'',description:'',status:'pending'})
+   setVendorForm({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
    await refreshSellerDashboard()
-   notify('Vendor created and linked to the Supabase user UUID')
+   notify(editing?'Vendor delivery location updated':'Vendor created with delivery location')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function updateVendorStatus(vendor,status){
@@ -267,7 +352,19 @@ export default function App() {
    await load();await refreshSellerDashboard();setDrawer('seller-dashboard');notify(productForm.id?'Product updated':'Product created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
- async function place(e){e.preventDefault();if(busy)return;if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}if(!/^\d{6}$/.test(String(address.postal_code||'').trim()))return notify('Enter a valid 6-digit PIN code to calculate delivery charges.');if(!session)return login();if(vendors.length>1)return notify('Checkout one seller at a time.');setBusy(true);try{const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})});setCart([]);setOrders(o=>[r,...o]);setDrawer('orders');notify(`Order ${r.order_number} placed`)}catch(err){notify(err.message)}finally{setBusy(false)}}
+ async function place(e){
+  e.preventDefault();if(busy)return
+  if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}
+  if(address.latitude===''||address.longitude==='')return notify('Select your delivery location on the map or use your current location.')
+  if(!session)return login()
+  if(vendors.length>1)return notify('Checkout one seller at a time.')
+  setBusy(true)
+  try{
+   const payload={...address,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(address.latitude),longitude:Number(address.longitude)}
+   const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
+   setCart([]);setOrders(o=>[r,...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed`)
+  }catch(err){notify(err.message)}finally{setBusy(false)}
+ }
  const catalogContent = <>
   {error&&<div className="notice">{error}<button onClick={()=>load(new AbortController().signal)}>Retry</button></div>}
   <div className="grid">{loading?Array.from({length:6},(_,i)=><div className="skeleton" key={i}><div/></div>):products.map((p,i)=><article className="product" key={p.id}><button className="photo" onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}}>{p.image_url?<img src={p.image_url} alt={p.name} loading={i>2?'lazy':'eager'} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<small className="sale">SPECIAL PRICE</small>}<span className="quick">Quick view <ArrowRight size={13}/></span></button><div className="product-info"><div className="meta"><span>{p.category_name||'Curated style'}</span><span>{p.vendor_name||'Local seller'}</span></div><button className="product-name" onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}}>{p.name}</button><div className="price"><b>{money(p.price)}</b>{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<del>{money(p.compare_at_price)}</del>}<button onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}} aria-label={'Choose options for '+p.name}><Plus size={18}/></button></div></div></article>)}</div>
