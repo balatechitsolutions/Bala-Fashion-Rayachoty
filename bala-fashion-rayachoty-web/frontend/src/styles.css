@@ -1265,3 +1265,11 @@ footer a,footer button{color:#f6dfe8}
 .seller-vendor-actions{display:flex;flex-wrap:wrap;gap:6px}
 .seller-vendor-actions button{font-size:11px}
 @media(max-width:560px){.location-map{height:220px}.location-picker{padding:10px}.location-picker-head{align-items:flex-start}.seller-vendor-actions button{padding:7px 9px}}
+
+/* Delivery staff tools */
+.delivery-assignment-controls,.delivery-order-actions{display:flex;flex-direction:column;gap:8px;min-width:160px;max-width:260px}
+.delivery-assignment-controls select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;padding:9px;background:#fffdfb;color:var(--ink);font:inherit;font-size:12px}
+.delivery-order-card a{display:inline-flex;align-items:center;gap:6px;margin:7px 0;color:var(--rose);font-size:12px;text-decoration:underline;overflow-wrap:anywhere}
+.delivery-order-card>span:first-child{min-width:0;overflow-wrap:anywhere}
+.delivery-order-card small{line-height:1.5}
+@media(max-width:560px){.delivery-assignment-controls,.delivery-order-actions{max-width:none;width:100%}.delivery-order-card{align-items:stretch;flex-direction:column}.delivery-order-actions .primary{width:100%}}
