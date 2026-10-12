@@ -6,6 +6,16 @@ from . import views
 
 class EndpointTests(SimpleTestCase):
     def setUp(self): self.factory=APIRequestFactory()
+    def test_delivery_fee_uses_low_cost_location_tiers(self):
+        self.assertEqual(views.delivery_fee_for_address("516269", "Andhra Pradesh"), Decimal("20.00"))
+        self.assertEqual(views.delivery_fee_for_address("516270", "Andhra Pradesh"), Decimal("35.00"))
+        self.assertEqual(views.delivery_fee_for_address("500001", "Telangana"), Decimal("45.00"))
+        self.assertEqual(views.delivery_fee_for_address("110001", "Delhi"), Decimal("60.00"))
+
+    def test_delivery_fee_requires_six_digit_pin(self):
+        with self.assertRaises(ValueError):
+            views.delivery_fee_for_address("123", "Andhra Pradesh")
+
     def test_health_without_database_is_ok_but_not_configured(self):
         req=self.factory.get("/api/health/")
         with patch.object(views.os,"getenv",side_effect=lambda k,d=None:"" if k=="DATABASE_URL" else d):
