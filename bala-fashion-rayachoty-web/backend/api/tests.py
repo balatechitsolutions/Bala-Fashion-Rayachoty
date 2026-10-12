@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
+from decimal import Decimal
 from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
 from . import views
