@@ -389,7 +389,6 @@ def profile(request):
         return Response(_profile(user["id"]))
     except Exception:return Response({"detail":"Profile is unavailable."},status=503)
 
-@api_view(["GET","POST"])
 @api_view(["POST"])
 def delivery_quote(request):
     """Return a server-calculated OSRM route quote for a single approved vendor."""
@@ -441,6 +440,7 @@ def delivery_quote(request):
         return Response({"detail": "Could not calculate the delivery quote. Please retry."}, status=503)
 
 
+@api_view(["GET","POST"])
 def orders(request):
     user,error=_user(request)
     if error:return error
