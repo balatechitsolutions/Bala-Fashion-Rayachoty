@@ -1,34 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Map as MapLibreMap, Marker, NavigationControl, LngLatBounds, setWorkerUrl } from 'maplibre-gl'
-import maplibreWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import 'maplibre-gl/dist/maplibre-gl.css'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, Clock3, CreditCard, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, MapPin, Menu, Minus, Package, Pencil, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
 
-setWorkerUrl(maplibreWorker)
-
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const MINIMUM_ORDER_AMOUNT = 250
-const RAYACHOTY_MAP_CENTER = [14.05742, 78.74865]
-const RAYACHOTY_DELIVERY_RADIUS_METERS = 5000
+const RAYACHOTY_MAP_CENTER = [14.057, 78.75]
 
-function createCoverageCircle(longitude,latitude,radiusMeters,steps=96) {
- const earthRadius=6371008.8
- const latitudeRadians=latitude*Math.PI/180
- const longitudeRadians=longitude*Math.PI/180
- const angularDistance=radiusMeters/earthRadius
- const coordinates=[]
- for(let i=0;i<steps;i++){
-  const bearing=2*Math.PI*i/steps
-  const pointLatitude=Math.asin(Math.sin(latitudeRadians)*Math.cos(angularDistance)+Math.cos(latitudeRadians)*Math.sin(angularDistance)*Math.cos(bearing))
-  const pointLongitude=longitudeRadians+Math.atan2(Math.sin(bearing)*Math.sin(angularDistance)*Math.cos(latitudeRadians),Math.cos(angularDistance)-Math.sin(latitudeRadians)*Math.sin(pointLatitude))
-  coordinates.push([pointLongitude*180/Math.PI,pointLatitude*180/Math.PI])
- }
- coordinates.push(coordinates[0])
- return {type:'Feature',properties:{name:'5 km delivery coverage'},geometry:{type:'Polygon',coordinates:[coordinates]}}
-}
+L.Icon.Default.mergeOptions({
+ iconRetinaUrl: markerIcon2x,
+ iconUrl: markerIcon,
+ shadowUrl: markerShadow,
+})
 
 function LocationPicker({latitude,longitude,onChange,label}) {
  const mapNode=useRef(null), mapRef=useRef(null), markerRef=useRef(null)
@@ -46,48 +35,23 @@ function LocationPicker({latitude,longitude,onChange,label}) {
    if(cancelled||!mapNode.current||mapRef.current)return
    const current=latest.current
    const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
-   const center=hasPoint?[Number(current.longitude),Number(current.latitude)]:[RAYACHOTY_MAP_CENTER[1],RAYACHOTY_MAP_CENTER[0]]
-   const map=new MapLibreMap({
-    container:mapNode.current,
-    center,
-    zoom:hasPoint?16:13,
+   const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
+   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
-    attributionControl:{compact:true},
-    style:{
-     version:8,
-     sources:{
-      'osm-raster':{
-       type:'raster',
-       tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-       tileSize:256,
-       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
-      }
-     },
-     layers:[{id:'osm-raster-layer',type:'raster',source:'osm-raster'}]
-    }
-   })
-   map.addControl(new NavigationControl({showCompass:false}),'top-right')
-   const circleFeature=createCoverageCircle(RAYACHOTY_MAP_CENTER[1],RAYACHOTY_MAP_CENTER[0],RAYACHOTY_DELIVERY_RADIUS_METERS)
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
+   }).addTo(map)
    const setMarker=(lat,lng)=>{
     if(!markerRef.current){
-     markerRef.current=new Marker({draggable:true,color:'#7b1e3a'}).setLngLat([lng,lat]).addTo(map)
-     markerRef.current.on('dragend',()=>{const p=markerRef.current.getLngLat();addPoint(p.lat,p.lng)})
-    }else markerRef.current.setLngLat([lng,lat])
+     markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
+     markerRef.current.on('dragend',event=>{const p=event.target.getLatLng();addPoint(p.lat,p.lng)})
+    }else markerRef.current.setLatLng([lat,lng])
    }
-   if(hasPoint)setMarker(center[1],center[0])
-   map.on('click',event=>{setMarker(event.lngLat.lat,event.lngLat.lng);addPoint(event.lngLat.lat,event.lngLat.lng)})
-   map.once('load',()=>{
-    if(cancelled)return
-    map.addSource('delivery-coverage',{type:'geojson',data:circleFeature})
-    map.addLayer({id:'delivery-coverage-fill',type:'fill',source:'delivery-coverage',paint:{'fill-color':'#7b1e3a','fill-opacity':0.12}})
-    map.addLayer({id:'delivery-coverage-outline',type:'line',source:'delivery-coverage',paint:{'line-color':'#7b1e3a','line-width':2,'line-opacity':0.95}})
-    const bounds=new LngLatBounds()
-    circleFeature.geometry.coordinates[0].forEach(point=>bounds.extend(point))
-    map.fitBounds(bounds,{padding:18,duration:0})
-    map.resize()
-   })
-   map.on('error',()=>{if(!cancelled)setLocationError('The map could not load. Check your internet connection or tap Use my location to retry.')})
+   if(hasPoint)setMarker(center[0],center[1])
+   map.on('click',event=>{setMarker(event.latlng.lat,event.latlng.lng);addPoint(event.latlng.lat,event.latlng.lng)})
    mapRef.current=map
+   map.__setMarker=setMarker
+   map.whenReady(()=>{if(!cancelled)map.invalidateSize()})
   }
   init()
   return ()=>{
@@ -101,11 +65,8 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!map)return
   const lat=Number(latitude),lng=Number(longitude)
   if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
-   if(!markerRef.current){
-    markerRef.current=new Marker({draggable:true,color:'#7b1e3a'}).setLngLat([lng,lat]).addTo(map)
-    markerRef.current.on('dragend',()=>{const p=markerRef.current.getLngLat();latest.current.onChange({latitude:p.lat.toFixed(6),longitude:p.lng.toFixed(6)});setLocationError('')})
-   }else markerRef.current.setLngLat([lng,lat])
-  }else if(markerRef.current){markerRef.current.remove();markerRef.current=null}
+   map.__setMarker?.(lat,lng);map.setView([lat,lng],16)
+  }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
  },[latitude,longitude])
 
  function useCurrentLocation(){
@@ -119,11 +80,11 @@ function LocationPicker({latitude,longitude,onChange,label}) {
  }
  return <section className="location-picker">
   <div className="location-picker-head"><b>{label}</b><button type="button" className="secondary" onClick={useCurrentLocation}><MapPin size={15}/> Use my location</button></div>
-  <p>5 km delivery coverage from Rayachoti Bus Stand. Tap inside the circle or drag the pin to select your address.</p>
+  <p>Tap the map or drag the pin to the exact location. Only Rayachoty local deliveries are supported.</p>
   <div ref={mapNode} className="location-map" role="application" aria-label={label+' map'} />
   <div className="location-coordinates"><span>Latitude: {latitude||'Not selected'}</span><span>Longitude: {longitude||'Not selected'}</span></div>
   {locationError&&<small className="location-error">{locationError}</small>}
-  <small>Maroon circle: 5 km from Rayachoti Bus Stand. Final eligibility is checked using road distance. Map data &copy; OpenStreetMap contributors.</small>
+  <small>Map data &copy; OpenStreetMap contributors.</small>
  </section>
 }
 
@@ -478,9 +439,9 @@ export default function App() {
   {drawer&&<div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&setDrawer('')}><aside className="drawer"><div className="drawer-head"><div><div className="eyebrow muted">{drawer==='cart'?'YOUR SELECTION':drawer==='checkout'?'DELIVERY DETAILS':drawer==='orders'||drawer==='order-details'?'YOUR ACCOUNT':'BALA FASHION'}</div><h2>{({cart:'Your bag',checkout:'Checkout',orders:'My orders','order-details':'Order details',account:'Account','categories-manage':'Manage categories','vendors-manage':'Manage vendors'})[drawer]||'Manage products'}</h2></div><button className="icon" onClick={()=>setDrawer('')}><X/></button></div>
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><ShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><Minus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><Plus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}{subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1||subtotal<MINIMUM_ORDER_AMOUNT} onClick={()=>session?setDrawer('checkout'):setDrawer('account')}>Continue to checkout <ArrowRight size={16}/></button></div></>}</div>}
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}>
-    <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from Rayachoti Bus Stand.</p>
+    <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from this store.</p>
     { [['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}
-    <div className="local-service-note"><MapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from Rayachoti Bus Stand</div>
+    <div className="local-service-note"><MapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from the selling vendor</div>
     <LocationPicker label="Your delivery location" latitude={address.latitude} longitude={address.longitude} onChange={({latitude,longitude})=>setAddress(p=>({...p,latitude,longitude}))}/>
     <div className="delivery-fee-preview">
      {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>Select a map location to calculate the delivery charge.</span>}
