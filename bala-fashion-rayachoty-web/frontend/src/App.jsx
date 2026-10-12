@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+import { Map as MapLibreMap, Marker, NavigationControl, LngLatBounds, setWorkerUrl } from 'maplibre-gl'
+import maplibreWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, Clock3, CreditCard, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, MapPin, Menu, Minus, Package, Pencil, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { api } from './api'
+
+setWorkerUrl(maplibreWorker)
 
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
@@ -14,11 +14,21 @@ const MINIMUM_ORDER_AMOUNT = 250
 const RAYACHOTY_MAP_CENTER = [14.05742, 78.74865]
 const RAYACHOTY_DELIVERY_RADIUS_METERS = 5000
 
-L.Icon.Default.mergeOptions({
- iconRetinaUrl: markerIcon2x,
- iconUrl: markerIcon,
- shadowUrl: markerShadow,
-})
+function createCoverageCircle(longitude,latitude,radiusMeters,steps=96) {
+ const earthRadius=6371008.8
+ const latitudeRadians=latitude*Math.PI/180
+ const longitudeRadians=longitude*Math.PI/180
+ const angularDistance=radiusMeters/earthRadius
+ const coordinates=[]
+ for(let i=0;i<steps;i++){
+  const bearing=2*Math.PI*i/steps
+  const pointLatitude=Math.asin(Math.sin(latitudeRadians)*Math.cos(angularDistance)+Math.cos(latitudeRadians)*Math.sin(angularDistance)*Math.cos(bearing))
+  const pointLongitude=longitudeRadians+Math.atan2(Math.sin(bearing)*Math.sin(angularDistance)*Math.cos(latitudeRadians),Math.cos(angularDistance)-Math.sin(latitudeRadians)*Math.sin(pointLatitude))
+  coordinates.push([pointLongitude*180/Math.PI,pointLatitude*180/Math.PI])
+ }
+ coordinates.push(coordinates[0])
+ return {type:'Feature',properties:{name:'5 km delivery coverage'},geometry:{type:'Polygon',coordinates:[coordinates]}}
+}
 
 function LocationPicker({latitude,longitude,onChange,label}) {
  const mapNode=useRef(null), mapRef=useRef(null), markerRef=useRef(null)
@@ -36,29 +46,48 @@ function LocationPicker({latitude,longitude,onChange,label}) {
    if(cancelled||!mapNode.current||mapRef.current)return
    const current=latest.current
    const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
-   const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
-   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
-   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+   const center=hasPoint?[Number(current.longitude),Number(current.latitude)]:[RAYACHOTY_MAP_CENTER[1],RAYACHOTY_MAP_CENTER[0]]
+   const map=new MapLibreMap({
+    container:mapNode.current,
+    center,
+    zoom:hasPoint?16:13,
     maxZoom:19,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
-   }).addTo(map)
-   const coverageCircle=L.circle(RAYACHOTY_MAP_CENTER,{
-    radius:RAYACHOTY_DELIVERY_RADIUS_METERS,
-    color:'#7b1e3a',weight:2,opacity:0.95,
-    fillColor:'#7b1e3a',fillOpacity:0.12,interactive:false
-   }).addTo(map)
-   map.fitBounds(coverageCircle.getBounds(),{padding:[18,18]})
+    attributionControl:{compact:true},
+    style:{
+     version:8,
+     sources:{
+      'osm-raster':{
+       type:'raster',
+       tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+       tileSize:256,
+       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
+      }
+     },
+     layers:[{id:'osm-raster-layer',type:'raster',source:'osm-raster'}]
+    }
+   })
+   map.addControl(new NavigationControl({showCompass:false}),'top-right')
+   const circleFeature=createCoverageCircle(RAYACHOTY_MAP_CENTER[1],RAYACHOTY_MAP_CENTER[0],RAYACHOTY_DELIVERY_RADIUS_METERS)
    const setMarker=(lat,lng)=>{
     if(!markerRef.current){
-     markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
-     markerRef.current.on('dragend',event=>{const p=event.target.getLatLng();addPoint(p.lat,p.lng)})
-    }else markerRef.current.setLatLng([lat,lng])
+     markerRef.current=new Marker({draggable:true,color:'#7b1e3a'}).setLngLat([lng,lat]).addTo(map)
+     markerRef.current.on('dragend',()=>{const p=markerRef.current.getLngLat();addPoint(p.lat,p.lng)})
+    }else markerRef.current.setLngLat([lng,lat])
    }
-   if(hasPoint)setMarker(center[0],center[1])
-   map.on('click',event=>{setMarker(event.latlng.lat,event.latlng.lng);addPoint(event.latlng.lat,event.latlng.lng)})
+   if(hasPoint)setMarker(center[1],center[0])
+   map.on('click',event=>{setMarker(event.lngLat.lat,event.lngLat.lng);addPoint(event.lngLat.lat,event.lngLat.lng)})
+   map.once('load',()=>{
+    if(cancelled)return
+    map.addSource('delivery-coverage',{type:'geojson',data:circleFeature})
+    map.addLayer({id:'delivery-coverage-fill',type:'fill',source:'delivery-coverage',paint:{'fill-color':'#7b1e3a','fill-opacity':0.12}})
+    map.addLayer({id:'delivery-coverage-outline',type:'line',source:'delivery-coverage',paint:{'line-color':'#7b1e3a','line-width':2,'line-opacity':0.95}})
+    const bounds=new LngLatBounds()
+    circleFeature.geometry.coordinates[0].forEach(point=>bounds.extend(point))
+    map.fitBounds(bounds,{padding:18,duration:0})
+    map.resize()
+   })
+   map.on('error',()=>{if(!cancelled)setLocationError('The map could not load. Check your internet connection or tap Use my location to retry.')})
    mapRef.current=map
-   map.__setMarker=setMarker
-   map.whenReady(()=>{if(!cancelled)map.invalidateSize()})
   }
   init()
   return ()=>{
@@ -72,8 +101,11 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!map)return
   const lat=Number(latitude),lng=Number(longitude)
   if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
-   map.__setMarker?.(lat,lng)
-  }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
+   if(!markerRef.current){
+    markerRef.current=new Marker({draggable:true,color:'#7b1e3a'}).setLngLat([lng,lat]).addTo(map)
+    markerRef.current.on('dragend',()=>{const p=markerRef.current.getLngLat();latest.current.onChange({latitude:p.lat.toFixed(6),longitude:p.lng.toFixed(6)});setLocationError('')})
+   }else markerRef.current.setLngLat([lng,lat])
+  }else if(markerRef.current){markerRef.current.remove();markerRef.current=null}
  },[latitude,longitude])
 
  function useCurrentLocation(){
