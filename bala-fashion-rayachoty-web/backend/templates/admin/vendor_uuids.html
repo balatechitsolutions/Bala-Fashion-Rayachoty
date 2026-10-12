@@ -11,15 +11,19 @@
   .vendor-uuid-table th{background:var(--darkened-bg,#f5f5f5)}
   .uuid-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
   .copy-button{margin:4px 0;padding:4px 8px;cursor:pointer}
-  @media(max-width:760px){.vendor-uuid-table{font-size:12px}.vendor-uuid-table th,.vendor-uuid-table td{padding:7px}.vendor-tools input{min-width:0;width:100%}}
+  .owner-form{display:flex;gap:6px;flex-wrap:wrap;min-width:250px}
+  .owner-form input{min-width:230px;max-width:100%;padding:7px}
+  .owner-help{display:block;color:var(--body-quiet-color,#666);font-size:12px;margin-top:5px}
+  @media(max-width:760px){.vendor-uuid-table{font-size:12px}.vendor-uuid-table th,.vendor-uuid-table td{padding:7px}.vendor-tools input{min-width:0;width:100%}.owner-form input{min-width:0;width:100%}}
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="content-main">
   <p><a href="{% url 'admin:index' %}">← Back to Django Admin</a></p>
-  <h1>Vendor UUIDs</h1>
-  <p><strong>These UUIDs are different.</strong> <strong>Vendor record UUID</strong> (<code>public.vendors.id</code>) identifies the store. <strong>Owner Supabase Auth UUID</strong> (<code>public.vendors.owner_id</code>) identifies the user who signs in. Use the owner UUID for account identity and permissions; use the vendor record UUID for store/product references.</p>
+  <h1>Vendor UUIDs and Owner Linking</h1>
+  <p><strong>Vendor record UUID</strong> (<code>public.vendors.id</code>) identifies the shop. <strong>Owner Supabase Auth UUID</strong> (<code>public.vendors.owner_id</code>) identifies the account that signs in. If the owner UUID is blank, use the form below to link an existing Supabase Auth user. This form does not create a login account.</p>
+  <p>To get the owner UUID, open Supabase → Authentication → Users and copy the user's UUID. Linking is restricted to Django superusers.</p>
 
   <div class="vendor-tools">
     <input id="vendor-search" type="search" placeholder="Search vendor name, status, or UUID…" aria-label="Search vendors">
@@ -29,19 +33,28 @@
   <div style="overflow-x:auto">
     <table class="vendor-uuid-table" id="vendor-table">
       <thead><tr>
-        <th>Vendor record UUID <small>(public.vendors.id)</small></th><th>Owner Supabase Auth UUID <small>(public.vendors.owner_id)</small></th><th>Status</th><th>Phone</th><th>Created</th>
+        <th>Vendor / record UUID</th><th>Owner Supabase Auth UUID</th><th>Link owner account</th><th>Status</th><th>Phone</th><th>Created</th>
       </tr></thead>
       <tbody>
       {% for vendor in vendors %}
         <tr>
-          <td>{{ vendor.name|default:"—" }}<br><span class="uuid-value">{{ vendor.id|default:"—" }}</span>{% if vendor.id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.id }}" data-label="Copy vendor record UUID">Copy vendor record UUID</button>{% endif %}</td>
-          <td><span class="uuid-value">{{ vendor.owner_id|default:"—" }}</span>{% if vendor.owner_id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.owner_id }}" data-label="Copy owner Auth UUID">Copy owner Auth UUID</button>{% endif %}</td>
+          <td>{{ vendor.name|default:"—" }}<br><span class="uuid-value">{{ vendor.id|default:"—" }}</span>{% if vendor.id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.id }}" data-label="Copy vendor record UUID">Copy vendor UUID</button>{% endif %}</td>
+          <td><span class="uuid-value">{{ vendor.owner_id|default:"Not linked" }}</span>{% if vendor.owner_id %}<br><button class="copy-button" type="button" data-copy="{{ vendor.owner_id }}" data-label="Copy owner Auth UUID">Copy owner UUID</button>{% endif %}</td>
+          <td>
+            <form class="owner-form" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="vendor_id" value="{{ vendor.id }}">
+              <input type="text" name="owner_user_id" aria-label="Supabase Auth user UUID for {{ vendor.name }}" placeholder="Paste Supabase Auth user UUID" required pattern="[0-9a-fA-F-]{36}" title="Paste the UUID from Supabase Authentication → Users">
+              <button type="submit" class="default">Link owner</button>
+            </form>
+            <small class="owner-help">Use an existing Supabase Auth user UUID, not this vendor's UUID.</small>
+          </td>
           <td>{{ vendor.status|default:"—" }}</td>
           <td>{{ vendor.phone|default:"—" }}</td>
           <td>{{ vendor.created_at|default:"—" }}</td>
         </tr>
       {% empty %}
-        <tr><td colspan="5">No vendors found, or the vendor table could not be queried. Check any admin error message above.</td></tr>
+        <tr><td colspan="6">No vendors found, or the vendor table could not be queried. Check any admin error message above.</td></tr>
       {% endfor %}
       </tbody>
     </table>
