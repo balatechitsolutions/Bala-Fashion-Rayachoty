@@ -256,7 +256,7 @@ def manage_vendors(request):
 
     if request.method == "POST":
         data = request.data
-        owner_id = str(data.get("owner_id", "")).strip()
+        owner_id = str(data.get("owner_user_id") or data.get("owner_id") or "").strip()
         try:
             owner_uuid = uuid.UUID(owner_id)
         except (ValueError, TypeError, AttributeError):
@@ -315,7 +315,7 @@ def manage_vendors(request):
                 ["id","owner_id","name","slug","description","logo_url","phone","address","latitude","longitude","status","created_at"], row
             )}
             result["id"] = str(result["id"])
-            result["owner_id"] = str(result["owner_id"])
+            result["owner_id"] = str(result["owner_id"])\n            result["vendor_id"] = result["id"]\n            result["owner_user_id"] = result["owner_id"]
             if hasattr(result["created_at"], "isoformat"):
                 result["created_at"] = result["created_at"].isoformat()
             return Response(result, status=201)
