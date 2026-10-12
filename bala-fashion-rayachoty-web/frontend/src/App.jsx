@@ -100,7 +100,8 @@ export default function App() {
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
- const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
+ const [authUsers,setAuthUsers]=useState([]),[authUsersLoading,setAuthUsersLoading]=useState(false),[authUsersFetched,setAuthUsersFetched]=useState(false),[authUserSearch,setAuthUserSearch]=useState('')
+ const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase){sessionRef.current=null;setSession(null);return}let active=true,initialEventSeen=false;const applySession=nextSession=>{if(!active)return;const value=nextSession||null;sessionRef.current=value;setSession(value);if(!value)setProfile(null)};const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){if(!initialEventSeen&&!sessionRef.current)applySession(null);return}if(data?.session)applySession(data.session);else if(!initialEventSeen&&!sessionRef.current)applySession(null)}catch{if(active&&!initialEventSeen&&!sessionRef.current)applySession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{if(!active)return;if(event==='INITIAL_SESSION'){initialEventSeen=true;if(nextSession||!sessionRef.current)applySession(nextSession);return}if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}if(event==='SIGNED_IN'){applySession(nextSession);setDrawer('');return}if(event==='SIGNED_OUT'){applySession(null);setDrawer('');return}if(nextSession)applySession(nextSession)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';const isVercelPreview=location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical;if(isVercelPreview){const callbackHash=location.hash;const callbackQuery=location.search;const isOAuthCallback=callbackHash.includes('access_token=')||callbackHash.includes('refresh_token=')||callbackQuery.includes('code=')||callbackQuery.includes('error=');if(!isOAuthCallback)location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
@@ -255,27 +256,47 @@ export default function App() {
   try{await api('/categories/manage/?id='+encodeURIComponent(cat.id),{method:'DELETE',token:session.access_token});const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[]);await load();notify('Category deactivated')}
   catch(e){notify(e.message)}finally{setBusy(false)}
  }
+ async function fetchAuthUsers(){
+  if(!session?.access_token)return login()
+  if(authUsersLoading)return
+  setAuthUsersLoading(true)
+  try{
+   const data=await api('/users/manage/',{token:session.access_token})
+   setAuthUsers(Array.isArray(data.results)?data.results:[])
+   setAuthUsersFetched(true)
+   notify(`Fetched ${data.count??data.results?.length??0} website user(s).`)
+  }catch(e){notify(e.message||'Could not fetch website users.')}
+  finally{setAuthUsersLoading(false)}
+ }
  async function openVendorManagement(){
   if(!session)return login()
   setDrawer('vendors-manage')
+  if(!authUsersFetched)await fetchAuthUsers()
   try{const data=await api('/vendors/manage/',{token:session.access_token});setAdminVendors(data.results||[])}
   catch(e){notify(e.message)}
+ }
+ async function openDeliveryManagement(){
+  if(!session)return login()
+  setDrawer('delivery-management')
+  if(!authUsersFetched)await fetchAuthUsers()
  }
  async function createVendor(e){
   e.preventDefault();if(busy)return;if(!session)return login()
   const editing=Boolean(vendorForm.id)
   const ownerId=vendorForm.owner_id.trim()
+  const ownerEmail=vendorForm.owner_email.trim().toLowerCase()
   const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  if(!editing&&!uuidPattern.test(ownerId))return notify('Enter a valid Supabase Auth user UUID (not a Django ID or email).')
+  if(!editing&&!uuidPattern.test(ownerId))return notify('Select a website user or enter a valid Supabase Auth UUID.')
+  if(!editing&&!ownerEmail)return notify('Enter the vendor email and match it to the selected website user.')
   if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
   if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
-   const payload={...vendorForm,owner_id:ownerId,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
+   const payload={...vendorForm,owner_id:ownerId,owner_email:ownerEmail,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
    await api('/vendors/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const data=await api('/vendors/manage/',{token:session.access_token})
    setAdminVendors(data.results||[])
-   setVendorForm({id:'',owner_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
+   setVendorForm({id:'',owner_id:'',owner_email:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
    await refreshSellerDashboard()
    notify(editing?'Vendor delivery location updated':'Vendor created with delivery location')
   }catch(e){notify(e.message)}finally{setBusy(false)}
@@ -315,6 +336,7 @@ export default function App() {
   if(!session)return login()
   setDrawer('seller-dashboard')
   const data=await refreshSellerDashboard()
+  if(profile?.role==='admin'&&!authUsersFetched)await fetchAuthUsers()
   if(data?.role==='vendor'&&!data.stores?.length)notify('Your seller account has no approved store yet. Contact the administrator.')
  }
  async function openAccountEntry(){
