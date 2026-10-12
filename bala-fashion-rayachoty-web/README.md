@@ -85,3 +85,22 @@ Checkout only allows products from one seller per order, revalidates prices/stoc
 The storefront authenticates through Supabase Auth. Vendor `owner_id` references `auth.users.id`, so the UUID in the built-in Django **Users** list is not the correct value. Staff can use **Supabase Auth users — copy user UUIDs** in the Django Admin header to view paginated Supabase user UUIDs and copy the correct one.
 
 Set `SUPABASE_SERVICE_ROLE_KEY` as a secret environment variable on the Render backend. Obtain it from Supabase Dashboard → Project Settings → API Keys. Never put this key in frontend `VITE_*` variables, commit it to GitHub, or show it in admin pages. Keep `SUPABASE_URL` configured as well. If the secret is missing, the page displays setup guidance and does not reveal credentials.
+
+
+## Delivery-boy role
+
+Delivery staff use the same Supabase Auth sign-in as other users, but have a separate `delivery_boy` profile role and a dedicated delivery dashboard. Admins authorize an existing customer account by UUID, then assign packed or out-for-delivery orders to that person. Delivery staff can see only their assigned orders and can mark an order delivered only after it is `out_for_delivery`. They cannot manage products, vendors, or unassigned orders. COD payment is marked paid when delivery is confirmed; customer and admin delivery notifications use the existing notification system.
+
+### Required database migration
+
+Before deploying this feature, open Supabase Dashboard → SQL Editor and run `supabase/migrations/20261012_delivery_boy_role.sql` from this repository. It adds the delivery role to the profile constraint and the nullable order assignment column/index. Do not deploy the new backend before this migration is applied.
+
+### Setup and use
+
+1. Create a delivery person's Supabase Auth account in Authentication → Users (or use an existing customer account).
+2. Sign in as admin on the storefront and open **Delivery staff**.
+3. Enter the person's Supabase Auth user UUID to authorize the delivery role. Admin/vendor accounts cannot be converted into delivery accounts.
+4. In the same panel, assign an order once it is packed or out for delivery. The vendor/admin still controls the existing order progression to `out_for_delivery`.
+5. The delivery person signs in to the storefront and opens **Delivery dashboard** from Account. They can view the assigned customer's address/phone, open turn-by-turn directions in Google Maps via a regular URL (no Maps API key required), and mark the order delivered.
+
+Delivery assignment is enforced server-side. A production release should include API tests, a test account for each role, and end-to-end validation before handling live orders.
