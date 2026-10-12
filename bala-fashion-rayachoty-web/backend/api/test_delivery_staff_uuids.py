@@ -1,19 +1,26 @@
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
-from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.core.exceptions import PermissionDenied
+from django.test import RequestFactory, SimpleTestCase
+
+from config import urls
 
 
-class DeliveryStaffUUIDAdminTests(TestCase):
+class DeliveryStaffUUIDAdminTests(SimpleTestCase):
     def setUp(self):
-        user_model = get_user_model()
-        self.admin_user = user_model.objects.create_superuser(
-            username="uuid-admin", email="uuid-admin@example.com", password="test-password-123"
+        self.factory = RequestFactory()
+
+    def admin_request(self, is_superuser=True):
+        request = self.factory.get("/admin/delivery-staff-uuids/")
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.user = SimpleNamespace(
+            is_active=True,
+            is_staff=True,
+            is_superuser=is_superuser,
         )
-        self.staff_user = user_model.objects.create_user(
-            username="ordinary-staff", email="ordinary@example.com",
-            password="test-password-123", is_staff=True, is_superuser=False
-        )
+        return request
 
     @patch("config.urls.connection.cursor")
     def test_superuser_can_view_delivery_staff_uuids_without_django_model(self, cursor_factory):
@@ -26,17 +33,15 @@ class DeliveryStaffUUIDAdminTests(TestCase):
             ("3db4b2df-77f9-4e25-93a6-32a50f8f70c1", "Delivery Worker", "9876543210", None)
         ]
 
-        self.client.force_login(self.admin_user)
-        response = self.client.get("/admin/delivery-staff-uuids/")
+        response = urls.delivery_staff_uuids(self.admin_request())
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Delivery Staff UUIDs")
         self.assertContains(response, "3db4b2df-77f9-4e25-93a6-32a50f8f70c1")
         cursor.execute.assert_called_once()
         self.assertIn("public.profiles", cursor.execute.call_args.args[0])
-        self.assertIn("delivery_boy", cursor.execute.call_args.args[1])
-        
+        self.assertEqual(cursor.execute.call_args.args[1], ["delivery_boy"])
+
     def test_non_superuser_staff_cannot_view_delivery_staff_uuids(self):
-        self.client.force_login(self.staff_user)
-        response = self.client.get("/admin/delivery-staff-uuids/")
-        self.assertEqual(response.status_code, 403)
+        with self.assertRaises(PermissionDenied):
+            urls.delivery_staff_uuids(self.admin_request(is_superuser=False))
