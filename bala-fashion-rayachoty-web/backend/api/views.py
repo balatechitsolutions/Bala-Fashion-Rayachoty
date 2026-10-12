@@ -331,7 +331,7 @@ def manage_vendors(request):
                     c.execute("select id, email, coalesce(raw_user_meta_data->>'full_name','') from auth.users where id=%s limit 1", [owner_user_id])
                     auth_user = c.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No website account exists for this email. The owner must register/sign in first."}, status=404)
+                        return Response({"detail": "No website account exists for this UUID. The owner must register/sign in first."}, status=404)
                     owner_uuid = auth_user[0]
                     c.execute("select role from public.profiles where id=%s", [str(owner_uuid)])
                     existing_profile = c.fetchone()
