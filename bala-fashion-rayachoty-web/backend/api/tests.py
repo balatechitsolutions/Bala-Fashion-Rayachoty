@@ -220,7 +220,7 @@ class EndpointTests(SimpleTestCase):
         cursor = MagicMock()
         cursor.__enter__.return_value = cursor
         cursor.fetchone.side_effect = [
-            (order_id, "out_for_delivery", "cod", "pending"),
+            (order_id, "out_for_delivery", "cod", "pending", "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11", "BFR-TEST123"),
             (order_id, "BFR-TEST123", "delivered", "paid", "1499.00", datetime.now(timezone.utc)),
         ]
         with patch.object(views, "_user", return_value=(user, None)):
