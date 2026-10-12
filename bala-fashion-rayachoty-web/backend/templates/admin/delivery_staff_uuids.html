@@ -1,0 +1,77 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .staff-tools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:16px 0}
+  .staff-tools input{min-width:260px;max-width:100%;padding:9px 12px}
+  .staff-uuid-table{width:100%;border-collapse:collapse;background:var(--body-bg,#fff)}
+  .staff-uuid-table th,.staff-uuid-table td{padding:10px;border-bottom:1px solid var(--hairline-color,#ddd);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+  .staff-uuid-table th{background:var(--darkened-bg,#f5f5f5)}
+  .uuid-value{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+  .copy-button{margin:4px 0;padding:4px 8px;cursor:pointer}
+  @media(max-width:760px){.staff-uuid-table{font-size:12px}.staff-uuid-table th,.staff-uuid-table td{padding:7px}.staff-tools input{min-width:0;width:100%}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p><a href="{% url 'admin:index' %}">← Back to Django Admin</a></p>
+  <h1>Delivery Staff UUIDs</h1>
+  <p>Read-only list of Supabase-backed delivery staff profiles. The UUID shown here is the Supabase Auth user ID used for delivery authorization and order assignment.</p>
+
+  <div class="staff-tools">
+    <input id="staff-search" type="search" placeholder="Search name, phone, or UUID…" aria-label="Search delivery staff">
+    <span><strong>{{ delivery_staff|length }}</strong> delivery staff account(s)</span>
+  </div>
+
+  <div style="overflow-x:auto">
+    <table class="staff-uuid-table" id="staff-table">
+      <thead><tr><th>Delivery staff</th><th>Supabase Auth UUID</th><th>Phone</th><th>Last profile update</th></tr></thead>
+      <tbody>
+      {% for staff in delivery_staff %}
+        <tr>
+          <td>{{ staff.full_name|default:"—" }}</td>
+          <td><span class="uuid-value">{{ staff.id|default:"—" }}</span>{% if staff.id %}<br><button class="copy-button" type="button" data-copy="{{ staff.id }}">Copy UUID</button>{% endif %}</td>
+          <td>{{ staff.phone|default:"—" }}</td>
+          <td>{{ staff.updated_at|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4">No authorized delivery staff found yet. Add a Supabase Auth user, then authorize that UUID in the storefront admin Delivery staff section.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+(function () {
+  const search = document.getElementById('staff-search');
+  const rows = Array.from(document.querySelectorAll('#staff-table tbody tr'));
+  search.addEventListener('input', function () {
+    const query = search.value.trim().toLowerCase();
+    rows.forEach(function (row) {
+      row.hidden = !row.innerText.toLowerCase().includes(query);
+    });
+  });
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', async function () {
+      const value = button.getAttribute('data-copy');
+      try {
+        await navigator.clipboard.writeText(value);
+        button.textContent = 'Copied!';
+      } catch (error) {
+        const area = document.createElement('textarea');
+        area.value = value;
+        document.body.appendChild(area);
+        area.select();
+        const copied = document.execCommand('copy');
+        area.remove();
+        button.textContent = copied ? 'Copied!' : 'Copy failed';
+      }
+      window.setTimeout(function () { button.textContent = 'Copy UUID'; }, 1600);
+    });
+  });
+})();
+</script>
+{% endblock %}
