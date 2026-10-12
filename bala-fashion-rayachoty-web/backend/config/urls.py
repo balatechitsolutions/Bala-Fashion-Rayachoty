@@ -153,17 +153,20 @@ def delivery_staff_uuids(request):
         try:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT id, COALESCE(raw_user_meta_data->>'full_name', '') FROM auth.users WHERE id = %s",
+                    "SELECT id, email, COALESCE(raw_user_meta_data->>'full_name', '') FROM auth.users WHERE id = %s",
                     [staff_id],
                 )
                 auth_user = cursor.fetchone()
                 if not auth_user:
-                    messages.error(request, "No Supabase Auth user exists for that UUID. Create the user in Supabase Authentication first.")
+                    messages.error(request, "No Supabase Auth user exists for that UUID. The delivery staff member must first register or sign in on the website.")
                     return redirect("admin-delivery-staff-uuids")
                 cursor.execute("SELECT role FROM public.profiles WHERE id = %s", [staff_id])
                 existing_profile = cursor.fetchone()
                 if existing_profile and existing_profile[0] in {"admin", "vendor"}:
-                    messages.error(request, "This account already has an admin/vendor role. Use a separate customer account for delivery work.")
+                    messages.error(request, "This account already has an admin/vendor role. Select a separate customer account for delivery work.")
+                    return redirect("admin-delivery-staff-uuids")
+                if existing_profile and existing_profile[0] == "delivery_boy":
+                    messages.info(request, "This user is already authorized as delivery staff.")
                     return redirect("admin-delivery-staff-uuids")
                 cursor.execute(
                     """INSERT INTO public.profiles (id, full_name, phone, role)
@@ -173,7 +176,7 @@ def delivery_staff_uuids(request):
                          phone = CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE public.profiles.phone END,
                          role = 'delivery_boy',
                          updated_at = now()""",
-                    [staff_id, full_name or str(auth_user[1] or "")[:120], phone],
+                    [staff_id, full_name or str(auth_user[2] or "")[:120], phone],
                 )
             messages.success(request, "Delivery staff authorized successfully. The Supabase Auth UUID is now enabled for delivery assignments.")
         except DatabaseError:
@@ -181,31 +184,45 @@ def delivery_staff_uuids(request):
         return redirect("admin-delivery-staff-uuids")
 
     staff = []
+    auth_users = []
     try:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id, full_name, phone, updated_at
-                FROM public.profiles
-                WHERE role = %s
-                ORDER BY full_name ASC NULLS LAST, id ASC
+                SELECT p.id, p.full_name, p.phone, p.updated_at, u.email
+                FROM public.profiles p
+                LEFT JOIN auth.users u ON u.id = p.id
+                WHERE p.role = %s
+                ORDER BY p.full_name ASC NULLS LAST, p.id ASC
                 LIMIT 500
                 """,
                 ["delivery_boy"],
             )
             columns = [column[0] for column in cursor.description]
             staff = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            # List existing website/Auth users so admins can select the matching email and copy UUID.
+            cursor.execute(
+                """
+                SELECT u.id, u.email, COALESCE(u.raw_user_meta_data->>'full_name', '') AS full_name,
+                       u.created_at, COALESCE(p.role, 'customer') AS role
+                FROM auth.users u
+                LEFT JOIN public.profiles p ON p.id = u.id
+                ORDER BY u.created_at DESC
+                LIMIT 1000
+                """
+            )
+            columns = [column[0] for column in cursor.description]
+            auth_users = [dict(zip(columns, row)) for row in cursor.fetchall()]
     except DatabaseError:
         messages.error(
             request,
-            "Could not load delivery staff UUIDs. Verify that the connected database "
-            "is Supabase PostgreSQL and that the public.profiles delivery_boy role is configured.",
+            "Could not load delivery staff or Supabase Auth users. Verify Render DATABASE_URL permissions and the public.profiles/auth.users tables.",
         )
 
     return render(
         request,
         "admin/delivery_staff_uuids.html",
-        {"title": "Delivery Staff Management", "delivery_staff": staff},
+        {"title": "Delivery Staff Management", "delivery_staff": staff, "auth_users": auth_users},
     )
 
 
