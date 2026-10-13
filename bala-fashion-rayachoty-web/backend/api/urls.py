@@ -16,6 +16,7 @@ urlpatterns = [
     path("orders/", views.orders),
     path("delivery/quote/", views.delivery_quote),
     path("delivery/staff/", delivery.delivery_staff),
+    path("delivery/availability/", delivery.delivery_availability),
     path("delivery/assign/", delivery.assign_delivery_staff),
     path("delivery/orders/", delivery.my_delivery_orders),
     path("delivery/location/", delivery.delivery_location),
