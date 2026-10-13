@@ -172,6 +172,10 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   }, [session?.access_token])
 
   useEffect(() => { loadOrders() }, [loadOrders])
+  useEffect(() => {
+    const timer = window.setInterval(loadOrders, 30000)
+    return () => window.clearInterval(timer)
+  }, [loadOrders])
 
   useEffect(() => {
     if (!session?.access_token || !navigator.geolocation) return
