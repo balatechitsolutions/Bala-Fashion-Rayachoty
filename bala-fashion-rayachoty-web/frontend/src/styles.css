@@ -1273,3 +1273,64 @@ footer a,footer button{color:#f6dfe8}
 .delivery-order-card>span:first-child{min-width:0;overflow-wrap:anywhere}
 .delivery-order-card small{line-height:1.5}
 @media(max-width:560px){.delivery-assignment-controls,.delivery-order-actions{max-width:none;width:100%}.delivery-order-card{align-items:stretch;flex-direction:column}.delivery-order-actions .primary{width:100%}}
+
+/* Component audit pass: consistent, accessible controls and mobile-safe dashboard layouts. */
+:root{--focus-ring:0 0 0 3px rgba(112,43,56,.18)}
+:where(button,input,select,textarea,a,[tabindex]):focus-visible{outline:2px solid var(--rose);outline-offset:3px}
+button:disabled{cursor:not-allowed;opacity:.58}
+.app-page,.drawer-body,.seller-dashboard,.seller-dashboard-section,.form{min-width:0}
+.app-page{overflow-wrap:anywhere}
+.drawer{max-width:100vw}
+.drawer-head{position:sticky;top:0;z-index:5;background:var(--paper,#fbf7f2)}
+.drawer-body{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.form label{min-width:0}
+.form input,.form select,.form textarea,.delivery-order-actions input,.delivery-assignment-controls select{width:100%;min-width:0;max-width:100%}
+.seller-dashboard-head{align-items:flex-start;flex-wrap:wrap}
+.seller-dashboard-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.seller-dashboard-head-actions button{min-height:40px}
+.seller-order-row{min-width:0}
+.delivery-order-card{align-items:flex-start;gap:18px;padding:16px 0}
+.delivery-order-details{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.delivery-order-details>b:not(:first-child){margin-top:8px}
+.delivery-order-details small{font-size:13px;overflow-wrap:anywhere}
+.delivery-order-actions{flex:0 0 250px;min-width:0}
+.delivery-otp-controls{display:flex;flex-direction:column;gap:8px;width:100%}
+.delivery-otp-controls button{width:100%;min-height:44px;justify-content:center;white-space:normal}
+.delivery-otp-controls label{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.delivery-order-actions .secondary,.delivery-order-actions .primary{min-height:44px}
+.delivery-missing-data{padding:10px 12px;border:1px solid #e6c58c;border-radius:10px;background:#fff7e7;color:#754d11;font-size:12px;line-height:1.5}
+.delivery-contact-link{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;text-decoration:none;font-weight:600}
+.seller-store-row,.seller-product-row,.seller-order-row{overflow-wrap:anywhere}
+.seller-store-row>span,.seller-product-main{min-width:0}
+.seller-admin-actions button,.seller-vendor-actions button{min-height:40px}
+.app-topbar input,.app-search input{min-width:0}
+@media(max-width:760px){
+ .seller-dashboard{gap:14px}
+ .seller-dashboard-head{gap:12px}
+ .seller-dashboard-head>div:first-child{flex:1 1 100%}
+ .seller-dashboard-head-actions{width:100%;justify-content:stretch}
+ .seller-dashboard-head-actions button{flex:1 1 auto}
+ .seller-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .seller-stat-grid>div{padding:12px;min-width:0}
+ .seller-stat-grid b{font-size:24px}
+ .seller-stat-grid small{font-size:12px}
+ .delivery-order-card{display:flex;flex-direction:column;align-items:stretch;gap:14px;padding:16px;border:1px solid var(--line);border-radius:16px;background:#fff;margin:0 0 14px}
+ .delivery-order-details,.delivery-order-actions{width:100%;max-width:none;min-width:0}
+ .delivery-order-details small{font-size:13px}
+ .delivery-order-actions{border-top:1px solid var(--line);padding-top:12px}
+ .delivery-otp-controls{display:grid;grid-template-columns:1fr}
+ .delivery-otp-controls button{min-height:46px}
+ .seller-order-row:not(.delivery-order-card){align-items:stretch;flex-direction:column}
+ .delivery-assignment-controls{width:100%;max-width:none}
+ .delivery-assignment-controls select{min-height:44px}
+ .drawer-head{padding:16px}
+ .drawer-body{padding-inline:16px}
+}
+@media(max-width:380px){
+ .seller-stat-grid>div{padding:10px}
+ .seller-stat-grid b{font-size:21px}
+ .seller-dashboard-head-actions{display:grid;grid-template-columns:1fr 1fr}
+ .seller-dashboard-head-actions .seller-status{grid-column:1/-1}
+ .delivery-order-card{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
