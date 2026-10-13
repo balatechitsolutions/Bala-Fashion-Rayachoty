@@ -5,14 +5,15 @@ from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect
 from django.core.exceptions import ValidationError
-from django.db import DatabaseError, IntegrityError
+from django.db import DatabaseError, IntegrityError, transaction
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.text import slugify
 import cloudinary
 import cloudinary.exceptions
 import cloudinary.uploader
 
-from .models import Category, DeliveryStaff, Product, Vendor
+from .models import Category, CustomerAddress, DeliveryStaff, OrderRecord, Product, Vendor
 
 logger = logging.getLogger(__name__)
 
@@ -425,3 +426,47 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(CustomerAddress)
+class CustomerAddressAdmin(admin.ModelAdmin):
+    """Manage saved customer addresses directly in Django admin."""
+    list_display = ("recipient_name", "phone", "user_id", "city", "postal_code", "is_default", "updated_at")
+    list_filter = ("is_default", "city", "state")
+    search_fields = ("recipient_name", "phone", "user_id", "line1", "line2", "landmark", "postal_code")
+    readonly_fields = ("id", "created_at", "updated_at")
+    list_per_page = 50
+    ordering = ("-updated_at",)
+    fieldsets = (
+        ("Customer", {"fields": ("user_id", "recipient_name", "phone")}),
+        ("Delivery address", {"fields": ("line1", "line2", "landmark", "city", "state", "postal_code", "latitude", "longitude", "notes")}),
+        ("Default address", {"fields": ("is_default",)}),
+        ("Record information", {"fields": ("id", "created_at", "updated_at")}),
+    )
+
+    def save_model(self, request, obj, form, change):
+        with transaction.atomic():
+            if obj.is_default:
+                CustomerAddress.objects.filter(user_id=obj.user_id).exclude(pk=obj.pk).update(is_default=False)
+            obj.updated_at = timezone.now()
+            super().save_model(request, obj, form, change)
+
+
+@admin.register(OrderRecord)
+class OrderRecordAdmin(admin.ModelAdmin):
+    """Search orders and repair their saved address snapshot without altering payment/items."""
+    list_display = ("order_number", "customer_id", "status", "payment_status", "total", "created_at", "address_state")
+    list_filter = ("status", "payment_status", "payment_method")
+    search_fields = ("order_number", "customer_id", "vendor_id")
+    readonly_fields = ("id", "order_number", "customer_id", "vendor_id", "status", "payment_method", "payment_status", "subtotal", "delivery_fee", "total", "notes", "created_at", "address_state")
+    fields = ("id", "order_number", "customer_id", "vendor_id", "status", "payment_method", "payment_status", "subtotal", "delivery_fee", "total", "address_state", "address_snapshot", "notes", "created_at")
+    list_per_page = 50
+
+    @admin.display(description="Delivery address")
+    def address_state(self, obj):
+        snapshot = obj.address_snapshot if isinstance(obj.address_snapshot, dict) else {}
+        return "Saved" if snapshot.get("line1") and snapshot.get("recipient_name") else "Missing / incomplete"
+
+    def save_model(self, request, obj, form, change):
+        # Only editable field is address_snapshot; order totals, items and payment stay untouched.
+        super().save_model(request, obj, form, change)
