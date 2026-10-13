@@ -725,14 +725,7 @@ def manage_orders(request):
                 c.execute(
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
-                              jsonb_strip_nulls(jsonb_build_object(
-                                'line1',o.address_snapshot->>'line1',
-                                'line2',o.address_snapshot->>'line2',
-                                'landmark',o.address_snapshot->>'landmark',
-                                'city',o.address_snapshot->>'city',
-                                'state',o.address_snapshot->>'state',
-                                'postal_code',o.address_snapshot->>'postal_code'
-                              )) as address_snapshot,
+                              '{}'::jsonb as address_snapshot,
                               o.notes,o.created_at,v.name as vendor_name,
                               coalesce(json_agg(json_build_object(
                                 'product_name',oi.product_name,'image_url',oi.image_url,
