@@ -8,3 +8,5 @@ cloudinary==1.42.2
 gunicorn==23.0.0
 whitenoise==6.8.2
 firebase-admin>=6.6,<8
+django-redis==5.4.0
+celery==5.4.0
