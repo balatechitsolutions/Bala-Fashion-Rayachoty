@@ -126,7 +126,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
             <span className="delivery-assignment-controls">
               <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
                 <option value="">Choose online delivery person</option>
-                {staff.filter(person=>person.is_active && person.availability_status==='available').sort((a,b)=> {
+                {staff.filter(person=>person.availability_status==='available').sort((a,b)=> {
                   const destination=order.delivery_coordinates||{}
                   const distance=person=> {
                     if(destination.latitude==null||destination.longitude==null||person.latitude==null||person.longitude==null) return Number.POSITIVE_INFINITY
@@ -141,7 +141,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
                   return String(a.full_name||'').localeCompare(String(b.full_name||''))
                 }).map(person => <option key={person.id} value={person.id}>{person.full_name || person.phone || person.id.slice(0, 8)}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
               </select>
-              <button className="secondary" disabled={saving || !staff.some(person=>person.is_active&&person.availability_status==='available')} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
+              <button className="secondary" disabled={saving || !staff.some(person=>person.availability_status==='available')} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
             </span>
           </article>
         )}
@@ -181,7 +181,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   }, [loadOrders])
 
   useEffect(() => {
-    if (!session?.access_token || !isActive || availabilityStatus !== 'available' || !navigator.geolocation) return
+    if (!session?.access_token || availabilityStatus !== 'available' || !navigator.geolocation) return
     let active = true
     const shareLocation = () => navigator.geolocation.getCurrentPosition(async position => {
       if (!active) return
@@ -194,7 +194,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     shareLocation()
     const timer = window.setInterval(shareLocation, 120000)
     return () => { active=false; window.clearInterval(timer) }
-  }, [session?.access_token, isActive, availabilityStatus])
+  }, [session?.access_token, availabilityStatus])
 
   async function toggleAvailability() {
     if (!session?.access_token || availabilityBusy || !isActive) return
