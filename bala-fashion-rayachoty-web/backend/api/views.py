@@ -2,6 +2,9 @@ import json, os, re, uuid
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 import requests
 from django.db import connection, transaction
+from django.core.cache import cache
+import hashlib
+import logging
 from django.utils.text import slugify
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -120,13 +123,21 @@ def _insert_account_notification(cursor, recipient_id, event_type, title, body, 
         [str(uuid.uuid4()), str(recipient_id), event_type, title, body, str(order_id)],
     )
     if cursor.rowcount == 1:
-        # Push is best-effort: notification persistence/order processing must succeed
-        # even when Firebase credentials are not configured or a device token is stale.
-        try:
-            from .push_notifications import send_push_to_user
-            send_push_to_user(recipient_id, title, body, order_id, event_type)
-        except Exception:
-            logging.getLogger(__name__).exception("Could not dispatch account notification push")
+        # Dispatch after commit. Redis/Celery moves push delivery to a worker; when
+        # Redis is absent, preserve the existing best-effort inline behavior.
+        def dispatch_push():
+            try:
+                if os.getenv("CELERY_BROKER_URL", "").strip():
+                    from .tasks import send_account_push
+                    send_account_push.delay(
+                        str(recipient_id), title, body, str(order_id), event_type
+                    )
+                else:
+                    from .push_notifications import send_push_to_user
+                    send_push_to_user(recipient_id, title, body, order_id, event_type)
+            except Exception:
+                logging.getLogger(__name__).exception("Could not dispatch account notification push")
+        transaction.on_commit(dispatch_push)
 
 
 def _notify_admins(cursor, event_type, title, body, order_id):
@@ -183,11 +194,18 @@ def manage_auth_users(request):
 
 @api_view(["GET"])
 def categories(request):
+    cache_key = "catalog:categories:v1"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return Response(cached)
     try:
         with connection.cursor() as c:
             c.execute("select id,name,slug,image_url,sort_order from public.categories where is_active=true order by sort_order,name")
-            return Response(_rows(c))
-    except Exception:return Response({"detail":"Categories are temporarily unavailable."},status=503)
+            rows = _rows(c)
+        cache.set(cache_key, rows, 60)
+        return Response(rows)
+    except Exception:
+        return Response({"detail":"Categories are temporarily unavailable."},status=503)
 
 @api_view(["GET", "POST", "PATCH", "DELETE"])
 def manage_category(request):
@@ -442,21 +460,59 @@ def manage_vendors(request):
 
 @api_view(["GET"])
 def products(request):
-    search=request.query_params.get("search","").strip()[:100]
-    category=request.query_params.get("category","").strip()[:80]
-    limit=min(int(request.query_params.get("limit","30")) if request.query_params.get("limit","30").isdigit() else 30,100)
-    where=["p.is_active=true","v.status='approved'"]; params=[]
+    """Bounded public catalog query with offset pagination and short-lived caching."""
+    search = request.query_params.get("search", "").strip()[:100]
+    category = request.query_params.get("category", "").strip()[:80]
+    raw_limit = request.query_params.get("limit", "30")
+    raw_offset = request.query_params.get("offset", "0")
+    limit = min(max(int(raw_limit), 1), 60) if raw_limit.isdigit() else 30
+    offset = min(max(int(raw_offset), 0), 1_000_000) if raw_offset.isdigit() else 0
+    cache_fingerprint = hashlib.sha256(
+        f"{search.lower()}|{category.lower()}|{limit}|{offset}".encode("utf-8")
+    ).hexdigest()[:32]
+    cache_key = f"catalog:products:v1:{cache_fingerprint}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return Response(cached)
+
+    where = ["p.is_active=true", "v.status='approved'"]
+    params = []
     if search:
         where.append("(p.name ilike %s or p.description ilike %s or v.name ilike %s)")
-        params += [f"%{search}%"]*3
-    if category:where.append("c.slug=%s");params.append(category)
-    params.append(max(1,limit))
+        params += [f"%{search}%"] * 3
+    if category:
+        where.append("c.slug=%s")
+        params.append(category)
+    params.extend([limit + 1, offset])
     try:
         with connection.cursor() as c:
-            c.execute(f"""select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.category_id,c.name as category_name,c.slug as category_slug,p.vendor_id,v.slug as vendor_slug from public.products p join public.vendors v on v.id=p.vendor_id left join public.categories c on c.id=p.category_id where {' and '.join(where)} order by p.created_at desc limit %s""",params)
-            rows=_rows(c)
-        return Response({"results":rows,"count":len(rows)})
-    except Exception:return Response({"detail":"Products are unavailable. Check the backend database connection."},status=503)
+            c.execute(
+                f"""select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
+                           p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                           p.category_id,c.name as category_name,c.slug as category_slug,
+                           p.vendor_id,v.slug as vendor_slug
+                    from public.products p
+                    join public.vendors v on v.id=p.vendor_id
+                    left join public.categories c on c.id=p.category_id
+                    where {' and '.join(where)}
+                    order by p.created_at desc,p.id desc
+                    limit %s offset %s""",
+                params,
+            )
+            rows = _rows(c)
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        payload = {
+            "results": rows,
+            "count": len(rows),
+            "has_more": has_more,
+            "next_offset": offset + len(rows) if has_more else None,
+        }
+        # Checkout revalidates inventory; this short TTL limits stale catalog data.
+        cache.set(cache_key, payload, 15)
+        return Response(payload)
+    except Exception:
+        return Response({"detail":"Products are unavailable. Check the backend database connection."},status=503)
 
 @api_view(["GET","PATCH"])
 def profile(request):
