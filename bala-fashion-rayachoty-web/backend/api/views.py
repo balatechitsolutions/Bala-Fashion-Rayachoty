@@ -545,7 +545,7 @@ def orders(request):
         customer_longitude = _coordinate(address.get("longitude"), "longitude")
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=400)
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","latitude":customer_latitude,"longitude":customer_longitude}
+    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude}
     try:
         with transaction.atomic():
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
@@ -868,6 +868,17 @@ def seller_dashboard(request):
                             'latitude',o.address_snapshot->>'latitude',
                             'longitude',o.address_snapshot->>'longitude'
                           ) else null end as delivery_coordinates,
+                          case when %s='vendor' then coalesce(
+                            nullif(o.address_snapshot,'{}'::jsonb),
+                            (select jsonb_build_object(
+                              'recipient_name',ca.recipient_name,'phone',ca.phone,
+                              'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
+                              'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
+                              'latitude',ca.latitude,'longitude',ca.longitude
+                            ) from public.customer_addresses ca
+                             where ca.user_id=o.customer_id
+                             order by ca.is_default desc,ca.created_at desc limit 1)
+                          ) else null end as address_snapshot,
                           coalesce(json_agg(json_build_object(
                             'product_id',oi.product_id,'product_name',oi.product_name,
                             'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,
@@ -878,7 +889,7 @@ def seller_dashboard(request):
                    left join public.order_items oi on oi.order_id=o.id
                    where o.vendor_id = any(%s)
                    group by o.id,v.name order by o.created_at desc limit 50""",
-                [prof["role"], store_ids],
+                [prof["role"], prof["role"], store_ids],
             )
             managed_orders = _rows(c)
         return Response({
