@@ -136,6 +136,15 @@ export default function App() {
   return ()=>{active=false;window.clearTimeout(timer)}
  },[drawer,session?.access_token,address.latitude,address.longitude,cart[0]?.vendor_id])
 
+ useEffect(()=>{
+  if(drawer!=='checkout'||!session?.access_token)return
+  let active=true
+  api('/addresses/',{token:session.access_token}).then(data=>{
+   const preferred=(data.results||[]).find(item=>item.is_default)
+   if(active&&preferred)setAddress(current=>current.line1?current:{...current,...preferred,latitude:String(preferred.latitude),longitude:String(preferred.longitude)})
+  }).catch(()=>{})
+  return()=>{active=false}
+ },[drawer,session?.access_token])
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
  useEffect(()=>{
   if(!session?.user?.id){setNotifications([]);setNotificationOpen(false);return}
