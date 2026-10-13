@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-import { Check, MapPin, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { FiCheck, FiMapPin, FiEdit2, FiPlus, FiRefreshCw, FiTrash2, FiX } from 'react-icons/fi'
 import { api } from './api'
 
 L.Icon.Default.mergeOptions({
@@ -110,7 +110,7 @@ function AddressLocationPicker({ latitude, longitude, onChange }) {
   return <section className="location-picker address-location-picker">
     <div className="location-picker-head">
       <b>Pin your delivery location</b>
-      <button type="button" className="secondary" onClick={useCurrentLocation}><MapPin size={15}/> Use my location</button>
+      <button type="button" className="secondary" onClick={useCurrentLocation}><FiMapPin size={15}/> Use my location</button>
     </div>
     <p>Tap the map or drag the pin to your house entrance. The pin coordinates are saved with this address.</p>
     <div ref={mapNode} className="location-map" role="application" aria-label="Delivery address map" />
@@ -195,7 +195,7 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
   return <div className="drawer-body seller-dashboard address-management">
     <div className="seller-dashboard-head">
       <div><b>Saved delivery addresses</b><small>Create, edit or remove addresses. One address can be your default.</small></div>
-      <button type="button" className="secondary" onClick={load} disabled={loading}><RefreshCw size={14}/> Refresh</button>
+      <button type="button" className="secondary" onClick={load} disabled={loading}><FiRefreshCw size={14}/> Refresh</button>
     </div>
     {error && <div className="warning">{error}</div>}
     {loading ? <p>Loading saved addresses…</p> : !addresses.length ? <p className="seller-empty">No saved addresses yet. Add one below.</p> : addresses.map(address =>
@@ -204,8 +204,8 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
         <span className="address-actions">
           {onChoose && <button type="button" className="primary" disabled={saving} onClick={() => onChoose(address, returnTo)}>Use address</button>}
           {!address.is_default && <button type="button" className="secondary" disabled={saving} onClick={() => makeDefault(address)}>Set default</button>}
-          <button type="button" className="secondary" aria-label="Edit address" disabled={saving} onClick={() => edit(address)}><Pencil size={14}/></button>
-          <button type="button" className="secondary" aria-label="Delete address" disabled={saving} onClick={() => remove(address)}><Trash2 size={14}/></button>
+          <button type="button" className="secondary" aria-label="Edit address" disabled={saving} onClick={() => edit(address)}><FiEdit2 size={14}/></button>
+          <button type="button" className="secondary" aria-label="Delete address" disabled={saving} onClick={() => remove(address)}><FiTrash2 size={14}/></button>
         </span>
       </article>
     )}
@@ -225,8 +225,8 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
       {(!form.latitude || !form.longitude) && <small className="location-error">Select a pin on the map or use your current location before saving.</small>}
       <label>Delivery instructions (optional)<textarea rows="2" maxLength={500} value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
       <label className="checkbox-label"><input type="checkbox" checked={Boolean(form.is_default)} onChange={e=>setForm({...form,is_default:e.target.checked})}/> Set as my default address</label>
-      <button className="primary full" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save address'} <Check size={15}/></button>
-      {editingId && <button type="button" className="secondary full" onClick={reset}><X size={14}/> Cancel edit</button>}
+      <button className="primary full" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save address'} <FiCheck size={15}/></button>
+      {editingId && <button type="button" className="secondary full" onClick={reset}><FiX size={14}/> Cancel edit</button>}
     </form>
   </div>
 }

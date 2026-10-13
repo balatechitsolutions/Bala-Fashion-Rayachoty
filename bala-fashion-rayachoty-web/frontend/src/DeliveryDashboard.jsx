@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, Check, MapPin, Package, RefreshCw, Truck, UserPlus } from 'lucide-react'
+import { FiArrowRight, FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus } from 'react-icons/fi'
 import { api } from './api'
 
 const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
@@ -75,10 +75,10 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
   return <div className="drawer-body seller-dashboard">
     <div className="seller-dashboard-head">
       <div><b>Delivery staff</b><small>View delivery availability and assign orders to people who are online.</small></div>
-      <button className="secondary" onClick={loadStaff}><RefreshCw size={14}/> Refresh</button>
+      <button className="secondary" onClick={loadStaff}><FiRefreshCw size={14}/> Refresh</button>
     </div>
     <form className="form admin-vendor-create" onSubmit={addStaff}>
-      <h3><UserPlus size={17}/> Add delivery person</h3>
+      <h3><FiUserPlus size={17}/> Add delivery person</h3>
       <label>Find an account<input type="search" value={userSearch} onChange={event=>setUserSearch(event.target.value)} placeholder="Search registered email…" autoComplete="off"/></label>
       <label>Delivery staff account<select required value={userId} onChange={event=>setUserId(event.target.value)}>
         <option value="">Choose an existing customer account</option>
@@ -130,7 +130,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
                   return String(a.full_name||'').localeCompare(String(b.full_name||''))
                 }).map(person => <option key={person.id} value={person.id}>{person.full_name || person.phone || person.id.slice(0, 8)}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
               </select>
-              <button className="secondary" disabled={saving || !staff.some(person=>person.availability_status==='available')} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
+              <button className="secondary" disabled={saving || !staff.some(person=>person.availability_status==='available')} onClick={() => assign(order)}>Assign <FiArrowRight size={14}/></button>
             </span>
           </article>
         )}
@@ -265,11 +265,11 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
 
   return <div className="drawer-body seller-dashboard">
     <div className="seller-dashboard-head">
-      <div><b><Truck size={17}/> Delivery dashboard</b><small>Only orders assigned to your account are shown.</small></div>
+      <div><b><FiTruck size={17}/> Delivery dashboard</b><small>Only orders assigned to your account are shown.</small></div>
       <div className="seller-dashboard-head-actions">
         <span className={'seller-status '+(availabilityStatus==='available'?'approved':'suspended')}>{availabilityStatus==='available'?'Online':'Offline'}</span>
         <button className={availabilityStatus==='available'?'secondary':'primary'} onClick={toggleAvailability} disabled={availabilityBusy}>{availabilityBusy?'Saving…':availabilityStatus==='available'?'Go offline':'Go online'}</button>
-        <button className="secondary" onClick={loadOrders} disabled={loading}><RefreshCw size={14}/> Refresh</button>
+        <button className="secondary" onClick={loadOrders} disabled={loading}><FiRefreshCw size={14}/> Refresh</button>
         <button className="secondary" onClick={onSignOut}>Sign out</button>
       </div>
     </div>
@@ -279,7 +279,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
       <div><b>{orders.filter(order => order.status === 'delivered').length}</b><small>Delivered</small></div>
     </div>
     {error && <div className="warning">{error}<button className="secondary" onClick={loadOrders}>Retry</button></div>}
-    {loading ? <p>Loading assigned deliveries…</p> : !orders.length ? <div className="empty"><Package size={28}/><h3>No assigned deliveries</h3><p>Ask the administrator to assign an order to your account.</p></div> :
+    {loading ? <p>Loading assigned deliveries…</p> : !orders.length ? <div className="empty"><FiPackage size={28}/><h3>No assigned deliveries</h3><p>Ask the administrator to assign an order to your account.</p></div> :
       orders.map(order => {
         const address = order.address_snapshot || {}
         const canConfirm = order.status === 'placed'
@@ -302,7 +302,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone'}</small>
             {order.customer_email && <small>Email: <a href={`mailto:${order.customer_email}`}>{order.customer_email}</a></small>}
             <small>{destination || 'Address not provided'}{address.state ? `, ${address.state}` : ''}{address.postal_code ? ` ${address.postal_code}` : ''}</small>
-            {navigation && <a href={navigation} target="_blank" rel="noreferrer"><MapPin size={14}/> Navigate to customer</a>}
+            {navigation && <a href={navigation} target="_blank" rel="noreferrer"><FiMapPin size={14}/> Navigate to customer</a>}
             <b>Items ({(order.items || []).length})</b>
             {(order.items || []).map((item,index) => <small key={`${order.id}-item-${index}`}>{item.quantity} × {item.product_name}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''} · {money(item.line_total)}</small>)}
             <small>Subtotal: {money(order.subtotal)} · Delivery: {money(order.delivery_fee)}</small>
@@ -310,7 +310,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             {order.notes && <small>Order instructions: {order.notes}</small>}
           </span>
           <span className="delivery-order-actions">
-            {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><Package size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery (SMTP)'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP (SMTP)</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
+            {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><FiPackage size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><FiTruck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery (SMTP)'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP (SMTP)</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><FiCheck size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
           </span>
         </article>
       })
