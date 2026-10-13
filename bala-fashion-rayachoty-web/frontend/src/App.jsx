@@ -4,11 +4,12 @@ import 'leaflet/dist/leaflet.css'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-import { ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, Clock3, CreditCard, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, MapPin, Menu, Minus, Package, Pencil, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, X } from 'lucide-react'
+import { ArrowRight, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, Clock3, CreditCard, Download, Eye, EyeOff, Grid2X2, Home, LayoutDashboard, MapPin, Menu, Minus, Package, Pencil, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, UserRound, Volume2, X } from 'lucide-react'
 import { supabase } from './supabase'
 import { DeliveryDashboard, DeliveryManagement } from './DeliveryDashboard'
 import { AddressManagement } from './AddressManagement'
 import { api } from './api'
+import { enableFirebaseNotifications, firebaseConfigured, subscribeToFirebaseMessages } from './firebase'
 
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
@@ -120,6 +121,8 @@ export default function App() {
  const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState('')
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([]),[selectedOrder,setSelectedOrder]=useState(null),[orderReturnDrawer,setOrderReturnDrawer]=useState('orders')
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
+ const [installPrompt,setInstallPrompt]=useState(null),[pushEnabled,setPushEnabled]=useState(false),[soundEnabled,setSoundEnabled]=useState(false),[alertsBusy,setAlertsBusy]=useState(false)
+ const seenNotificationIds=useRef(null)
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),searchInputRef=useRef(null),[addressReturnDrawer,setAddressReturnDrawer]=useState('account'),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',latitude:'',longitude:'',notes:''}),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
@@ -128,6 +131,14 @@ export default function App() {
  const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase){sessionRef.current=null;setSession(null);return}let active=true,initialEventSeen=false;const applySession=nextSession=>{if(!active)return;const value=nextSession||null;sessionRef.current=value;setSession(value);if(!value)setProfile(null)};const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){if(!initialEventSeen&&!sessionRef.current)applySession(null);return}if(data?.session)applySession(data.session);else if(!initialEventSeen&&!sessionRef.current)applySession(null)}catch{if(active&&!initialEventSeen&&!sessionRef.current)applySession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{if(!active)return;if(event==='INITIAL_SESSION'){initialEventSeen=true;if(nextSession||!sessionRef.current)applySession(nextSession);return}if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}if(event==='SIGNED_IN'){applySession(nextSession);setDrawer('');return}if(event==='SIGNED_OUT'){applySession(null);setAuthUsers([]);setAuthUsersFetched(false);setDrawer('');return}if(nextSession)applySession(nextSession)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
+ useEffect(()=>{
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(error=>console.warn('PWA service worker registration failed:',error))
+  const capture=event=>{event.preventDefault();setInstallPrompt(event)}
+  window.addEventListener('beforeinstallprompt',capture)
+  const installed=()=>setInstallPrompt(null)
+  window.addEventListener('appinstalled',installed)
+  return()=>{window.removeEventListener('beforeinstallprompt',capture);window.removeEventListener('appinstalled',installed)}
+ },[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';const isVercelPreview=location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical;if(isVercelPreview){const callbackHash=location.hash;const callbackQuery=location.search;const isOAuthCallback=callbackHash.includes('access_token=')||callbackHash.includes('refresh_token=')||callbackQuery.includes('code=')||callbackQuery.includes('error=');if(!isOAuthCallback)location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
  useEffect(()=>{
   const vendorId=cart[0]?.vendor_id
@@ -177,6 +188,63 @@ export default function App() {
  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
  async function load(signal){setLoading(true);try{const q=new URLSearchParams();if(category!=='all')q.set('category',category);if(search.trim())q.set('search',search.trim());const [p,c]=await Promise.all([api(`/products/?${q}`,{signal}),api('/categories/',{signal}).catch(e=>{if(e.name==='AbortError')throw e;return defaultCats.slice(1)})]);setProducts(Array.isArray(p.results)?p.results:Array.isArray(p)?p:[]);setCategories([defaultCats[0],...c]);setError('')}catch(e){if(e.name!=='AbortError'){setProducts([]);setError('We could not load the live catalog. Check your connection and try again.')}}finally{if(!signal?.aborted)setLoading(false)}}
  function notify(t){setToast(t);window.setTimeout(()=>setToast(''),2600)}
+ useEffect(()=>{
+  if(!notifications.length)return
+  const ids=notifications.map(item=>item.id)
+  if(seenNotificationIds.current===null){seenNotificationIds.current=new Set(ids);return}
+  const known=seenNotificationIds.current
+  const fresh=notifications.filter(item=>!known.has(item.id))
+  ids.forEach(id=>known.add(id))
+  if(!fresh.length)return
+  if(soundEnabled)playAlertSound()
+  if('Notification' in window&&Notification.permission==='granted'&&document.visibilityState==='hidden'){
+   fresh.forEach(item=>new Notification(item.title||'Bala Fashion update',{body:item.body||'You have a new order notification.',icon:'/b-tech-logo.png',tag:'bala-'+item.id}))
+  }
+ },[notifications,soundEnabled])
+ function playAlertSound(){
+  try{
+   const AudioContextClass=window.AudioContext||window.webkitAudioContext
+   if(!AudioContextClass)return
+   const context=new AudioContextClass()
+   const oscillator=context.createOscillator(),gain=context.createGain()
+   oscillator.type='sine';oscillator.frequency.setValueAtTime(880,context.currentTime)
+   oscillator.frequency.setValueAtTime(660,context.currentTime+0.12)
+   gain.gain.setValueAtTime(0.0001,context.currentTime);gain.gain.exponentialRampToValueAtTime(0.16,context.currentTime+0.02)
+   gain.gain.exponentialRampToValueAtTime(0.0001,context.currentTime+0.28)
+   oscillator.connect(gain);gain.connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+0.3)
+   oscillator.onended=()=>context.close()
+  }catch(error){console.warn('Notification sound unavailable:',error)}
+ }
+ async function enableAlertsAndSound(){
+  if(!session?.access_token){setDrawer('account');notify('Sign in first to enable account notifications.');return}
+  setAlertsBusy(true)
+  try{
+   if(!('Notification' in window))throw new Error('This browser does not support notifications.')
+   const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission()
+   if(permission!=='granted')throw new Error('Allow notifications in your browser settings, then try again.')
+   setSoundEnabled(true)
+   playAlertSound()
+   if('serviceWorker' in navigator)await navigator.serviceWorker.register('/sw.js')
+   if(firebaseConfigured){
+    const token=await enableFirebaseNotifications()
+    await api('/notifications/devices/',{method:'POST',token:session.access_token,body:JSON.stringify({token})})
+    setPushEnabled(true)
+    const unsubscribe=await subscribeToFirebaseMessages(payload=>{
+     playAlertSound()
+     const title=payload?.notification?.title||payload?.data?.title||'Bala Fashion'
+     const body=payload?.notification?.body||payload?.data?.body||'You have a new notification.'
+     notify(title+': '+body)
+    })
+    window.__balaFirebaseMessageUnsubscribe?.()
+    window.__balaFirebaseMessageUnsubscribe=unsubscribe
+    notify('Browser push notifications and sound are enabled.')
+   }else{
+    setPushEnabled(false)
+    notify('Browser alerts and sound enabled while the website is open. Configure Firebase web keys and Render service-account credentials for background push.')
+   }
+  }catch(error){notify(error.message||'Could not enable browser notifications.')}
+  finally{setAlertsBusy(false)}
+ }
  const unreadNotificationCount=notifications.filter(item=>!item.read).length
  async function loadNotifications(){
   if(!session?.access_token)return
