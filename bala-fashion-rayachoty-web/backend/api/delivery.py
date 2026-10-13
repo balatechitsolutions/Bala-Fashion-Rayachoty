@@ -191,7 +191,7 @@ def assign_delivery_staff(request):
 
 @api_view(["GET", "PATCH"])
 def my_delivery_orders(request):
-    """Delivery staff can view only assigned orders and mark their dispatched orders delivered."""
+    """Assigned delivery staff manage preparation, dispatch, and OTP-verified completion."""
     user, profile, error = _role_user(request, {"delivery_boy"})
     if error:
         return error
@@ -210,7 +210,7 @@ def my_delivery_orders(request):
                     current=cursor.fetchone()
                     if not current:
                         return Response({"detail":"Order not found or not assigned to your account."},status=404)
-                    transitions={"placed":{"confirmed","cancelled"},"confirmed":{"packed"}}
+                    transitions={"placed":{"confirmed","cancelled"},"confirmed":{"packed"},"packed":set()}
                     if next_status not in transitions.get(current[2],set()):
                         return Response({"detail":f"Order cannot move from {current[2]} to {next_status}."},status=409)
                     cursor.execute("""update public.orders set status=%s,updated_at=now()
@@ -275,7 +275,17 @@ def my_delivery_orders(request):
         with connection.cursor() as cursor:
             cursor.execute(
                 """select o.id, o.order_number, o.status, o.payment_method, o.payment_status,
-                          o.subtotal, o.delivery_fee, o.total, o.address_snapshot, o.notes,
+                          o.subtotal, o.delivery_fee, o.total,
+                          coalesce(nullif(o.address_snapshot,'{}'::jsonb),
+                            (select jsonb_build_object(
+                              'recipient_name',ca.recipient_name,'phone',ca.phone,
+                              'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
+                              'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
+                              'latitude',ca.latitude,'longitude',ca.longitude
+                            ) from public.customer_addresses ca
+                             where ca.user_id=o.customer_id
+                             order by ca.is_default desc,ca.created_at desc limit 1)
+                          ) as address_snapshot, o.notes,
                           o.created_at, v.name as vendor_name, v.address as vendor_address,
                           v.phone as vendor_phone, cu.email as customer_email,
                           coalesce(json_agg(json_build_object(
