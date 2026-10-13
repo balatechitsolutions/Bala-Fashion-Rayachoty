@@ -251,7 +251,7 @@ def my_delivery_orders(request):
             cursor.execute(
                 """select o.id, o.order_number, o.status, o.payment_method, o.payment_status,
                           o.subtotal, o.delivery_fee, o.total,
-                          coalesce(nullif(o.address_snapshot,'{}'::jsonb),
+                          (coalesce(
                             (select jsonb_build_object(
                               'recipient_name',ca.recipient_name,'phone',ca.phone,
                               'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
@@ -259,8 +259,9 @@ def my_delivery_orders(request):
                               'latitude',ca.latitude,'longitude',ca.longitude
                             ) from public.customer_addresses ca
                              where ca.user_id=o.customer_id
-                             order by ca.is_default desc,ca.created_at desc limit 1)
-                          ) as address_snapshot, o.notes,
+                             order by ca.is_default desc,ca.created_at desc limit 1),
+                            '{}'::jsonb
+                          ) || coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)) as address_snapshot, o.notes,
                           o.created_at, v.name as vendor_name, v.address as vendor_address,
                           v.phone as vendor_phone, cu.email as customer_email,
                           coalesce(json_agg(json_build_object(
