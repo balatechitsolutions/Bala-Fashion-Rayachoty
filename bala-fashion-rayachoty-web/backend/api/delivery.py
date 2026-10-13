@@ -133,6 +133,7 @@ def my_delivery_orders(request):
         return error
 
     if request.method == "PATCH":
+        return Response({"detail": "Delivery completion now requires customer email OTP verification."}, status=409)
         order_id = _valid_uuid(request.data.get("order_id") or request.data.get("id"))
         if not order_id:
             return Response({"detail": "Choose a valid order."}, status=400)
