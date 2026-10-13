@@ -76,3 +76,28 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+
+class DeliveryStaff(models.Model):
+    """
+    Read-only Django mapping for delivery staff profiles stored by Supabase Auth.
+
+    This model intentionally does not manage the shared public.profiles table;
+    Django must never create or alter the Supabase-owned schema.
+    """
+    id = models.UUIDField(primary_key=True)
+    full_name = models.CharField(max_length=255, null=True, blank=True)
+    phone = models.CharField(max_length=100, null=True, blank=True)
+    role = models.CharField(max_length=32)
+    updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = "profiles"
+        ordering = ("full_name", "id")
+        verbose_name = "Delivery staff"
+        verbose_name_plural = "Delivery staff"
+
+    def __str__(self):
+        return self.full_name or str(self.id)
