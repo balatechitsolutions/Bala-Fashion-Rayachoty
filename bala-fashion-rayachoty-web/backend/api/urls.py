@@ -18,6 +18,7 @@ urlpatterns = [
     path("delivery/staff/", delivery.delivery_staff),
     path("delivery/assign/", delivery.assign_delivery_staff),
     path("delivery/orders/", delivery.my_delivery_orders),
+    path("delivery/location/", delivery.delivery_location),
     path("delivery/verify/", delivery_verification.delivery_verification),
     path("orders/manage/", views.manage_orders),
     path("notifications/", views.account_notifications),

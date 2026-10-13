@@ -27,6 +27,17 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
 
   useEffect(() => { loadStaff() }, [loadStaff])
 
+  async function updateStaff(person, changes) {
+    if (!session?.access_token || saving) return
+    setSaving(true)
+    try {
+      await api('/delivery/staff/', { method:'PATCH', token:session.access_token, body:JSON.stringify({id:person.id,...changes}) })
+      await loadStaff()
+      notify('Delivery staff status updated')
+    } catch (err) { notify(err.message || 'Could not update delivery staff') }
+    finally { setSaving(false) }
+  }
+
   async function addStaff(event) {
     event.preventDefault()
     if (!session?.access_token || saving) return
@@ -38,7 +49,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       })
       setUserId(''); setUserSearch(''); setFullName(''); setPhone('')
       await loadStaff()
-      notify('Delivery-boy role enabled. The user can now sign in.')
+      notify('Delivery account created inactive. Activate it when the person is ready to deliver.')
     } catch (err) {
       notify(err.message || 'Could not enable delivery staff.')
     } finally { setSaving(false) }
@@ -95,7 +106,11 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       {!staff.length ? <p className="seller-empty">No delivery accounts yet.</p> : staff.map(person =>
         <article className="seller-store-row" key={person.id}>
           <span><b>{person.full_name || 'Delivery person'}</b><small>{person.email || 'No email'} · {person.phone || 'No phone'}</small><small>{person.id}</small></span>
-          <span className="seller-status approved">Active</span><button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove</button>
+          <span className={'seller-status '+(person.is_active?'approved':'suspended')}>{person.is_active?'Activated':'Inactive'} · {person.availability_status || 'offline'}</span>
+          {person.last_location_at && <small>GPS updated {new Date(person.last_location_at).toLocaleString('en-IN')} {person.latitude != null && person.longitude != null ? '· '+Number(person.latitude).toFixed(4)+', '+Number(person.longitude).toFixed(4) : ''}</small>}
+          <span className="seller-product-actions"><button type="button" className="secondary" disabled={saving || busy} onClick={() => updateStaff(person,{is_active:!person.is_active,availability_status:person.is_active?'offline':'available'})}>{person.is_active?'Deactivate':'Activate'}</button>
+          {person.is_active && <select aria-label="Delivery availability" value={person.availability_status || 'offline'} onChange={event=>updateStaff(person,{availability_status:event.target.value})}><option value="available">Available</option><option value="busy">Busy</option><option value="offline">Offline</option></select>}
+          <button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove role</button></span>
         </article>
       )}
     </section>
@@ -108,15 +123,27 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
           <article className="seller-order-row" key={order.id}>
             <span>
               <b>{order.order_number}</b>
-              <small>{order.vendor_name} · {order.status.replaceAll('_', ' ')}</small>
-              {order.address_snapshot?.recipient_name && <small>{order.address_snapshot.recipient_name} · {order.address_snapshot.phone || ''}</small>}
+              <small>{order.status.replaceAll('_', ' ')} · {order.assigned_delivery_boy_id ? 'Assigned' : 'Unassigned'}</small>}
             </span>
             <span className="delivery-assignment-controls">
               <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
-                <option value="">Choose delivery person</option>
-                {staff.map(person => <option key={person.id} value={person.id}>{person.full_name || person.phone || person.id.slice(0, 8)}</option>)}
+                <option value="">Choose active, available delivery person</option>
+                {staff.filter(person=>person.is_active && person.availability_status==='available').sort((a,b)=> {
+                  const destination=order.delivery_coordinates||{}
+                  const distance=person=> {
+                    if(destination.latitude==null||destination.longitude==null||person.latitude==null||person.longitude==null) return Number.POSITIVE_INFINITY
+                    const rad=value=>Number(value)*Math.PI/180
+                    const dLat=rad(Number(destination.latitude)-Number(person.latitude))
+                    const dLon=rad(Number(destination.longitude)-Number(person.longitude))
+                    const x=Math.sin(dLat/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(destination.latitude))*Math.sin(dLon/2)**2
+                    return 6371*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
+                  }
+                  const da=distance(a), db=distance(b)
+                  if(da!==db) return da-db
+                  return String(a.full_name||'').localeCompare(String(b.full_name||''))
+                }).map(person => <option key={person.id} value={person.id}>{person.full_name || person.phone || person.id.slice(0, 8)}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):' · GPS unavailable'}</option>)}
               </select>
-              <button className="secondary" disabled={saving || !staff.length} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
+              <button className="secondary" disabled={saving || !staff.some(person=>person.is_active&&person.availability_status==='available')} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
             </span>
           </article>
         )}
@@ -137,6 +164,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     try {
       const data = await api('/delivery/orders/', { token: session.access_token })
       setOrders(data.results || [])
+      if (data.notifications?.length) data.notifications.forEach(item => notify(item.message || 'A delivery order was assigned to you.'))
       setError('')
     } catch (err) {
       setError(err.message || 'Could not load your assigned deliveries.')
@@ -144,6 +172,22 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   }, [session?.access_token])
 
   useEffect(() => { loadOrders() }, [loadOrders])
+
+  useEffect(() => {
+    if (!session?.access_token || !navigator.geolocation) return
+    let active = true
+    const shareLocation = () => navigator.geolocation.getCurrentPosition(async position => {
+      if (!active) return
+      try {
+        await api('/delivery/location/', {method:'POST',token:session.access_token,body:JSON.stringify({
+          latitude:position.coords.latitude, longitude:position.coords.longitude, availability_status:'available'
+        })})
+      } catch (err) { setError(err.message || 'Could not share delivery location.') }
+    }, () => { if (active) setError('Enable GPS to share your delivery location and improve assignment priority.') }, {enableHighAccuracy:true, maximumAge:60000, timeout:12000})
+    shareLocation()
+    const timer = window.setInterval(shareLocation, 120000)
+    return () => { active=false; window.clearInterval(timer) }
+  }, [session?.access_token])
 
   async function startDelivery(order) {
     if (!window.confirm(`Mark ${order.order_number} out for delivery and email the customer a verification code?`)) return
@@ -208,7 +252,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
         return <article className="seller-order-row delivery-order-card" key={order.id}>
           <span>
             <b>{order.order_number}</b>
-            <small>{order.vendor_name} · {order.status.replaceAll('_', ' ')}</small>
+            <small>{order.status.replaceAll('_', ' ')}</small>
             <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone'}</small>
             <small>{destination || 'Address not provided'}</small>
             {navigation && <a href={navigation} target="_blank" rel="noreferrer"><MapPin size={14}/> Navigate to customer</a>}
