@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FiArrowRight, FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus } from 'react-icons/fi'
+import { FiArrowRight, FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus, FiSearch } from 'react-icons/fi'
 import { api } from './api'
 
 const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
@@ -138,8 +138,9 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
   </div>
 }
 
-export function DeliveryDashboard({ session, notify, onSignOut }) {
+export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }) {
   const [orders, setOrders] = useState([])
+  const [orderSearch, setOrderSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [busyOrder, setBusyOrder] = useState('')
   const [error, setError] = useState('')
@@ -273,6 +274,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
         <button className="secondary" onClick={onSignOut}>Sign out</button>
       </div>
     </div>
+    <label className="order-search-field delivery-order-search"><FiSearch size={16}/><input aria-label="Search assigned orders" placeholder="Search order number or status" value={orderSearch} onChange={event=>setOrderSearch(event.target.value)}/></label>
     <div className="seller-stat-grid">
       <div><b>{orders.length}</b><small>Assigned orders</small></div>
       <div><b>{orders.filter(order => order.status === 'out_for_delivery').length}</b><small>On the way</small></div>
@@ -280,7 +282,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     </div>
     {error && <div className="warning">{error}<button className="secondary" onClick={loadOrders}>Retry</button></div>}
     {loading ? <p>Loading assigned deliveries…</p> : !orders.length ? <div className="empty"><FiPackage size={28}/><h3>No assigned deliveries</h3><p>Ask the administrator to assign an order to your account.</p></div> :
-      orders.map(order => {
+      orders.filter(order=>[order.order_number,order.status,order.vendor_name].some(value=>String(value||'').toLowerCase().includes(orderSearch.trim().toLowerCase()))).map(order => {
         const address = order.address_snapshot || {}
         const canConfirm = order.status === 'placed'
         const canPack = order.status === 'confirmed'
@@ -292,7 +294,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
           : ''
         return <article className="seller-order-row delivery-order-card" key={order.id}>
           <span className="delivery-order-details">
-            <b>{order.order_number}</b>
+            <button type="button" className="order-detail-link" onClick={()=>onOrderDetails?.(order)}>{order.order_number} <FiArrowRight size={13}/></button>
             <small>Status: {order.status.replaceAll('_', ' ')}</small>
             <b>Vendor / pickup</b>
             <small>{order.vendor_name || 'Vendor name unavailable'}</small>
