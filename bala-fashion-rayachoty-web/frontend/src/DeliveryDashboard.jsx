@@ -205,6 +205,19 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     } finally { setBusyOrder('') }
   }
 
+  async function sendMailjetDeliveryCode(order) {
+    if (!window.confirm(`Send a delivery verification OTP for ${order.order_number} using Mailjet instead of SMTP?`)) return
+    setBusyOrder(order.id)
+    try {
+      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'mailjet' }) })
+      notify(`Mailjet sent the verification OTP to the customer's registered email for ${order.order_number}.`)
+      await loadOrders()
+    } catch (err) {
+      notify(err.message || 'Could not send the OTP through Mailjet.')
+      await loadOrders()
+    } finally { setBusyOrder('') }
+  }
+
   async function resendDeliveryCode(order) {
     setBusyOrder(order.id)
     try {
@@ -263,7 +276,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             <small>COD · {order.payment_status === 'paid' ? 'Marked paid' : 'Payment pending'} · {money(order.total)}</small>
           </span>
           <span className="delivery-order-actions">
-            {canStart ? <button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery'}</button> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
+            {canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery (SMTP)'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP (SMTP)</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
           </span>
         </article>
       })
