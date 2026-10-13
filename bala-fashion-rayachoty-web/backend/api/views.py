@@ -753,7 +753,7 @@ def manage_orders(request):
                                  where ca.user_id=o.customer_id
                                  order by ca.is_default desc,ca.created_at desc limit 1)
                               ) as address_snapshot,
-                              o.notes,o.created_at,v.name as vendor_name,
+                              o.notes,o.created_at,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,
                               cu.email as customer_email,
                               dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
                               o.assigned_delivery_boy_id,
@@ -767,7 +767,7 @@ def manage_orders(request):
                        left join auth.users cu on cu.id=o.customer_id
                        left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                        left join public.order_items oi on oi.order_id=o.id
-                       group by o.id,v.name,cu.email,dp.full_name,dp.phone
+                       group by o.id,v.name,v.address,v.phone,cu.email,dp.full_name,dp.phone
                        order by o.created_at desc limit 200"""
                 )
             rows = _rows(c)
@@ -879,7 +879,7 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
-                          o.assigned_delivery_boy_id,v.name as vendor_name,o.payment_method,o.subtotal,o.delivery_fee,
+                          o.assigned_delivery_boy_id,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
                           case when %s='admin' then jsonb_build_object(
                             'latitude',o.address_snapshot->>'latitude',
@@ -909,7 +909,7 @@ def seller_dashboard(request):
                    left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                    left join public.order_items oi on oi.order_id=o.id
                    where o.vendor_id = any(%s)
-                   group by o.id,v.name,cu.email,dp.full_name,dp.phone
+                   group by o.id,v.name,v.address,v.phone,cu.email,dp.full_name,dp.phone
                    order by o.created_at desc limit 50""",
                 [prof["role"], prof["role"], store_ids],
             )
