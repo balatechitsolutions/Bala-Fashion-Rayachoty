@@ -606,45 +606,23 @@ def orders(request):
 
 @api_view(["GET", "PATCH", "DELETE"])
 def manage_orders(request):
-    """Role-scoped order management: admins see all orders; vendors see their own."""
+    """Vendors process their own orders; delivery staff handle delivery; admins cannot delete/process orders."""
     user, prof, error = _role_user(request, {"vendor", "admin"})
     if error:
         return error
 
-    if request.method in {"PATCH", "DELETE"}:
+    # Orders are business records: no role may permanently delete them through this API.
+    if request.method == "DELETE":
+        return Response({"detail": "Order deletion is disabled. Preserve order history and use an authorized status transition instead."}, status=403)
+
+    if request.method == "PATCH":
+        if prof["role"] != "vendor":
+            return Response({"detail": "Only the vendor who owns this order can confirm, reject, or pack it. Delivery status is handled by the assigned delivery person."}, status=403)
         order_id = str(request.data.get("id") or request.data.get("order_id") or request.query_params.get("id") or "").strip()
         try:
             uuid.UUID(order_id)
         except (ValueError, TypeError, AttributeError):
             return Response({"detail": "Choose a valid order."}, status=400)
-
-        if request.method == "DELETE":
-            # Permanent order deletion is restricted to administrators. Restore stock
-            # only when the order was not delivered, since delivered goods left inventory.
-            if prof["role"] != "admin":
-                return Response({"detail": "Only administrators can delete orders."}, status=403)
-            try:
-                with transaction.atomic():
-                    with connection.cursor() as c:
-                        c.execute("select id, order_number, status from public.orders where id=%s for update", [order_id])
-                        existing = c.fetchone()
-                        if not existing:
-                            return Response({"detail": "Order not found."}, status=404)
-                        if existing[2] != "delivered":
-                            c.execute(
-                                "select product_id, quantity from public.order_items where order_id=%s and product_id is not null",
-                                [order_id],
-                            )
-                            for product_id, quantity in c.fetchall():
-                                c.execute(
-                                    "update public.products set stock_quantity=stock_quantity+%s, updated_at=now() where id=%s",
-                                    [quantity, product_id],
-                                )
-                        c.execute("delete from public.order_items where order_id=%s", [order_id])
-                        c.execute("delete from public.orders where id=%s", [order_id])
-                return Response({"id": str(existing[0]), "order_number": existing[1], "detail": "Order permanently deleted."})
-            except Exception:
-                return Response({"detail": "Order could not be deleted. No changes were committed; please retry."}, status=503)
 
         status_value = str(request.data.get("status") or "").strip().lower()
         allowed_statuses = {"placed", "confirmed", "packed", "out_for_delivery", "delivered", "cancelled"}
@@ -663,8 +641,6 @@ def manage_orders(request):
                                for update of o""",
                             [order_id, user["id"]],
                         )
-                    else:
-                        c.execute("select id, status, payment_method, payment_status, customer_id, order_number from public.orders where id=%s for update", [order_id])
                     current = c.fetchone()
                     if not current:
                         return Response({"detail": "Order not found or you do not have permission to manage it."}, status=404)
