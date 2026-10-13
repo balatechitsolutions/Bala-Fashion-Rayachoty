@@ -3,6 +3,7 @@ from . import views
 from . import delivery
 from . import addresses
 from . import delivery_verification
+from . import push_notifications
 
 urlpatterns = [
     path("health/", views.health),
@@ -23,6 +24,7 @@ urlpatterns = [
     path("delivery/verify/", delivery_verification.delivery_verification),
     path("orders/manage/", views.manage_orders),
     path("notifications/", views.account_notifications),
+    path("notifications/devices/", push_notifications.notification_devices),
     path("uploads/signature/", views.upload_signature),
     path("products/manage/", views.manage_product),
     path("seller/dashboard/", views.seller_dashboard),
