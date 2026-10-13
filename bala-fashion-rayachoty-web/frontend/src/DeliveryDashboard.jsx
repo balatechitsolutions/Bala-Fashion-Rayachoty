@@ -291,13 +291,23 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
           ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address.latitude + ',' + address.longitude)}&travelmode=driving`
           : ''
         return <article className="seller-order-row delivery-order-card" key={order.id}>
-          <span>
+          <span className="delivery-order-details">
             <b>{order.order_number}</b>
-            <small>{order.status.replaceAll('_', ' ')}</small>
+            <small>Status: {order.status.replaceAll('_', ' ')}</small>
+            <b>Vendor / pickup</b>
+            <small>{order.vendor_name || 'Vendor name unavailable'}</small>
+            <small>{order.vendor_address || 'Vendor address not provided'}</small>
+            {order.vendor_phone && <small>Vendor phone: <a href={`tel:${order.vendor_phone}`}>{order.vendor_phone}</a></small>}
+            <b>Customer / drop-off</b>
             <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone'}</small>
-            <small>{destination || 'Address not provided'}</small>
+            {order.customer_email && <small>Email: <a href={`mailto:${order.customer_email}`}>{order.customer_email}</a></small>}
+            <small>{destination || 'Address not provided'}{address.state ? `, ${address.state}` : ''}{address.postal_code ? ` ${address.postal_code}` : ''}</small>
             {navigation && <a href={navigation} target="_blank" rel="noreferrer"><MapPin size={14}/> Navigate to customer</a>}
-            <small>COD · {order.payment_status === 'paid' ? 'Marked paid' : 'Payment pending'} · {money(order.total)}</small>
+            <b>Items ({(order.items || []).length})</b>
+            {(order.items || []).map((item,index) => <small key={`${order.id}-item-${index}`}>{item.quantity} × {item.product_name}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''} · {money(item.line_total)}</small>)}
+            <small>Subtotal: {money(order.subtotal)} · Delivery: {money(order.delivery_fee)}</small>
+            <small>Payment: {String(order.payment_method || 'cod').toUpperCase()} · {order.payment_status === 'paid' ? 'Paid' : 'Payment pending'} · Total {money(order.total)}</small>
+            {order.notes && <small>Order instructions: {order.notes}</small>}
           </span>
           <span className="delivery-order-actions">
             {canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery (SMTP)'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP (SMTP)</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
