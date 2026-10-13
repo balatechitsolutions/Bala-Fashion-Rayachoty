@@ -1334,3 +1334,11 @@ button:disabled{cursor:not-allowed;opacity:.58}
  .delivery-order-card{padding:12px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+
+/* Search controls for order lists */
+.order-search-field{display:flex;align-items:center;gap:9px;min-width:0;max-width:100%;padding:10px 12px;border:1px solid var(--line,#e5e5e5);border-radius:12px;background:var(--surface,#fff);color:var(--muted,#777)}
+.order-search-field input{width:100%;min-width:0;border:0!important;outline:0!important;background:transparent!important;color:var(--ink,#222);font:inherit;padding:0!important;box-shadow:none!important}
+.delivery-order-search{margin:14px 0}
+.seller-section-title .order-search-field{width:min(100%,320px)}
+@media(max-width:520px){.seller-section-title:has(.order-search-field){align-items:stretch;flex-direction:column}.seller-section-title .order-search-field{width:100%;box-sizing:border-box}}
