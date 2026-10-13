@@ -742,17 +742,33 @@ def manage_orders(request):
             else:
                 c.execute(
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
-                              o.subtotal,o.delivery_fee,o.total,o.address_snapshot,o.notes,o.created_at,
-                              v.name as vendor_name,
+                              o.subtotal,o.delivery_fee,o.total,
+                              coalesce(nullif(o.address_snapshot,'{}'::jsonb),
+                                (select jsonb_build_object(
+                                  'recipient_name',ca.recipient_name,'phone',ca.phone,
+                                  'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
+                                  'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
+                                  'latitude',ca.latitude,'longitude',ca.longitude
+                                ) from public.customer_addresses ca
+                                 where ca.user_id=o.customer_id
+                                 order by ca.is_default desc,ca.created_at desc limit 1)
+                              ) as address_snapshot,
+                              o.notes,o.created_at,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,
+                              cu.email as customer_email,
+                              dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
+                              o.assigned_delivery_boy_id,
                               coalesce(json_agg(json_build_object(
-                                'product_name',oi.product_name,'image_url',oi.image_url,
+                                'product_id',oi.product_id,'product_name',oi.product_name,'image_url',oi.image_url,
                                 'quantity',oi.quantity,'size',oi.size,'color',oi.color,
-                                'line_total',oi.line_total
+                                'unit_price',oi.unit_price,'line_total',oi.line_total
                               )) filter(where oi.id is not null),'[]'::json) as items
                        from public.orders o
                        join public.vendors v on v.id=o.vendor_id
+                       left join auth.users cu on cu.id=o.customer_id
+                       left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                        left join public.order_items oi on oi.order_id=o.id
-                       group by o.id,v.name order by o.created_at desc limit 200"""
+                       group by o.id,v.name,v.address,v.phone,cu.email,dp.full_name,dp.phone
+                       order by o.created_at desc limit 200"""
                 )
             rows = _rows(c)
         return Response({"results": rows, "count": len(rows), "role": prof["role"]})
@@ -863,13 +879,13 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
-                          o.assigned_delivery_boy_id,v.name as vendor_name,o.payment_method,o.subtotal,o.delivery_fee,
+                          o.assigned_delivery_boy_id,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
                           case when %s='admin' then jsonb_build_object(
                             'latitude',o.address_snapshot->>'latitude',
                             'longitude',o.address_snapshot->>'longitude'
                           ) else null end as delivery_coordinates,
-                          case when %s='vendor' then coalesce(
+                          case when %s='admin' then coalesce(
                             nullif(o.address_snapshot,'{}'::jsonb),
                             (select jsonb_build_object(
                               'recipient_name',ca.recipient_name,'phone',ca.phone,
@@ -880,6 +896,8 @@ def seller_dashboard(request):
                              where ca.user_id=o.customer_id
                              order by ca.is_default desc,ca.created_at desc limit 1)
                           ) else null end as address_snapshot,
+                          cu.email as customer_email,
+                          dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
                           coalesce(json_agg(json_build_object(
                             'product_id',oi.product_id,'product_name',oi.product_name,
                             'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,
@@ -887,9 +905,12 @@ def seller_dashboard(request):
                           )) filter(where oi.id is not null),'[]'::json) as items
                    from public.orders o
                    join public.vendors v on v.id=o.vendor_id
+                   left join auth.users cu on cu.id=o.customer_id
+                   left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                    left join public.order_items oi on oi.order_id=o.id
                    where o.vendor_id = any(%s)
-                   group by o.id,v.name order by o.created_at desc limit 50""",
+                   group by o.id,v.name,v.address,v.phone,cu.email,dp.full_name,dp.phone
+                   order by o.created_at desc limit 50""",
                 [prof["role"], prof["role"], store_ids],
             )
             managed_orders = _rows(c)

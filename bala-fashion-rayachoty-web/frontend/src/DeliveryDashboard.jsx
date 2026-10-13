@@ -27,17 +27,6 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
 
   useEffect(() => { loadStaff() }, [loadStaff])
 
-  async function updateStaff(person, changes) {
-    if (!session?.access_token || saving) return
-    setSaving(true)
-    try {
-      await api('/delivery/staff/', { method:'PATCH', token:session.access_token, body:JSON.stringify({id:person.id,...changes}) })
-      await loadStaff()
-      notify('Delivery staff status updated')
-    } catch (err) { notify(err.message || 'Could not update delivery staff') }
-    finally { setSaving(false) }
-  }
-
   async function addStaff(event) {
     event.preventDefault()
     if (!session?.access_token || saving) return
@@ -49,7 +38,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       })
       setUserId(''); setUserSearch(''); setFullName(''); setPhone('')
       await loadStaff()
-      notify('Delivery account created inactive. Activate it when the person is ready to deliver.')
+      notify('Delivery account created. The delivery person can now choose Online or Offline.')
     } catch (err) {
       notify(err.message || 'Could not enable delivery staff.')
     } finally { setSaving(false) }
@@ -85,7 +74,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
 
   return <div className="drawer-body seller-dashboard">
     <div className="seller-dashboard-head">
-      <div><b>Delivery staff</b><small>Manage your delivery team and assign orders.</small></div>
+      <div><b>Delivery staff</b><small>View delivery availability and assign orders to people who are online.</small></div>
       <button className="secondary" onClick={loadStaff}><RefreshCw size={14}/> Refresh</button>
     </div>
     <form className="form admin-vendor-create" onSubmit={addStaff}>
@@ -98,7 +87,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       <small>Choose an existing customer account.</small>
       <label>Display name (optional)<input value={fullName} onChange={event => setFullName(event.target.value)} maxLength={120}/></label>
       <label>Phone (optional)<input value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} inputMode="tel"/></label>
-      <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Enable delivery account'}</button>
+      <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Add delivery person'}</button>
     </form>
     {error && <div className="warning">{error}</div>}
     <section className="seller-dashboard-section">
@@ -106,17 +95,15 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       {!staff.length ? <p className="seller-empty">No delivery people added yet.</p> : staff.map(person =>
         <article className="seller-store-row" key={person.id}>
           <span><b>{person.full_name || 'Delivery person'}</b><small>{person.email || 'No email'} · {person.phone || 'No phone'}</small><small>{person.id}</small></span>
-          <span className={'seller-status '+(person.is_active?'approved':'suspended')}>{person.is_active?'Activated':'Inactive'} · {person.availability_status || 'offline'}</span>
+          <span className={'seller-status '+(person.availability_status==='available'?'approved':'suspended')}>{person.availability_status==='available'?'Online':'Offline'}</span>
           {person.last_location_at && <small>Location updated {new Date(person.last_location_at).toLocaleString('en-IN')} {person.latitude != null && person.longitude != null ? '· '+Number(person.latitude).toFixed(4)+', '+Number(person.longitude).toFixed(4) : ''}</small>}
-          <span className="seller-product-actions"><button type="button" className="secondary" disabled={saving || busy} onClick={() => updateStaff(person,{is_active:!person.is_active,availability_status:person.is_active?'offline':'available'})}>{person.is_active?'Deactivate':'Activate'}</button>
-          {person.is_active && <select aria-label="Delivery availability" value={person.availability_status || 'offline'} onChange={event=>updateStaff(person,{availability_status:event.target.value})}><option value="available">Available</option><option value="busy">Busy</option><option value="offline">Offline</option></select>}
-          <button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove role</button></span>
+          <span className="seller-product-actions"><button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove role</button></span>
         </article>
       )}
     </section>
     <section className="seller-dashboard-section">
       <h3>Assign orders</h3>
-      <p className="muted">Assign a packed order to an available delivery person.</p>
+      <p className="muted">Assign a packed order to a delivery person who is Online.</p>
       {!orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).length
         ? <p className="seller-empty">No orders ready to assign.</p>
         : orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).map(order =>
@@ -127,8 +114,8 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
             </span>
             <span className="delivery-assignment-controls">
               <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
-                <option value="">Choose delivery person</option>
-                {staff.filter(person=>person.is_active && person.availability_status==='available').sort((a,b)=> {
+                <option value="">Choose online delivery person</option>
+                {staff.filter(person=>person.availability_status==='available').sort((a,b)=> {
                   const destination=order.delivery_coordinates||{}
                   const distance=person=> {
                     if(destination.latitude==null||destination.longitude==null||person.latitude==null||person.longitude==null) return Number.POSITIVE_INFINITY
@@ -143,7 +130,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
                   return String(a.full_name||'').localeCompare(String(b.full_name||''))
                 }).map(person => <option key={person.id} value={person.id}>{person.full_name || person.phone || person.id.slice(0, 8)}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
               </select>
-              <button className="secondary" disabled={saving || !staff.some(person=>person.is_active&&person.availability_status==='available')} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
+              <button className="secondary" disabled={saving || !staff.some(person=>person.availability_status==='available')} onClick={() => assign(order)}>Assign <ArrowRight size={14}/></button>
             </span>
           </article>
         )}
@@ -157,7 +144,6 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   const [busyOrder, setBusyOrder] = useState('')
   const [error, setError] = useState('')
   const [otpInputs, setOtpInputs] = useState({})
-  const [isActive, setIsActive] = useState(false)
   const [availabilityStatus, setAvailabilityStatus] = useState('offline')
   const [availabilityBusy, setAvailabilityBusy] = useState(false)
 
@@ -167,7 +153,6 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     try {
       const data = await api('/delivery/orders/', { token: session.access_token })
       setOrders(data.results || [])
-      setIsActive(Boolean(data.is_active))
       setAvailabilityStatus(data.availability_status || 'offline')
       if (data.notifications?.length) data.notifications.forEach(item => notify(item.message || 'A delivery order was assigned to you.'))
       setError('')
@@ -183,7 +168,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   }, [loadOrders])
 
   useEffect(() => {
-    if (!session?.access_token || !isActive || availabilityStatus !== 'available' || !navigator.geolocation) return
+    if (!session?.access_token || availabilityStatus !== 'available' || !navigator.geolocation) return
     let active = true
     const shareLocation = () => navigator.geolocation.getCurrentPosition(async position => {
       if (!active) return
@@ -196,10 +181,10 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     shareLocation()
     const timer = window.setInterval(shareLocation, 120000)
     return () => { active=false; window.clearInterval(timer) }
-  }, [session?.access_token, isActive, availabilityStatus])
+  }, [session?.access_token, availabilityStatus])
 
   async function toggleAvailability() {
-    if (!session?.access_token || availabilityBusy || !isActive) return
+    if (!session?.access_token || availabilityBusy) return
     const next = availabilityStatus === 'available' ? 'offline' : 'available'
     setAvailabilityBusy(true)
     try {
@@ -282,8 +267,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     <div className="seller-dashboard-head">
       <div><b><Truck size={17}/> Delivery dashboard</b><small>Only orders assigned to your account are shown.</small></div>
       <div className="seller-dashboard-head-actions">
-        <span className={'seller-status '+(isActive&&availabilityStatus==='available'?'approved':'suspended')}>{!isActive?'Account inactive':availabilityStatus==='available'?'Available for deliveries':'Not accepting deliveries'}</span>
-        <button className={isActive&&availabilityStatus==='available'?'secondary':'primary'} onClick={toggleAvailability} disabled={!isActive||availabilityBusy}>{availabilityBusy?'Saving…':isActive&&availabilityStatus==='available'?'Go offline':'Start accepting deliveries'}</button>
+        <span className={'seller-status '+(availabilityStatus==='available'?'approved':'suspended')}>{availabilityStatus==='available'?'Online':'Offline'}</span>
+        <button className={availabilityStatus==='available'?'secondary':'primary'} onClick={toggleAvailability} disabled={availabilityBusy}>{availabilityBusy?'Saving…':availabilityStatus==='available'?'Go offline':'Go online'}</button>
         <button className="secondary" onClick={loadOrders} disabled={loading}><RefreshCw size={14}/> Refresh</button>
         <button className="secondary" onClick={onSignOut}>Sign out</button>
       </div>
