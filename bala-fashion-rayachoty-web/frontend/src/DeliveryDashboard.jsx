@@ -123,7 +123,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
           <article className="seller-order-row" key={order.id}>
             <span>
               <b>{order.order_number}</b>
-              <small>{order.status.replaceAll('_', ' ')} · {order.assigned_delivery_boy_id ? 'Assigned' : 'Unassigned'}</small>}
+              <small>{order.status.replaceAll('_', ' ')} · {order.assigned_delivery_boy_id ? 'Assigned' : 'Unassigned'}</small>
             </span>
             <span className="delivery-assignment-controls">
               <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
@@ -217,7 +217,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
 
   async function verifyDelivery(order) {
     const otp = String(otpInputs[order.id] || '').trim()
-    if (!/^\\d{6}$/.test(otp)) return notify('Enter the six-digit customer email OTP.')
+    if (!/^\d{6}$/.test(otp)) return notify('Enter the six-digit customer email OTP.')
     if (!window.confirm(`Confirm the customer received ${order.order_number} and supplied the email OTP?`)) return
     setBusyOrder(order.id)
     try {
