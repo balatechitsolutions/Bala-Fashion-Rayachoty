@@ -230,8 +230,9 @@ class EndpointTests(SimpleTestCase):
                     with patch.object(views.transaction, "atomic", return_value=nullcontext()):
                         response = views.manage_orders(req)
 
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("cannot move", response.data["detail"].lower())
+        # Admins are forbidden from changing order status through this endpoint;
+        # delivery completion must go through the assigned delivery person's OTP flow.
+        self.assertEqual(response.status_code, 403)
         update_calls = [call for call in cursor.execute.call_args_list if "update public.orders" in call.args[0].lower()]
         self.assertFalse(update_calls)
 
