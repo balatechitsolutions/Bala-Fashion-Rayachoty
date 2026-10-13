@@ -269,7 +269,13 @@ def my_delivery_orders(request):
             notifications = _rows(cursor)
             if notifications:
                 cursor.execute("update public.delivery_assignment_notifications set read_at=now() where recipient_id=%s and read_at is null", [user["id"]])
-        return Response({"results": rows, "count": len(rows), "notifications": notifications})
+            cursor.execute("select coalesce(is_active,false),coalesce(availability_status,'offline') from public.profiles where id=%s and role='delivery_boy'", [user["id"]])
+            availability_row = cursor.fetchone()
+        return Response({
+            "results": rows, "count": len(rows), "notifications": notifications,
+            "is_active": bool(availability_row[0]) if availability_row else False,
+            "availability_status": availability_row[1] if availability_row else "offline",
+        })
     except Exception:
         return Response({"detail": "Assigned deliveries could not be loaded. Apply the delivery-role SQL migration first."}, status=503)
 
