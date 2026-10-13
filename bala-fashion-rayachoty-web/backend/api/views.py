@@ -858,7 +858,7 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
-                          v.name as vendor_name,o.payment_method,o.subtotal,o.delivery_fee,
+                          o.assigned_delivery_boy_id,v.name as vendor_name,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
                           case when %s='admin' then jsonb_build_object(
                             'latitude',o.address_snapshot->>'latitude',
