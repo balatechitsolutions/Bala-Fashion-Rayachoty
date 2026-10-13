@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Bala Fashion Rayachoty",
+  "short_name": "Bala Fashion",
+  "description": "Shop local fashion from Bala Fashion Rayachoty.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8f3ea",
+  "theme_color": "#f8f3ea",
+  "icons": [
+    { "src": "/b-tech-logo.png", "sizes": "any", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
