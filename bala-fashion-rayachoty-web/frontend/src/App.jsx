@@ -13,7 +13,8 @@ import { api } from './api'
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const MINIMUM_ORDER_AMOUNT = 250
-const RAYACHOTY_MAP_CENTER = [14.057, 78.75]
+const RAYACHOTY_MAP_CENTER = [14.05742, 78.74865]
+const DELIVERY_RADIUS_METERS = 5000
 
 L.Icon.Default.mergeOptions({
  iconRetinaUrl: markerIcon2x,
@@ -37,12 +38,22 @@ function LocationPicker({latitude,longitude,onChange,label}) {
    if(cancelled||!mapNode.current||mapRef.current)return
    const current=latest.current
    const hasPoint=current.latitude!==''&&current.longitude!==''&&Number.isFinite(Number(current.latitude))&&Number.isFinite(Number(current.longitude))
-   const center=hasPoint?[Number(current.latitude),Number(current.longitude)]:RAYACHOTY_MAP_CENTER
-   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,hasPoint?16:13)
+   const center=RAYACHOTY_MAP_CENTER
+   const map=L.map(mapNode.current,{scrollWheelZoom:false}).setView(center,13)
    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>'
    }).addTo(map)
+   const coverageCircle=L.circle(center,{
+    radius:DELIVERY_RADIUS_METERS,
+    color:'#b42318',
+    weight:2,
+    opacity:0.95,
+    fillColor:'#e5484d',
+    fillOpacity:0.13
+   }).addTo(map)
+   coverageCircle.bindTooltip('Approx. 5 km delivery coverage from Rayachoti Bus Stand')
+   map.fitBounds(coverageCircle.getBounds(),{padding:[18,18]})
    const setMarker=(lat,lng)=>{
     if(!markerRef.current){
      markerRef.current=L.marker([lat,lng],{draggable:true}).addTo(map)
@@ -67,7 +78,7 @@ function LocationPicker({latitude,longitude,onChange,label}) {
   if(!map)return
   const lat=Number(latitude),lng=Number(longitude)
   if(latitude!==''&&longitude!==''&&Number.isFinite(lat)&&Number.isFinite(lng)){
-   map.__setMarker?.(lat,lng);map.setView([lat,lng],16)
+   map.__setMarker?.(lat,lng)
   }else if(markerRef.current){map.removeLayer(markerRef.current);markerRef.current=null}
  },[latitude,longitude])
 
