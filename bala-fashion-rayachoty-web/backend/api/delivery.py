@@ -108,7 +108,7 @@ def delivery_availability(request):
                 """update public.profiles
                    set availability_status=%s,
                        updated_at=now()
-                   where id=%s and role='delivery_boy' and is_active=true
+                   where id=%s and role='delivery_boy'
                    returning id,is_active,availability_status""",
                 [availability, user["id"]],
             )
@@ -143,7 +143,7 @@ def assign_delivery_staff(request):
                 staff = cursor.fetchone()
                 if not staff:
                     return Response({"detail": "Choose an authorized delivery-boy account."}, status=400)
-                if not staff[2] or staff[3] != "available":
+                if staff[3] != "available":
                     return Response({"detail": "Choose a delivery person who is Online before assignment."}, status=409)
                 cursor.execute(
                     """update public.orders
@@ -315,7 +315,7 @@ def delivery_location(request):
         with connection.cursor() as cursor:
             cursor.execute("""update public.profiles set latitude=%s,longitude=%s,last_location_at=now(),
                 availability_status=%s,updated_at=now()
-                where id=%s and role='delivery_boy' and is_active=true
+                where id=%s and role='delivery_boy'
                 returning id,availability_status,last_location_at""",
                 [latitude, longitude, availability, user["id"]])
             row = cursor.fetchone()
