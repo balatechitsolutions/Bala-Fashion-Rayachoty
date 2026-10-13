@@ -606,14 +606,34 @@ def orders(request):
 
 @api_view(["GET", "PATCH", "DELETE"])
 def manage_orders(request):
-    """Vendors process their own orders; delivery staff handle delivery; admins cannot delete/process orders."""
+    """Admins manage accounts/assignments and may delete orders; vendors and assigned delivery staff process orders."""
     user, prof, error = _role_user(request, {"vendor", "admin"})
     if error:
         return error
 
-    # Orders are business records: no role may permanently delete them through this API.
+    # Order deletion is an explicit admin-only maintenance action. Vendors and
+    # delivery staff cannot delete records; processing permissions remain separate.
     if request.method == "DELETE":
-        return Response({"detail": "Order deletion is disabled. Preserve order history and use an authorized status transition instead."}, status=403)
+        if prof["role"] != "admin":
+            return Response({"detail": "Only an administrator can delete an order."}, status=403)
+        order_id = str(request.data.get("id") or request.data.get("order_id") or request.query_params.get("id") or "").strip()
+        try:
+            uuid.UUID(order_id)
+        except (ValueError, TypeError, AttributeError):
+            return Response({"detail": "Choose a valid order."}, status=400)
+        try:
+            with transaction.atomic():
+                with connection.cursor() as c:
+                    c.execute(
+                        "delete from public.orders where id=%s returning id,order_number",
+                        [order_id],
+                    )
+                    deleted = c.fetchone()
+            if not deleted:
+                return Response({"detail": "Order not found."}, status=404)
+            return Response({"id": str(deleted[0]), "order_number": deleted[1], "deleted": True})
+        except Exception:
+            return Response({"detail": "Order could not be deleted. Check dependent records and database constraints."}, status=409)
 
     if request.method == "PATCH":
         if prof["role"] != "vendor":
