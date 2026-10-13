@@ -498,15 +498,27 @@ export default function App() {
  async function place(e){
   e.preventDefault();if(busy)return
   if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}
-  if(address.latitude===''||address.longitude==='')return notify('Select your delivery location on the map or use your current location.')
-  if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote before placing the order.')
   if(!session)return login()
   if(vendors.length>1)return notify('Checkout one seller at a time.')
   setBusy(true)
   try{
-   const payload={...address,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(address.latitude),longitude:Number(address.longitude)}
-   const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
-   setCart([]);setOrders(o=>[r,...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed`)
+   // Resolve the saved default at submit time as well as on checkout open, so a
+   // slow address request cannot create an order with an empty address snapshot.
+   let checkoutAddress={...address}
+   if(!String(checkoutAddress.line1||'').trim()){
+    const saved=await api('/addresses/',{token:session.access_token})
+    const preferred=(saved.results||[]).find(item=>item.is_default)
+    if(preferred){
+     checkoutAddress={...preferred,...checkoutAddress,recipient_name:preferred.recipient_name,phone:preferred.phone,line1:preferred.line1,line2:preferred.line2||'',landmark:preferred.landmark||'',city:preferred.city||'Rayachoty',state:preferred.state||'Andhra Pradesh',postal_code:preferred.postal_code||'',latitude:String(preferred.latitude??''),longitude:String(preferred.longitude??''),notes:preferred.notes||''}
+     setAddress(checkoutAddress)
+    }
+   }
+   if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.phone||'').trim()||!String(checkoutAddress.line1||'').trim())return notify('Add or select a saved delivery address before placing your order.')
+   if(checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null)return notify('Select your delivery location on the map or use your current location.')
+   if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote for this address before placing the order.')
+   const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
+   const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:checkoutAddress.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
+   setCart([]);setOrders(o=>[r,...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed with delivery address saved`)
   }catch(err){notify(err.message)}finally{setBusy(false)}
  }
  const catalogContent = <>
