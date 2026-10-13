@@ -103,7 +103,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     </section>
     <section className="seller-dashboard-section">
       <h3>Assign orders</h3>
-      <p className="muted">Assign a packed order to an available delivery person.</p>
+      <p className="muted">Assign a packed order to a delivery person who is Online.</p>
       {!orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).length
         ? <p className="seller-empty">No orders ready to assign.</p>
         : orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).map(order =>
