@@ -157,6 +157,9 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   const [busyOrder, setBusyOrder] = useState('')
   const [error, setError] = useState('')
   const [otpInputs, setOtpInputs] = useState({})
+  const [isActive, setIsActive] = useState(false)
+  const [availabilityStatus, setAvailabilityStatus] = useState('offline')
+  const [availabilityBusy, setAvailabilityBusy] = useState(false)
 
   const loadOrders = useCallback(async () => {
     if (!session?.access_token) return
@@ -164,6 +167,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     try {
       const data = await api('/delivery/orders/', { token: session.access_token })
       setOrders(data.results || [])
+      setIsActive(Boolean(data.is_active))
+      setAvailabilityStatus(data.availability_status || 'offline')
       if (data.notifications?.length) data.notifications.forEach(item => notify(item.message || 'A delivery order was assigned to you.'))
       setError('')
     } catch (err) {
@@ -178,7 +183,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   }, [loadOrders])
 
   useEffect(() => {
-    if (!session?.access_token || !navigator.geolocation) return
+    if (!session?.access_token || !isActive || availabilityStatus !== 'available' || !navigator.geolocation) return
     let active = true
     const shareLocation = () => navigator.geolocation.getCurrentPosition(async position => {
       if (!active) return
@@ -186,12 +191,29 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
         await api('/delivery/location/', {method:'POST',token:session.access_token,body:JSON.stringify({
           latitude:position.coords.latitude, longitude:position.coords.longitude, availability_status:'available'
         })})
-      } catch (err) { setError(err.message || 'Could not share delivery location.') }
-    }, () => { if (active) setError('Enable GPS to share your delivery location and improve assignment priority.') }, {enableHighAccuracy:true, maximumAge:60000, timeout:12000})
+      } catch (err) { if (active) setError(err.message || 'Could not share delivery location.') }
+    }, () => { if (active) setError('Allow location access to share your delivery location while available.') }, {enableHighAccuracy:true, maximumAge:60000, timeout:12000})
     shareLocation()
     const timer = window.setInterval(shareLocation, 120000)
     return () => { active=false; window.clearInterval(timer) }
-  }, [session?.access_token])
+  }, [session?.access_token, isActive, availabilityStatus])
+
+  async function toggleAvailability() {
+    if (!session?.access_token || availabilityBusy || !isActive) return
+    const next = availabilityStatus === 'available' ? 'offline' : 'available'
+    setAvailabilityBusy(true)
+    try {
+      const result = await api('/delivery/availability/', {
+        method:'PATCH', token:session.access_token,
+        body:JSON.stringify({availability_status:next}),
+      })
+      setAvailabilityStatus(result.availability_status || next)
+      notify(result.detail || (next === 'available' ? 'You are now available for deliveries.' : 'You are now offline.'))
+      await loadOrders()
+    } catch (err) {
+      notify(err.message || 'Could not change delivery availability.')
+    } finally { setAvailabilityBusy(false) }
+  }
 
   async function startDelivery(order) {
     if (!window.confirm(`Mark ${order.order_number} out for delivery and email the customer a verification code?`)) return
@@ -247,6 +269,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     <div className="seller-dashboard-head">
       <div><b><Truck size={17}/> Delivery dashboard</b><small>Only orders assigned to your account are shown.</small></div>
       <div className="seller-dashboard-head-actions">
+        <span className={'seller-status '+(isActive&&availabilityStatus==='available'?'approved':'suspended')}>{!isActive?'Account inactive':availabilityStatus==='available'?'Available for deliveries':'Not accepting deliveries'}</span>
+        <button className={isActive&&availabilityStatus==='available'?'secondary':'primary'} onClick={toggleAvailability} disabled={!isActive||availabilityBusy}>{availabilityBusy?'Saving…':isActive&&availabilityStatus==='available'?'Go offline':'Start accepting deliveries'}</button>
         <button className="secondary" onClick={loadOrders} disabled={loading}><RefreshCw size={14}/> Refresh</button>
         <button className="secondary" onClick={onSignOut}>Sign out</button>
       </div>
