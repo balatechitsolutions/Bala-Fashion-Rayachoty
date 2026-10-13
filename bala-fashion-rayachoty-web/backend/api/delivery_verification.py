@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import hmac
 import secrets
 
@@ -10,6 +11,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .views import _insert_account_notification, _notify_admins, _role_user
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["POST"])
@@ -51,13 +54,20 @@ def delivery_verification(request):
                     return Response({"detail": "The customer has no registered email address."}, status=400)
                 code = f"{secrets.randbelow(1000000):06d}"
                 digest = hashlib.sha256(f"{order_id}:{code}".encode()).hexdigest()
-                send_mail(
-                    f"Bala Fashion delivery code — {order[1]}",
-                    f"Your order {order[1]} is out for delivery. Give this six-digit code to the delivery person only after receiving your order: {code}. It expires in 15 minutes. Do not share it before the order arrives.",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [recipient],
-                    fail_silently=False,
-                )
+                try:
+                    sent_count = send_mail(
+                        f"Bala Fashion delivery code — {order[1]}",
+                        f"Your order {order[1]} is out for delivery. Give this six-digit code to the delivery person only after receiving your order: {code}. It expires in 15 minutes. Do not share it before the order arrives.",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [recipient],
+                        fail_silently=False,
+                    )
+                    if sent_count != 1:
+                        logger.error("Delivery OTP email was not accepted by the email backend for order %s", order_id)
+                        return Response({"detail": "The email provider did not accept the delivery code. Check SMTP settings on Render and try again."}, status=503)
+                except Exception:
+                    logger.exception("Delivery OTP email send failed for order %s", order_id)
+                    return Response({"detail": "Could not send the delivery code email. Check the SMTP host, port, TLS mode, sender, and app password configured on Render."}, status=503)
                 cursor.execute(
                     """update public.orders set status='out_for_delivery',delivery_otp_hash=%s,
                        delivery_otp_expires_at=now()+interval '15 minutes',delivery_otp_sent_at=now(),
@@ -103,4 +113,5 @@ def delivery_verification(request):
                          "payment_status": updated[3], "total": str(updated[4]),
                          "created_at": updated[5].isoformat() if hasattr(updated[5], "isoformat") else updated[5]})
     except Exception:
-        return Response({"detail": "Delivery verification failed. Check backend email settings and Render logs."}, status=503)
+        logger.exception("Delivery verification failed for order %s (action=%s)", order_id, action)
+        return Response({"detail": "Delivery verification failed. The backend error was logged; check Render application logs for the traceback."}, status=503)
