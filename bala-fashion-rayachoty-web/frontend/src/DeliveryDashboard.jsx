@@ -217,8 +217,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     if (!window.confirm(`Mark ${order.order_number} out for delivery and email the customer a verification code?`)) return
     setBusyOrder(order.id)
     try {
-      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'start' }) })
-      notify(`OTP emailed to the customer's registered email for ${order.order_number}.`)
+      const result = await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'start' }) })
+      notify(result.detail || `Delivery started for ${order.order_number}.`)
       await loadOrders()
     } catch (err) {
       notify(err.message || 'Could not start delivery.')
@@ -241,8 +241,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   async function resendDeliveryCode(order) {
     setBusyOrder(order.id)
     try {
-      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'resend' }) })
-      notify(`A new OTP was emailed for ${order.order_number}.`)
+      const result = await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'resend' }) })
+      notify(result.detail || `A new OTP was sent for ${order.order_number}.`)
     } catch (err) {
       notify(err.message || 'Could not resend delivery OTP.')
     } finally { setBusyOrder('') }
@@ -297,12 +297,15 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             <b>Vendor / pickup</b>
             <small>{order.vendor_name || 'Vendor name unavailable'}</small>
             <small>{order.vendor_address || 'Vendor address not provided'}</small>
-            {order.vendor_phone && <small>Vendor phone: <a href={`tel:${order.vendor_phone}`}>{order.vendor_phone}</a></small>}
+            {order.vendor_address && <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.vendor_address)}&travelmode=driving`} target="_blank" rel="noreferrer"><FiMapPin size={14}/> Directions to vendor</a>}
+            {order.vendor_phone ? <a className="delivery-contact-link" href={`tel:${order.vendor_phone}`}>Call vendor · {order.vendor_phone}</a> : <div className="delivery-missing-data">Vendor phone number is missing. Ask the administrator to update this vendor before pickup.</div>}
             <b>Customer / drop-off</b>
-            <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone'}</small>
+            <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone number'}</small>
+            {address.phone ? <a className="delivery-contact-link" href={`tel:${address.phone}`}>Call customer · {address.phone}</a> : <div className="delivery-missing-data">Customer phone number is missing. Ask the administrator to verify the contact before delivery.</div>}
             {order.customer_email && <small>Email: <a href={`mailto:${order.customer_email}`}>{order.customer_email}</a></small>}
             <small>{destination || 'Address not provided'}{address.state ? `, ${address.state}` : ''}{address.postal_code ? ` ${address.postal_code}` : ''}</small>
             {navigation && <a href={navigation} target="_blank" rel="noreferrer"><FiMapPin size={14}/> Navigate to customer</a>}
+            {!address.line1 && !address.line2 && !address.landmark && <div className="delivery-missing-data">Customer address is incomplete. Ask the administrator to correct the delivery address before starting this delivery.</div>}
             <b>Items ({(order.items || []).length})</b>
             {(order.items || []).map((item,index) => <small key={`${order.id}-item-${index}`}>{item.quantity} × {item.product_name}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''} · {money(item.line_total)}</small>)}
             <small>Subtotal: {money(order.subtotal)} · Delivery: {money(order.delivery_fee)}</small>
@@ -310,7 +313,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             {order.notes && <small>Order instructions: {order.notes}</small>}
           </span>
           <span className="delivery-order-actions">
-            {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><FiPackage size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><FiTruck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery (SMTP)'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP (SMTP)</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><FiCheck size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
+            {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><FiPackage size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><FiTruck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Start delivery & send OTP'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend delivery OTP</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><FiCheck size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
           </span>
         </article>
       })
