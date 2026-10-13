@@ -297,12 +297,15 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             <b>Vendor / pickup</b>
             <small>{order.vendor_name || 'Vendor name unavailable'}</small>
             <small>{order.vendor_address || 'Vendor address not provided'}</small>
-            {order.vendor_phone && <small>Vendor phone: <a href={`tel:${order.vendor_phone}`}>{order.vendor_phone}</a></small>}
+            {order.vendor_address && <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.vendor_address)}&travelmode=driving`} target="_blank" rel="noreferrer"><MapPin size={14}/> Directions to vendor</a>}
+            {order.vendor_phone ? <a className="delivery-contact-link" href={`tel:${order.vendor_phone}`}>Call vendor · {order.vendor_phone}</a> : <div className="delivery-missing-data">Vendor phone number is missing. Ask the administrator to update this vendor before pickup.</div>}
             <b>Customer / drop-off</b>
-            <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone'}</small>
+            <small>{address.recipient_name || 'Customer'} · {address.phone || 'No phone number'}</small>
+            {address.phone ? <a className="delivery-contact-link" href={`tel:${address.phone}`}>Call customer · {address.phone}</a> : <div className="delivery-missing-data">Customer phone number is missing. Ask the administrator to verify the contact before delivery.</div>}
             {order.customer_email && <small>Email: <a href={`mailto:${order.customer_email}`}>{order.customer_email}</a></small>}
             <small>{destination || 'Address not provided'}{address.state ? `, ${address.state}` : ''}{address.postal_code ? ` ${address.postal_code}` : ''}</small>
             {navigation && <a href={navigation} target="_blank" rel="noreferrer"><MapPin size={14}/> Navigate to customer</a>}
+            {!address.line1 && !address.line2 && !address.landmark && <div className="delivery-missing-data">Customer address is incomplete. Ask the administrator to correct the delivery address before starting this delivery.</div>}
             <b>Items ({(order.items || []).length})</b>
             {(order.items || []).map((item,index) => <small key={`${order.id}-item-${index}`}>{item.quantity} × {item.product_name}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''} · {money(item.line_total)}</small>)}
             <small>Subtotal: {money(order.subtotal)} · Delivery: {money(order.delivery_fee)}</small>
