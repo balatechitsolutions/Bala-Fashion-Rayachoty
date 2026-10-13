@@ -180,7 +180,10 @@ def assign_delivery_staff(request):
                 row = cursor.fetchone()
                 if not row:
                     return Response({"detail": "Order not found or it must be packed/out for delivery before assignment."}, status=409)
-                cursor.execute("""insert into public.delivery_assignment_notifications(recipient_id,order_id,order_number,message) values (%s,%s,%s,%s)""", [staff_id, str(row[0]), str(row[1]), "Order " + str(row[1]) + " has been assigned to you."])
+                assignment_message = "Order " + str(row[1]) + " has been assigned to you."
+                cursor.execute("""insert into public.delivery_assignment_notifications(recipient_id,order_id,order_number,message) values (%s,%s,%s,%s)""", [staff_id, str(row[0]), str(row[1]), assignment_message])
+                from .push_notifications import send_push_to_user
+                send_push_to_user(staff_id, "New delivery assigned", assignment_message, row[0], "delivery_assigned")
         return Response({"id": str(row[0]), "order_number": row[1], "status": row[2], "assigned_delivery_boy_id": str(row[3]), "notification_created": True})
     except Exception:
         return Response({"detail": "Could not assign delivery staff. Apply the delivery-role SQL migration first."}, status=503)
