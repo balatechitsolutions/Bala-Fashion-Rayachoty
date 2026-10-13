@@ -127,7 +127,7 @@ def _insert_account_notification(cursor, recipient_id, event_type, title, body, 
         # Redis is absent, preserve the existing best-effort inline behavior.
         def dispatch_push():
             try:
-                if os.getenv("REDIS_URL", "").strip():
+                if os.getenv("CELERY_BROKER_URL", "").strip():
                     from .tasks import send_account_push
                     send_account_push.delay(
                         str(recipient_id), title, body, str(order_id), event_type
