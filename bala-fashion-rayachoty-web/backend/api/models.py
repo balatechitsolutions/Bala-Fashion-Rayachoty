@@ -2,6 +2,7 @@ import uuid
 
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.utils import timezone
 
 
 class Category(models.Model):
@@ -105,7 +106,7 @@ class DeliveryStaff(models.Model):
 
 class CustomerAddress(models.Model):
     """Django mapping of Supabase public.customer_addresses; schema is managed by Supabase."""
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user_id = models.UUIDField()
     recipient_name = models.CharField(max_length=120)
     phone = models.CharField(max_length=30)
@@ -119,8 +120,8 @@ class CustomerAddress(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     notes = models.TextField(blank=True, default="")
     is_default = models.BooleanField(default=False)
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField()
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         managed = False
