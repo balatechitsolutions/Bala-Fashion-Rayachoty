@@ -27,17 +27,6 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
 
   useEffect(() => { loadStaff() }, [loadStaff])
 
-  async function updateStaff(person, changes) {
-    if (!session?.access_token || saving) return
-    setSaving(true)
-    try {
-      await api('/delivery/staff/', { method:'PATCH', token:session.access_token, body:JSON.stringify({id:person.id,...changes}) })
-      await loadStaff()
-      notify('Delivery staff status updated')
-    } catch (err) { notify(err.message || 'Could not update delivery staff') }
-    finally { setSaving(false) }
-  }
-
   async function addStaff(event) {
     event.preventDefault()
     if (!session?.access_token || saving) return
@@ -98,7 +87,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       <small>Choose an existing customer account.</small>
       <label>Display name (optional)<input value={fullName} onChange={event => setFullName(event.target.value)} maxLength={120}/></label>
       <label>Phone (optional)<input value={phone} onChange={event => setPhone(event.target.value)} maxLength={30} inputMode="tel"/></label>
-      <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Enable delivery account'}</button>
+      <button className="primary full" disabled={saving}>{saving ? 'Saving…' : 'Add delivery person'}</button>
     </form>
     {error && <div className="warning">{error}</div>}
     <section className="seller-dashboard-section">
@@ -155,7 +144,6 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   const [busyOrder, setBusyOrder] = useState('')
   const [error, setError] = useState('')
   const [otpInputs, setOtpInputs] = useState({})
-  const [isActive, setIsActive] = useState(false)
   const [availabilityStatus, setAvailabilityStatus] = useState('offline')
   const [availabilityBusy, setAvailabilityBusy] = useState(false)
 
@@ -165,7 +153,6 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     try {
       const data = await api('/delivery/orders/', { token: session.access_token })
       setOrders(data.results || [])
-      setIsActive(Boolean(data.is_active))
       setAvailabilityStatus(data.availability_status || 'offline')
       if (data.notifications?.length) data.notifications.forEach(item => notify(item.message || 'A delivery order was assigned to you.'))
       setError('')
@@ -197,7 +184,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   }, [session?.access_token, availabilityStatus])
 
   async function toggleAvailability() {
-    if (!session?.access_token || availabilityBusy || !isActive) return
+    if (!session?.access_token || availabilityBusy) return
     const next = availabilityStatus === 'available' ? 'offline' : 'available'
     setAvailabilityBusy(true)
     try {
