@@ -164,7 +164,7 @@ export default function App() {
   let active=true
   api('/addresses/',{token:session.access_token}).then(data=>{
    const preferred=(data.results||[]).find(item=>item.is_default)
-   if(active&&preferred)setAddress(current=>current.line1?current:{...current,...preferred,latitude:String(preferred.latitude),longitude:String(preferred.longitude)})
+   if(active&&preferred)setAddress(current=>current.id?current:{...current,...preferred,latitude:preferred.latitude==null?'':String(preferred.latitude),longitude:preferred.longitude==null?'':String(preferred.longitude)})
   }).catch(()=>{})
   return()=>{active=false}
  },[drawer,session?.access_token])
@@ -506,7 +506,7 @@ export default function App() {
   try{
    const payload={...address,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(address.latitude),longitude:Number(address.longitude)}
    const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:address.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
-   setCart([]);setOrders(o=>[r,...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed`)
+   setCart([]);setOrders(o=>[{...r,address_snapshot:r.address_snapshot||payload,items:cart.map(i=>({product_name:i.name,image_url:i.image_url,quantity:i.quantity,size:i.size,color:i.color,unit_price:i.price,line_total:Number(i.price)*i.quantity}))},...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed`)
   }catch(err){notify(err.message)}finally{setBusy(false)}
  }
  const catalogContent = <>
