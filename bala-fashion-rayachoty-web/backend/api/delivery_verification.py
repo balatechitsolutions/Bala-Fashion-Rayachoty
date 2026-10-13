@@ -37,9 +37,11 @@ def delivery_verification(request):
             if not order:
                 return Response({"detail": "Order not found or not assigned to your account."}, status=404)
 
-            if action == "start":
-                if order[2] != "packed":
+            if action in {"start", "resend"}:
+                if action == "start" and order[2] != "packed":
                     return Response({"detail": "Only packed orders can be marked out for delivery."}, status=409)
+                if action == "resend" and order[2] != "out_for_delivery":
+                    return Response({"detail": "A verification code can only be resent for an order already out for delivery."}, status=409)
                 if not settings.EMAIL_HOST or not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
                     return Response({"detail": "Email delivery is not configured on the backend. Configure SMTP environment variables on Render."}, status=503)
                 cursor.execute("select email from auth.users where id=%s", [order[5]])
