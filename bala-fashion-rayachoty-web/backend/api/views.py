@@ -673,11 +673,14 @@ def manage_orders(request):
                     transitions = {
                         "placed": {"confirmed", "cancelled"},
                         "confirmed": {"packed", "cancelled"},
-                        "packed": {"out_for_delivery"},
-                        "out_for_delivery": {"delivered"},
+                        "packed": set(),
+                        "out_for_delivery": set(),
                         "delivered": set(),
                         "cancelled": set(),
                     }
+                    if prof["role"] == "admin":
+                        transitions["packed"] = {"out_for_delivery"}
+                        transitions["out_for_delivery"] = {"delivered"}
                     if status_value != current_status and status_value not in transitions.get(current_status, set()):
                         return Response(
                             {"detail": f"Order cannot move from {current_status} to {status_value}."},
