@@ -885,7 +885,7 @@ def seller_dashboard(request):
                             'latitude',o.address_snapshot->>'latitude',
                             'longitude',o.address_snapshot->>'longitude'
                           ) else null end as delivery_coordinates,
-                          case when %s='vendor' then coalesce(
+                          case when %s='admin' then coalesce(
                             nullif(o.address_snapshot,'{}'::jsonb),
                             (select jsonb_build_object(
                               'recipient_name',ca.recipient_name,'phone',ca.phone,
@@ -896,6 +896,8 @@ def seller_dashboard(request):
                              where ca.user_id=o.customer_id
                              order by ca.is_default desc,ca.created_at desc limit 1)
                           ) else null end as address_snapshot,
+                          cu.email as customer_email,
+                          dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
                           coalesce(json_agg(json_build_object(
                             'product_id',oi.product_id,'product_name',oi.product_name,
                             'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,
@@ -903,9 +905,12 @@ def seller_dashboard(request):
                           )) filter(where oi.id is not null),'[]'::json) as items
                    from public.orders o
                    join public.vendors v on v.id=o.vendor_id
+                   left join auth.users cu on cu.id=o.customer_id
+                   left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                    left join public.order_items oi on oi.order_id=o.id
                    where o.vendor_id = any(%s)
-                   group by o.id,v.name order by o.created_at desc limit 50""",
+                   group by o.id,v.name,cu.email,dp.full_name,dp.phone
+                   order by o.created_at desc limit 50""",
                 [prof["role"], prof["role"], store_ids],
             )
             managed_orders = _rows(c)
