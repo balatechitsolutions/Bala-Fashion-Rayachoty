@@ -173,13 +173,13 @@ def assign_delivery_staff(request):
                 cursor.execute(
                     """update public.orders
                        set assigned_delivery_boy_id=%s, updated_at=now()
-                       where id=%s and status in ('packed','out_for_delivery')
+                       where id=%s and status in ('placed','confirmed','packed','out_for_delivery')
                        returning id, order_number, status, assigned_delivery_boy_id""",
                     [staff_id, order_id],
                 )
                 row = cursor.fetchone()
                 if not row:
-                    return Response({"detail": "Order not found or it must be packed/out for delivery before assignment."}, status=409)
+                    return Response({"detail": "Order not found or not ready for delivery assignment."}, status=409)
                 assignment_message = "Order " + str(row[1]) + " has been assigned to you."
                 cursor.execute("""insert into public.delivery_assignment_notifications(recipient_id,order_id,order_number,message) values (%s,%s,%s,%s)""", [staff_id, str(row[0]), str(row[1]), assignment_message])
                 from .push_notifications import send_push_to_user
@@ -197,8 +197,34 @@ def my_delivery_orders(request):
         return error
 
     if request.method == "PATCH":
-        return Response({"detail": "Delivery completion now requires customer email OTP verification."}, status=409)
         order_id = _valid_uuid(request.data.get("order_id") or request.data.get("id"))
+        next_status = str(request.data.get("status") or "").strip().lower()
+        if not order_id or next_status not in {"confirmed", "cancelled", "packed"}:
+            return Response({"detail": "Provide an assigned order and valid status."}, status=400)
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("""select o.id,o.order_number,o.status,o.customer_id
+                        from public.orders o where o.id=%s and o.assigned_delivery_boy_id=%s for update""",
+                        [order_id,user["id"]])
+                    current=cursor.fetchone()
+                    if not current:
+                        return Response({"detail":"Order not found or not assigned to your account."},status=404)
+                    transitions={"placed":{"confirmed","cancelled"},"confirmed":{"packed"}}
+                    if next_status not in transitions.get(current[2],set()):
+                        return Response({"detail":f"Order cannot move from {current[2]} to {next_status}."},status=409)
+                    cursor.execute("""update public.orders set status=%s,updated_at=now()
+                        where id=%s returning id,order_number,status""",[next_status,order_id])
+                    updated=cursor.fetchone()
+                    if next_status in {"confirmed","cancelled"}:
+                        title="Order confirmed" if next_status=="confirmed" else "Order cancelled"
+                        _insert_account_notification(cursor,current[3],next_status,title,
+                            f"Your order {current[1]} was {next_status}.",current[0])
+                        _notify_admins(cursor,next_status,title,
+                            f"Order {current[1]} was {next_status} by delivery staff.",current[0])
+            return Response({"id":str(updated[0]),"order_number":updated[1],"status":updated[2]})
+        except Exception:
+            return Response({"detail":"Order status could not be updated. Please retry."},status=503)
         if not order_id:
             return Response({"detail": "Choose a valid order."}, status=400)
         try:
