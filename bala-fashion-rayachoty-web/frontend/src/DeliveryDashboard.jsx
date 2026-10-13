@@ -129,6 +129,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   const [loading, setLoading] = useState(true)
   const [busyOrder, setBusyOrder] = useState('')
   const [error, setError] = useState('')
+  const [otpInputs, setOtpInputs] = useState({})
 
   const loadOrders = useCallback(async () => {
     if (!session?.access_token) return
@@ -144,18 +145,30 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
 
   useEffect(() => { loadOrders() }, [loadOrders])
 
-  async function markDelivered(order) {
-    if (!window.confirm(`Confirm that order ${order.order_number} has been delivered?`)) return
+  async function startDelivery(order) {
+    if (!window.confirm(`Mark ${order.order_number} out for delivery and email the customer a verification code?`)) return
     setBusyOrder(order.id)
     try {
-      await api('/delivery/orders/', {
-        method: 'PATCH', token: session.access_token,
-        body: JSON.stringify({ id: order.id }),
-      })
-      notify(`${order.order_number} marked delivered.`)
+      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'start' }) })
+      notify(`OTP emailed to the customer's registered email for ${order.order_number}.`)
       await loadOrders()
     } catch (err) {
-      notify(err.message || 'Could not mark order delivered.')
+      notify(err.message || 'Could not start delivery.')
+    } finally { setBusyOrder('') }
+  }
+
+  async function verifyDelivery(order) {
+    const otp = String(otpInputs[order.id] || '').trim()
+    if (!/^\\d{6}$/.test(otp)) return notify('Enter the six-digit customer email OTP.')
+    if (!window.confirm(`Confirm the customer received ${order.order_number} and supplied the email OTP?`)) return
+    setBusyOrder(order.id)
+    try {
+      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'verify', otp }) })
+      setOtpInputs(current => ({ ...current, [order.id]:'' }))
+      notify(`${order.order_number} delivered after OTP verification.`)
+      await loadOrders()
+    } catch (err) {
+      notify(err.message || 'Could not verify delivery OTP.')
     } finally { setBusyOrder('') }
   }
 
@@ -176,6 +189,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     {loading ? <p>Loading assigned deliveries…</p> : !orders.length ? <div className="empty"><Package size={28}/><h3>No assigned deliveries</h3><p>Ask the administrator to assign an order to your account.</p></div> :
       orders.map(order => {
         const address = order.address_snapshot || {}
+        const canStart = order.status === 'packed'
         const canDeliver = order.status === 'out_for_delivery'
         const destination = [address.line1, address.line2, address.landmark, address.city || 'Rayachoty'].filter(Boolean).join(', ')
         const navigation = address.latitude != null && address.longitude != null
@@ -191,7 +205,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             <small>COD · {order.payment_status === 'paid' ? 'Marked paid' : 'Payment pending'} · {money(order.total)}</small>
           </span>
           <span className="delivery-order-actions">
-            {canDeliver ? <button className="primary" disabled={busyOrder === order.id} onClick={() => markDelivered(order)}><Check size={15}/>{busyOrder === order.id ? 'Saving…' : 'Mark delivered'}</button> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
+            {canStart ? <button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery'}</button> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
           </span>
         </article>
       })
