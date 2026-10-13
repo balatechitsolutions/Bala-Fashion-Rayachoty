@@ -206,9 +206,8 @@ class EndpointTests(SimpleTestCase):
         custom_page = resolve('/admin/vendor-uuids/')
         self.assertNotEqual(custom_page.url_name, 'admin-vendor-uuids')
 
-    def test_delivered_cod_order_marks_payment_paid(self):
+    def test_admin_cannot_mark_delivered_without_delivery_otp(self):
         from contextlib import nullcontext
-        from datetime import datetime, timezone
 
         order_id = "a2e4b2d8-2b77-4b84-a420-0e30e2a7d6aa"
         req = self.factory.patch(
@@ -221,22 +220,20 @@ class EndpointTests(SimpleTestCase):
         profile = {"id": user["id"], "full_name": "Admin", "phone": "", "role": "admin"}
         cursor = MagicMock()
         cursor.__enter__.return_value = cursor
-        cursor.fetchone.side_effect = [
-            (order_id, "out_for_delivery", "cod", "pending", "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11", "BFR-TEST123"),
-            (order_id, "BFR-TEST123", "delivered", "paid", "1499.00", datetime.now(timezone.utc)),
-        ]
+        cursor.fetchone.return_value = (
+            order_id, "out_for_delivery", "cod", "pending",
+            "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11", "BFR-TEST123",
+        )
         with patch.object(views, "_user", return_value=(user, None)):
             with patch.object(views, "_profile", return_value=profile):
                 with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
                     with patch.object(views.transaction, "atomic", return_value=nullcontext()):
                         response = views.manage_orders(req)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["status"], "delivered")
-        self.assertEqual(response.data["payment_status"], "paid")
-        update_calls = [call for call in cursor.execute.call_args_list if "payment_status=case" in call.args[0].lower()]
-        self.assertTrue(update_calls)
-        self.assertEqual(update_calls[0].args[1], ["delivered", "delivered", order_id])
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("cannot move", response.data["detail"].lower())
+        update_calls = [call for call in cursor.execute.call_args_list if "update public.orders" in call.args[0].lower()]
+        self.assertFalse(update_calls)
 
 
     def test_customer_cannot_access_delivery_staff_orders(self):
