@@ -119,6 +119,14 @@ def _insert_account_notification(cursor, recipient_id, event_type, title, body, 
            on conflict (recipient_id, order_id, event_type) do nothing""",
         [str(uuid.uuid4()), str(recipient_id), event_type, title, body, str(order_id)],
     )
+    if cursor.rowcount == 1:
+        # Push is best-effort: notification persistence/order processing must succeed
+        # even when Firebase credentials are not configured or a device token is stale.
+        try:
+            from .push_notifications import send_push_to_user
+            send_push_to_user(recipient_id, title, body, order_id, event_type)
+        except Exception:
+            logging.getLogger(__name__).exception("Could not dispatch account notification push")
 
 
 def _notify_admins(cursor, event_type, title, body, order_id):
