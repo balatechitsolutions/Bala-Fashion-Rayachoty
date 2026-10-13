@@ -217,8 +217,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
     if (!window.confirm(`Mark ${order.order_number} out for delivery and email the customer a verification code?`)) return
     setBusyOrder(order.id)
     try {
-      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'start' }) })
-      notify(`OTP emailed to the customer's registered email for ${order.order_number}.`)
+      const result = await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'start' }) })
+      notify(result.detail || `Delivery started for ${order.order_number}.`)
       await loadOrders()
     } catch (err) {
       notify(err.message || 'Could not start delivery.')
@@ -241,8 +241,8 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
   async function resendDeliveryCode(order) {
     setBusyOrder(order.id)
     try {
-      await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'resend' }) })
-      notify(`A new OTP was emailed for ${order.order_number}.`)
+      const result = await api('/delivery/verify/', { method:'POST', token:session.access_token, body:JSON.stringify({ order_id:order.id, action:'resend' }) })
+      notify(result.detail || `A new OTP was sent for ${order.order_number}.`)
     } catch (err) {
       notify(err.message || 'Could not resend delivery OTP.')
     } finally { setBusyOrder('') }
@@ -313,7 +313,7 @@ export function DeliveryDashboard({ session, notify, onSignOut }) {
             {order.notes && <small>Order instructions: {order.notes}</small>}
           </span>
           <span className="delivery-order-actions">
-            {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><Package size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Out for delivery (SMTP)'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend OTP (SMTP)</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
+            {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><Package size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><Truck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Start delivery & send OTP'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend delivery OTP</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><Check size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
           </span>
         </article>
       })
