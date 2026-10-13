@@ -250,17 +250,19 @@ def my_delivery_orders(request):
             cursor.execute(
                 """select o.id, o.order_number, o.status, o.payment_method, o.payment_status,
                           o.subtotal, o.delivery_fee, o.total, o.address_snapshot, o.notes,
-                          o.created_at, v.name as vendor_name,
+                          o.created_at, v.name as vendor_name, v.address as vendor_address,
+                          v.phone as vendor_phone, cu.email as customer_email,
                           coalesce(json_agg(json_build_object(
                             'product_name', oi.product_name, 'image_url', oi.image_url,
                             'quantity', oi.quantity, 'size', oi.size, 'color', oi.color,
-                            'line_total', oi.line_total
+                            'unit_price', oi.unit_price, 'line_total', oi.line_total
                           )) filter (where oi.id is not null), '[]'::json) as items
                    from public.orders o
                    join public.vendors v on v.id=o.vendor_id
+                   left join auth.users cu on cu.id=o.customer_id
                    left join public.order_items oi on oi.order_id=o.id
                    where o.assigned_delivery_boy_id=%s
-                   group by o.id, v.name
+                   group by o.id, v.name, v.address, v.phone, cu.email
                    order by case o.status when 'out_for_delivery' then 0 when 'packed' then 1 else 2 end,
                             o.created_at desc
                    limit 100""",
