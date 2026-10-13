@@ -673,8 +673,8 @@ def manage_orders(request):
                     transitions = {
                         "placed": {"confirmed", "cancelled"},
                         "confirmed": {"packed", "cancelled"},
-                        "packed": {"out_for_delivery"},
-                        "out_for_delivery": {"delivered"},
+                        "packed": set(),
+                        "out_for_delivery": set(),
                         "delivered": set(),
                         "cancelled": set(),
                     }
