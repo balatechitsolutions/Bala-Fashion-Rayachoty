@@ -42,16 +42,20 @@ def delivery_verification(request):
             if not order:
                 return Response({"detail": "Order not found or not assigned to your account."}, status=404)
 
-            if action in {"start", "resend"}:
+            if action in {"start", "resend", "mailjet"}:
                 if action == "start" and order[2] != "packed":
                     return Response({"detail": "Only packed orders can be marked out for delivery."}, status=409)
                 if action == "resend" and order[2] != "out_for_delivery":
                     return Response({"detail": "A verification code can only be resent for an order already out for delivery."}, status=409)
+                if action == "mailjet" and order[2] not in {"packed", "out_for_delivery"}:
+                    return Response({"detail": "Mailjet OTP is available only for packed or out-for-delivery orders."}, status=409)
+
                 cursor.execute("select email from auth.users where id=%s", [order[5]])
                 email_row = cursor.fetchone()
                 recipient = str(email_row[0] or "").strip() if email_row else ""
                 if not recipient:
                     return Response({"detail": "The customer has no registered email address."}, status=400)
+
                 code = f"{secrets.randbelow(1000000):06d}"
                 digest = hashlib.sha256(f"{order_id}:{code}".encode()).hexdigest()
                 subject = f"Bala Fashion delivery code — {order[1]}"
@@ -60,30 +64,45 @@ def delivery_verification(request):
                     f"the delivery person only after receiving your order: {code}. "
                     "It expires in 15 minutes. Do not share it before the order arrives."
                 )
-                # Try configured SMTP first. If the host cannot be reached, use Mailjet's HTTPS API.
-                smtp_configured = bool(settings.EMAIL_HOST and settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
+
+                # Normal workflow: SMTP only. Mailjet is a separate, delivery-staff-triggered option.
                 sent = False
-                smtp_error = None
-                if smtp_configured:
+                provider = ""
+                if action in {"start", "resend"}:
+                    if not (settings.EMAIL_HOST and settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD):
+                        return Response({"detail": "SMTP is not configured. Use the separate Send OTP via Mailjet option."}, status=503)
                     try:
                         sent = send_mail(
                             subject, body, settings.DEFAULT_FROM_EMAIL, [recipient],
                             fail_silently=False,
                         ) == 1
-                        if not sent:
-                            smtp_error = "SMTP backend returned zero sent messages"
+                        if sent:
+                            provider = "SMTP"
+                        else:
+                            logger.error("SMTP returned zero sent messages for delivery OTP order %s", order_id)
                     except Exception as exc:
-                        smtp_error = f"{type(exc).__name__}: {exc}"
                         logger.warning(
-                            "Delivery OTP SMTP send failed for order %s (%s); trying Mailjet fallback",
+                            "Delivery OTP SMTP send failed for order %s (%s). Mailjet remains available as a manual option.",
                             order_id, type(exc).__name__,
                         )
-
-                mailjet_key = os.getenv("MAILJET_API_KEY", "").strip()
-                mailjet_secret = os.getenv("MAILJET_API_SECRET", "").strip()
-                mailjet_sender = os.getenv("MAILJET_SENDER_EMAIL", "").strip()
-                mailjet_sender_name = os.getenv("MAILJET_SENDER_NAME", "Bala Fashion").strip() or "Bala Fashion"
-                if not sent and mailjet_key and mailjet_secret and mailjet_sender:
+                        if action == "start":
+                            return Response({
+                                "detail": "SMTP could not send the OTP. The order was not started; use Send OTP via Mailjet to send it through the alternate provider."
+                            }, status=503)
+                        return Response({
+                            "detail": "SMTP could not resend the OTP. Use Send OTP via Mailjet for the alternate email service."
+                        }, status=503)
+                    if not sent:
+                        return Response({
+                            "detail": "SMTP did not accept the OTP email. Use Send OTP via Mailjet for the alternate email service."
+                        }, status=503)
+                else:
+                    mailjet_key = os.getenv("MAILJET_API_KEY", "").strip()
+                    mailjet_secret = os.getenv("MAILJET_API_SECRET", "").strip()
+                    mailjet_sender = os.getenv("MAILJET_SENDER_EMAIL", "").strip()
+                    mailjet_sender_name = os.getenv("MAILJET_SENDER_NAME", "Bala Fashion").strip() or "Bala Fashion"
+                    if not (mailjet_key and mailjet_secret and mailjet_sender):
+                        return Response({"detail": "Mailjet is not configured. Set MAILJET_API_KEY, MAILJET_API_SECRET and MAILJET_SENDER_EMAIL on Render."}, status=503)
                     try:
                         response = requests.post(
                             "https://api.mailjet.com/v3.1/send",
@@ -96,38 +115,31 @@ def delivery_verification(request):
                             }]},
                             timeout=15,
                         )
-                        if response.ok:
-                            payload = response.json()
-                            messages = payload.get("Messages", [])
-                            sent = bool(messages and messages[0].get("Status") == "success")
-                            if not sent:
-                                logger.error("Mailjet did not accept delivery OTP for order %s (HTTP %s)", order_id, response.status_code)
+                        payload = response.json() if response.content else {}
+                        messages = payload.get("Messages", [])
+                        sent = response.ok and bool(messages and messages[0].get("Status") == "success")
+                        if sent:
+                            provider = "Mailjet"
                         else:
                             logger.error(
-                                "Mailjet delivery OTP fallback failed for order %s (HTTP %s)",
+                                "Mailjet delivery OTP rejected for order %s (HTTP %s)",
                                 order_id, response.status_code,
                             )
                     except Exception as exc:
-                        logger.exception(
-                            "Mailjet delivery OTP fallback failed for order %s (%s)",
-                            order_id, type(exc).__name__,
-                        )
+                        logger.exception("Mailjet delivery OTP send failed for order %s (%s)", order_id, type(exc).__name__)
+                    if not sent:
+                        return Response({"detail": "Mailjet could not send the delivery OTP. Check Mailjet API credentials and sender verification in Render/Mailjet."}, status=503)
 
-                if not sent:
-                    if not smtp_configured:
-                        logger.error("Delivery OTP could not be sent: SMTP is not configured and Mailjet fallback is unavailable")
-                    else:
-                        logger.error("Delivery OTP could not be sent by SMTP or Mailjet for order %s", order_id)
-                    return Response({
-                        "detail": "Could not send the delivery code. Check Render SMTP settings and Mailjet API credentials/sender verification."
-                    }, status=503)
                 cursor.execute(
                     """update public.orders set status='out_for_delivery',delivery_otp_hash=%s,
                        delivery_otp_expires_at=now()+interval '15 minutes',delivery_otp_sent_at=now(),
                        delivery_otp_attempts=0,updated_at=now() where id=%s""",
                     [digest, order_id],
                 )
-                return Response({"order_id": order_id, "status": "out_for_delivery", "detail": f"OTP sent to {recipient}."})
+                return Response({
+                    "order_id": order_id, "status": "out_for_delivery",
+                    "provider": provider, "detail": f"OTP sent to the customer's registered email using {provider}."
+                })
 
             if action != "verify":
                 return Response({"detail": "Choose start or verify action."}, status=400)
