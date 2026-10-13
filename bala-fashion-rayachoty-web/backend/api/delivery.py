@@ -119,6 +119,37 @@ def delivery_staff(request):
 
 
 @api_view(["PATCH"])
+def delivery_availability(request):
+    """Let an authorized delivery person pause or resume accepting new assignments."""
+    user, profile, error = _role_user(request, {"delivery_boy"})
+    if error:
+        return error
+    availability = str(request.data.get("availability_status") or "").strip().lower()
+    if availability not in {"available", "offline"}:
+        return Response({"detail": "Choose Available or Offline."}, status=400)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """update public.profiles
+                   set availability_status=case when is_active then %s else 'offline' end,
+                       updated_at=now()
+                   where id=%s and role='delivery_boy'
+                   returning id,is_active,availability_status""",
+                [availability, user["id"]],
+            )
+            row = cursor.fetchone()
+        if not row:
+            return Response({"detail": "Your delivery account is not activated. Contact the administrator."}, status=403)
+        return Response({
+            "id": str(row[0]), "is_active": row[1],
+            "availability_status": row[2],
+            "detail": "You are now accepting deliveries." if row[2] == "available" else "You are offline and will not receive new assignments.",
+        })
+    except Exception:
+        return Response({"detail": "Could not update your availability. Verify the delivery-role migration."}, status=503)
+
+
+@api_view(["PATCH"])
 def assign_delivery_staff(request):
     """Admins assign a delivery person only to a packed or dispatched order."""
     user, profile, error = _role_user(request, {"admin"})
