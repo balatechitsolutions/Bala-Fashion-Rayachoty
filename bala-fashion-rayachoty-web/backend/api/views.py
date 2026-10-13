@@ -445,7 +445,7 @@ def products(request):
     params.append(max(1,limit))
     try:
         with connection.cursor() as c:
-            c.execute(f"""select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.category_id,c.name as category_name,c.slug as category_slug,p.vendor_id,v.name as vendor_name,v.slug as vendor_slug from public.products p join public.vendors v on v.id=p.vendor_id left join public.categories c on c.id=p.category_id where {' and '.join(where)} order by p.created_at desc limit %s""",params)
+            c.execute(f"""select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.category_id,c.name as category_name,c.slug as category_slug,p.vendor_id,v.slug as vendor_slug from public.products p join public.vendors v on v.id=p.vendor_id left join public.categories c on c.id=p.category_id where {' and '.join(where)} order by p.created_at desc limit %s""",params)
             rows=_rows(c)
         return Response({"results":rows,"count":len(rows)})
     except Exception:return Response({"detail":"Products are unavailable. Check the backend database connection."},status=503)
@@ -859,7 +859,11 @@ def seller_dashboard(request):
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
                           v.name as vendor_name,o.payment_method,o.subtotal,o.delivery_fee,
-                          o.address_snapshot,o.notes,
+                          o.notes,
+                          case when %s='admin' then jsonb_build_object(
+                            'latitude',o.address_snapshot->>'latitude',
+                            'longitude',o.address_snapshot->>'longitude'
+                          ) else null end as delivery_coordinates,
                           coalesce(json_agg(json_build_object(
                             'product_id',oi.product_id,'product_name',oi.product_name,
                             'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,
@@ -870,7 +874,7 @@ def seller_dashboard(request):
                    left join public.order_items oi on oi.order_id=o.id
                    where o.vendor_id = any(%s)
                    group by o.id,v.name order by o.created_at desc limit 50""",
-                [store_ids],
+                [prof["role"], store_ids],
             )
             managed_orders = _rows(c)
         return Response({

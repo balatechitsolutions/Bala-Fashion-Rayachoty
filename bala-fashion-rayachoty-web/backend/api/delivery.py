@@ -20,7 +20,7 @@ def _valid_uuid(value):
         return None
 
 
-@api_view(["GET", "POST", "DELETE"])
+@api_view(["GET", "POST", "DELETE", "PATCH"])
 def delivery_staff(request):
     """Admins can list delivery staff and authorize an existing Supabase user."""
     user, profile, error = _role_user(request, {"admin"})
@@ -46,20 +46,46 @@ def delivery_staff(request):
                     if existing_profile and existing_profile[0] in {"admin", "vendor"}:
                         return Response({"detail": "This user already has an admin/vendor role. Use a separate customer account for delivery work."}, status=409)
                     cursor.execute(
-                        """insert into public.profiles(id, full_name, phone, role)
-                           values (%s, %s, %s, 'delivery_boy')
+                        """insert into public.profiles(id, full_name, phone, role, is_active, availability_status)
+                           values (%s, %s, %s, 'delivery_boy', false, 'offline')
                            on conflict (id) do update set
                              full_name=case when excluded.full_name<>'' then excluded.full_name else public.profiles.full_name end,
                              phone=case when excluded.phone<>'' then excluded.phone else public.profiles.phone end,
-                             role='delivery_boy', updated_at=now()
-                           returning id, full_name, phone, role""",
+                             role='delivery_boy', is_active=false, availability_status='offline', updated_at=now()
+                           returning id, full_name, phone, role, is_active, availability_status""",
                         [staff_id, str(request.data.get("full_name") or "").strip()[:120],
                          str(request.data.get("phone") or "").strip()[:30]],
                     )
                     row = cursor.fetchone()
-            return Response({"id": str(row[0]), "full_name": row[1], "phone": row[2], "role": row[3]}, status=201)
+            return Response({"id": str(row[0]), "full_name": row[1], "phone": row[2], "role": row[3], "is_active": row[4], "availability_status": row[5]}, status=201)
         except Exception:
             return Response({"detail": "Delivery staff could not be authorized. Apply the delivery-role SQL migration first."}, status=503)
+
+
+    if request.method == "PATCH":
+        staff_id = _valid_uuid(request.data.get("id"))
+        active = request.data.get("is_active")
+        availability = str(request.data.get("availability_status") or "").strip().lower()
+        if not staff_id:
+            return Response({"detail": "Choose a valid delivery staff account."}, status=400)
+        if active is not None and not isinstance(active, bool):
+            return Response({"detail": "is_active must be true or false."}, status=400)
+        if availability and availability not in {"available", "busy", "offline"}:
+            return Response({"detail": "Choose available, busy, or offline."}, status=400)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("select id from public.profiles where id=%s and role='delivery_boy'", [staff_id])
+                if not cursor.fetchone():
+                    return Response({"detail": "Delivery staff account not found."}, status=404)
+                cursor.execute("""update public.profiles set is_active=coalesce(%s,is_active),
+                    availability_status=case when coalesce(%s,is_active)=false then 'offline'
+                    when %s<>'' then %s else availability_status end,updated_at=now()
+                    where id=%s and role='delivery_boy' returning id,is_active,availability_status""",
+                    [active, active, availability, availability, staff_id])
+                row = cursor.fetchone()
+            return Response({"id": str(row[0]), "is_active": row[1], "availability_status": row[2]})
+        except Exception:
+            return Response({"detail": "Could not update delivery staff availability. Apply the delivery assignment migration."}, status=503)
 
     if request.method == "DELETE":
         staff_id = _valid_uuid(request.data.get("id") or request.query_params.get("id"))
@@ -80,7 +106,7 @@ def delivery_staff(request):
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                """select p.id, p.full_name, p.phone, u.email
+                """select p.id, p.full_name, p.phone, u.email, coalesce(p.is_active,false) as is_active, coalesce(p.availability_status,'offline') as availability_status, p.latitude,p.longitude,p.last_location_at
                    from public.profiles p
                    left join auth.users u on u.id=p.id
                    where p.role='delivery_boy'
@@ -107,9 +133,12 @@ def assign_delivery_staff(request):
     try:
         with transaction.atomic():
             with connection.cursor() as cursor:
-                cursor.execute("select id from public.profiles where id=%s and role='delivery_boy'", [staff_id])
-                if not cursor.fetchone():
+                cursor.execute("""select id,full_name,is_active,availability_status from public.profiles where id=%s and role='delivery_boy' for update""", [staff_id])
+                staff = cursor.fetchone()
+                if not staff:
                     return Response({"detail": "Choose an authorized delivery-boy account."}, status=400)
+                if not staff[2] or staff[3] != "available":
+                    return Response({"detail": "Delivery person must be activated and set to Available before assignment."}, status=409)
                 cursor.execute(
                     """update public.orders
                        set assigned_delivery_boy_id=%s, updated_at=now()
@@ -120,7 +149,8 @@ def assign_delivery_staff(request):
                 row = cursor.fetchone()
                 if not row:
                     return Response({"detail": "Order not found or it must be packed/out for delivery before assignment."}, status=409)
-        return Response({"id": str(row[0]), "order_number": row[1], "status": row[2], "assigned_delivery_boy_id": str(row[3])})
+                cursor.execute("""insert into public.delivery_assignment_notifications(recipient_id,order_id,order_number,message) values (%s,%s,%s,%s)""", [staff_id, str(row[0]), str(row[1]), "Order " + str(row[1]) + " has been assigned to you."])
+        return Response({"id": str(row[0]), "order_number": row[1], "status": row[2], "assigned_delivery_boy_id": str(row[3]), "notification_created": True})
     except Exception:
         return Response({"detail": "Could not assign delivery staff. Apply the delivery-role SQL migration first."}, status=503)
 
@@ -203,6 +233,41 @@ def my_delivery_orders(request):
                 [user["id"]],
             )
             rows = _rows(cursor)
-        return Response({"results": rows, "count": len(rows)})
+            cursor.execute("""select id,order_number,message,created_at from public.delivery_assignment_notifications
+                where recipient_id=%s and read_at is null order by created_at desc limit 20""", [user["id"]])
+            notifications = _rows(cursor)
+            if notifications:
+                cursor.execute("update public.delivery_assignment_notifications set read_at=now() where recipient_id=%s and read_at is null", [user["id"]])
+        return Response({"results": rows, "count": len(rows), "notifications": notifications})
     except Exception:
         return Response({"detail": "Assigned deliveries could not be loaded. Apply the delivery-role SQL migration first."}, status=503)
+
+@api_view(["POST"])
+def delivery_location(request):
+    """Save the active delivery person's latest GPS location and availability."""
+    user, profile, error = _role_user(request, {"delivery_boy"})
+    if error:
+        return error
+    try:
+        latitude = float(request.data.get("latitude"))
+        longitude = float(request.data.get("longitude"))
+    except (TypeError, ValueError):
+        return Response({"detail": "Valid latitude and longitude are required."}, status=400)
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return Response({"detail": "GPS coordinates are outside valid ranges."}, status=400)
+    availability = str(request.data.get("availability_status") or "available").strip().lower()
+    if availability not in {"available", "busy", "offline"}:
+        return Response({"detail": "Choose available, busy, or offline."}, status=400)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""update public.profiles set latitude=%s,longitude=%s,last_location_at=now(),
+                availability_status=case when is_active then %s else 'offline' end,updated_at=now()
+                where id=%s and role='delivery_boy' and is_active=true
+                returning id,availability_status,last_location_at""",
+                [latitude, longitude, availability, user["id"]])
+            row = cursor.fetchone()
+        if not row:
+            return Response({"detail": "Your delivery account is not activated. Ask the administrator to activate it."}, status=403)
+        return Response({"id": str(row[0]), "availability_status": row[1], "last_location_at": row[2].isoformat()})
+    except Exception:
+        return Response({"detail": "Location could not be saved. Apply the delivery assignment migration."}, status=503)
