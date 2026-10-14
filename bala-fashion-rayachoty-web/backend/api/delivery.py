@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from .views import (
     _insert_account_notification,
     _notify_admins,
+    _order_address_issues,
     _role_user,
     _rows,
 )
@@ -146,15 +147,30 @@ def assign_delivery_staff(request):
                 if staff[3] != "available":
                     return Response({"detail": "Choose a delivery person who is Online before assignment."}, status=409)
                 cursor.execute(
+                    """select id, order_number, status, coalesce(address_snapshot, '{}'::jsonb)
+                       from public.orders
+                       where id=%s and status in ('placed','confirmed','packed','out_for_delivery')
+                       for update""",
+                    [order_id],
+                )
+                order = cursor.fetchone()
+                if not order:
+                    return Response({"detail": "Order not found or not ready for delivery assignment."}, status=409)
+                address_issues = _order_address_issues(order[3])
+                if address_issues:
+                    return Response({
+                        "detail": "Delivery assignment blocked because this order's saved drop-off address is incomplete or invalid: "
+                                  + ", ".join(address_issues)
+                                  + ". Ask an administrator to correct the order address using the audited address-repair workflow."
+                    }, status=409)
+                cursor.execute(
                     """update public.orders
                        set assigned_delivery_boy_id=%s, updated_at=now()
-                       where id=%s and status in ('placed','confirmed','packed','out_for_delivery')
+                       where id=%s
                        returning id, order_number, status, assigned_delivery_boy_id""",
                     [staff_id, order_id],
                 )
                 row = cursor.fetchone()
-                if not row:
-                    return Response({"detail": "Order not found or not ready for delivery assignment."}, status=409)
                 assignment_message = "Order " + str(row[1]) + " has been assigned to you."
                 cursor.execute("""insert into public.delivery_assignment_notifications(recipient_id,order_id,order_number,message) values (%s,%s,%s,%s)""", [staff_id, str(row[0]), str(row[1]), assignment_message])
                 from .push_notifications import send_push_to_user
