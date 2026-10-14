@@ -504,25 +504,10 @@ export default function App() {
   if(vendors.length>1)return notify('Checkout one seller at a time.')
   setBusy(true)
   try{
-   // Re-read saved addresses at submit time. The form can contain a partially
-   // edited/stale address (for example, line1 is present but phone/coordinates
-   // are empty), so only checking line1 before loading the default is unsafe.
-   let checkoutAddress={...address}
-   let savedAddresses=[]
-   try {
-    const saved=await api('/addresses/',{token:session.access_token})
-    savedAddresses=Array.isArray(saved.results)?saved.results:[]
-   } catch(error) {
-    if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.phone||'').trim()||!String(checkoutAddress.line1||'').trim()||checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null)throw error
-   }
-   let preferred=savedAddresses.find(item=>item.id&&item.id===checkoutAddress.id)||savedAddresses.find(item=>item.is_default)||savedAddresses[0]
-   // A checkout form is not proof that an address exists in the database.
-   // If this customer has no saved address yet, persist the completed form first
-   // and use the server-returned ID for order creation. The order endpoint then
-   // copies that database record into the immutable order-time snapshot.
-   if(!preferred){
-    const recipient=String(checkoutAddress.recipient_name||'').trim()
-    const phone=String(checkoutAddress.phone||'').trim()
+   // Use the address and drop-off contact entered for THIS order only.
+   // Never read or substitute a customer profile/default/saved address.
+   const checkoutAddress={...address}
+   const phone=String(checkoutAddress.phone||'').trim()
     const line1=String(checkoutAddress.line1||'').trim()
     const latitude=Number(checkoutAddress.latitude),longitude=Number(checkoutAddress.longitude)
     const phoneDigits=phone.replace(/[^0-9]/g,'').length
