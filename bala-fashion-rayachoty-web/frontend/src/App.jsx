@@ -617,11 +617,19 @@ export default function App() {
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}>
     <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from this store.</p>
     {session && <button type="button" className="secondary full" onClick={()=>{setAddressReturnDrawer('checkout');setDrawer('addresses')}}><FiMapPin size={15}/> Choose a saved address / manage addresses</button>}
-    { [['recipient_name','Recipient name'],['phone','Mobile number'],['line1','House / street address'],['line2','Address line 2 (optional)'],['landmark','Landmark']].map(([key,label])=><label key={key}>{label}<input required={!['line2','landmark'].includes(key)} value={address[key]} onChange={e=>setAddress({...address,[key]:e.target.value})}/></label>)}
+    {address.id ? <div className="checkout-saved-address">
+     <div className="checkout-saved-address-head"><b>Saved delivery address</b><span>Order placement uses this exact saved address.</span></div>
+     <p><b>{address.recipient_name}</b> · {address.phone}</p>
+     <p>{address.line1}{address.line2 ? ', '+address.line2 : ''}</p>
+     {address.landmark&&<p>Landmark: {address.landmark}</p>}
+     <p>{address.city||'Rayachoty'}, {address.state||'Andhra Pradesh'} {address.postal_code||''}</p>
+     <p className="checkout-address-coordinates">Map pin: {address.latitude}, {address.longitude}</p>
+     <a href={`https://www.google.com/maps?q=${encodeURIComponent(String(address.latitude)+','+String(address.longitude))}`} target="_blank" rel="noreferrer">View saved delivery location</a>
+     <button type="button" className="secondary full" onClick={()=>{setAddressReturnDrawer('checkout');setDrawer('addresses')}}>Change or edit saved address</button>
+    </div> : <div className="warning">A saved default delivery address is required. Use “Choose a saved address / manage addresses” above to add an address and set it as default.</div>}
     <div className="local-service-note"><FiMapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from the selling vendor</div>
-    <LocationPicker label="Your delivery location" latitude={address.latitude} longitude={address.longitude} onChange={({latitude,longitude})=>setAddress(p=>({...p,latitude,longitude}))}/>
     <div className="delivery-fee-preview">
-     {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>Select a map location to calculate the delivery charge.</span>}
+     {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>{address.id?'Calculating delivery fee for the saved address…':'Save a default address to calculate delivery.'}</span>}
     </div>
     <label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label>
     <div className="cod"><FiCheck size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div>
@@ -630,7 +638,7 @@ export default function App() {
      <div><span>Items subtotal</span><b>{money(subtotal)}</b></div>
      <div><span>Delivery charge</span><b>{deliveryQuote?money(deliveryQuote.delivery_fee):'Calculate route first'}</b></div>
      <div><span>Total</span><b>{deliveryQuote?money(subtotal+Number(deliveryQuote.delivery_fee)):'—'}</b></div>
-     <button className="primary full" disabled={busy||subtotal<MINIMUM_ORDER_AMOUNT||!deliveryQuote||deliveryQuoteLoading}>{busy?'Placing order…':'Place COD order'} <FiArrowRight size={16}/></button>
+     <button className="primary full" disabled={busy||!address.id||subtotal<MINIMUM_ORDER_AMOUNT||!deliveryQuote||deliveryQuoteLoading}>{busy?'Placing order…':'Place COD order'} <FiArrowRight size={16}/></button>
     </div>
    </form>}
    {drawer==='orders'&&<div className="drawer-body account-orders-panel">{!session?<div className="empty"><p>Sign in to see your orders.</p><button className="primary" onClick={()=>setDrawer('account')}>Sign in to continue</button></div>:!orders.length?<div className="empty"><FiPackage size={28}/><h3>No orders yet</h3><p>Your orders will appear here after checkout.</p><button className="secondary" onClick={getOrders}>Refresh orders</button></div>:<><div className="orders-intro"><span className="orders-intro-icon"><FiPackage size={20}/></span><div><b>Your order history</b><small>{orders.length} order{orders.length===1?'':'s'} · Latest first</small></div><button className="secondary" onClick={getOrders}>Refresh</button></div>{orders.map(o=><button type="button" className="account-order-card" key={o.id} onClick={()=>openOrderDetails(o)}><span className="account-order-thumb">{o.items?.[0]?.image_url?<img src={o.items[0].image_url} alt=""/>:<FiPackage size={21}/>}</span><span className="account-order-main"><b>{o.order_number}</b><small>{new Date(o.created_at).toLocaleDateString('en-IN',{dateStyle:'medium'})} · {o.items?.length||0} item line{(o.items?.length||0)===1?'':'s'}</small><span className={'order-status-chip status-'+String(o.status||'placed').replaceAll('_','-')}>{String(o.status||'placed').replaceAll('_',' ')}</span></span><span className="account-order-total"><b>{money(o.total)}</b><small>View details <FiArrowRight size={12}/></small></span></button>)}</>}</div>}
