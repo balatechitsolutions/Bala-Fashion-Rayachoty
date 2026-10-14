@@ -508,53 +508,11 @@ export default function App() {
    // Never read or substitute a customer profile/default/saved address.
    const checkoutAddress={...address}
    const phone=String(checkoutAddress.phone||'').trim()
-    const line1=String(checkoutAddress.line1||'').trim()
-    const latitude=Number(checkoutAddress.latitude),longitude=Number(checkoutAddress.longitude)
-    const phoneDigits=phone.replace(/[^0-9]/g,'').length
-    const validPhone=/^[0-9+() -]{10,16}$/.test(phone)&&phoneDigits>=10&&phoneDigits<=15
-    const validCoordinates=checkoutAddress.latitude!==''&&checkoutAddress.longitude!==''&&checkoutAddress.latitude!=null&&checkoutAddress.longitude!=null&&Number.isFinite(latitude)&&Number.isFinite(longitude)&&latitude>=-90&&latitude<=90&&longitude>=-180&&longitude<=180
-    if(recipient&&line1&&validPhone&&validCoordinates){
-     const saved=await api('/addresses/',{method:'POST',token:session.access_token,body:JSON.stringify({
-      recipient_name:recipient,phone,line1,
-      line2:String(checkoutAddress.line2||''),landmark:String(checkoutAddress.landmark||''),
-      city:'Rayachoty',state:'Andhra Pradesh',postal_code:String(checkoutAddress.postal_code||''),
-      latitude,longitude,notes:String(checkoutAddress.notes||''),is_default:true
-     })})
-     if(saved?.id){
-      preferred=saved
-      savedAddresses=[saved,...savedAddresses]
-      checkoutAddress={...saved,latitude:String(saved.latitude??''),longitude:String(saved.longitude??'')}
-      setAddress(checkoutAddress)
-     }
-    }
-   }
-   if(preferred){
-    const keep=(value,fallback)=>String(value??'').trim()!==''?value:(fallback??'')
-    const currentCoordinates=checkoutAddress.latitude!==''&&checkoutAddress.longitude!==''&&checkoutAddress.latitude!=null&&checkoutAddress.longitude!=null&&Number.isFinite(Number(checkoutAddress.latitude))&&Number.isFinite(Number(checkoutAddress.longitude))
-    checkoutAddress={
-     ...preferred,...checkoutAddress,
-     id:preferred.id,
-     recipient_name:keep(checkoutAddress.recipient_name,preferred.recipient_name),
-     phone:keep(checkoutAddress.phone,preferred.phone),
-     line1:keep(checkoutAddress.line1,preferred.line1),
-     line2:keep(checkoutAddress.line2,preferred.line2),
-     landmark:keep(checkoutAddress.landmark,preferred.landmark),
-     city:keep(checkoutAddress.city,preferred.city||'Rayachoty'),
-     state:keep(checkoutAddress.state,preferred.state||'Andhra Pradesh'),
-     postal_code:keep(checkoutAddress.postal_code,preferred.postal_code),
-     latitude:String(currentCoordinates?checkoutAddress.latitude:(preferred.latitude??'')),
-     longitude:String(currentCoordinates?checkoutAddress.longitude:(preferred.longitude??'')),
-     notes:keep(checkoutAddress.notes,preferred.notes),
-    }
-    setAddress(checkoutAddress)
-   }
-   const phone=String(checkoutAddress.phone||'').trim()
-    const phoneDigits=phone.replace(/[^0-9]/g,'').length
-   if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.line1||'').trim()||! /^[0-9+() \-]{10,16}$/.test(phone)||phoneDigits<10||phoneDigits>15)return notify('Address incomplete: enter recipient name, a valid 10–15 digit mobile number, and house/street address.')
+   const phoneDigits=phone.replace(/[^0-9]/g,'').length
+   if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.line1||'').trim()||! /^[0-9+() \\-]{10,16}$/.test(phone)||phoneDigits<10||phoneDigits>15)return notify('Address incomplete: enter drop-off recipient name, a valid 10–15 digit mobile number, and house/street address.')
    const latitude=Number(checkoutAddress.latitude),longitude=Number(checkoutAddress.longitude)
    if(checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null||!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude < -90||latitude > 90||longitude < -180||longitude > 180)return notify('Address incomplete: select a valid delivery location on the map or use your current location.')
-   // Quote against the final resolved coordinates, not an earlier address
-   // state captured before the saved default was restored.
+   // Quote against the coordinates entered for this order.
    const checkoutQuote=await api('/delivery/quote/',{method:'POST',token:session.access_token,body:JSON.stringify({vendor_id:cart[0]?.vendor_id,latitude,longitude})})
    if(!checkoutQuote||checkoutQuote.vendor_id!==cart[0]?.vendor_id)return notify('Could not verify delivery for this address. Please review the pin and retry.')
    const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
