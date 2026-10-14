@@ -601,7 +601,7 @@ def orders(request):
         customer_longitude = _coordinate(address.get("longitude"), "longitude")
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=400)
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude}
+    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude,"saved_address_id":str(address.get("id") or "")[:80]}
     try:
         with transaction.atomic():
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
@@ -663,7 +663,7 @@ def orders(request):
                     c, "placed", "New order placed",
                     f"Order {order[1]} has been placed.", order_id,
                 )
-            return Response({"id":str(order[0]),"order_number":order[1],"status":order[2],"payment_method":order[3],"subtotal":str(order[4]),"delivery_fee":str(order[5]),"total":str(order[6]),"created_at":order[7].isoformat()},status=201)
+            return Response({"id":str(order[0]),"order_number":order[1],"status":order[2],"payment_method":order[3],"subtotal":str(order[4]),"delivery_fee":str(order[5]),"total":str(order[6]),"created_at":order[7].isoformat(),"address_snapshot":snapshot,"notes":str(data.get("notes",""))[:500]},status=201)
     except ValueError as e:return Response({"detail":str(e)},status=409)
     except Exception:return Response({"detail":"Could not place order. Please retry or contact support."},status=503)
 
