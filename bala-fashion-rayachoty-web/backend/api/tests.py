@@ -47,6 +47,31 @@ class EndpointTests(SimpleTestCase):
             with patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(side_effect=Exception("db down")))):
                 res=views.health(req)
         self.assertEqual(res.status_code,503)
+    def test_order_address_resolves_default_from_database(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (
+            "a1b2c3d4-1111-4222-8333-123456789abc", "Customer", "9876543210",
+            "12 Main Road", "", "Near school", "Rayachoty", "Andhra Pradesh",
+            "516269", 14.05, 78.75, "",
+        )
+        resolved = views._resolve_order_address(cursor, "customer-uuid")
+        self.assertEqual(resolved["recipient_name"], "Customer")
+        self.assertEqual(resolved["line1"], "12 Main Road")
+        self.assertEqual(resolved["id"], "a1b2c3d4-1111-4222-8333-123456789abc")
+        self.assertIn("is_default=true", cursor.execute.call_args.args[0])
+
+    def test_order_address_rejects_address_not_owned_by_customer(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        with self.assertRaisesRegex(ValueError, "not found in your account"):
+            views._resolve_order_address(cursor, "customer-uuid", "a1b2c3d4-1111-4222-8333-123456789abc")
+
+    def test_order_address_requires_default_when_no_address_id_is_sent(self):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        with self.assertRaisesRegex(ValueError, "No default delivery address"):
+            views._resolve_order_address(cursor, "customer-uuid")
+
     def test_orders_requires_bearer(self):
         res=views.orders(self.factory.get("/api/orders/"))
         self.assertEqual(res.status_code,401)
