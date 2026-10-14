@@ -285,8 +285,8 @@ class EndpointTests(SimpleTestCase):
              patch.object(views, "connection", fake_connection), \
              patch.object(views, "transaction", SimpleNamespace(atomic=lambda: nullcontext())):
             response = views.orders(req)
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("No default delivery address", response.data["detail"])
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("choose a saved delivery address", response.data["detail"].lower())
         executed_sql = [str(call.args[0]).lower() for call in cursor.execute.call_args_list]
         self.assertFalse(any("insert into public.orders" in statement for statement in executed_sql))
 

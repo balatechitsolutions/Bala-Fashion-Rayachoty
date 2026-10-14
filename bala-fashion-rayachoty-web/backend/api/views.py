@@ -662,6 +662,12 @@ def orders(request):
     # Resolve the selected/default saved address on the server. Never trust
     # address fields sent by the browser: the order receives a checkout-time snapshot.
     requested_address_id = submitted_address.get("saved_address_id") or submitted_address.get("id") or ""
+    # Older clients may submit editable address fields without a saved-address ID.
+    # Reject those requests rather than silently substituting a different default address.
+    if not requested_address_id and submitted_address:
+        return Response({
+            "detail": "Refresh the storefront and choose a saved delivery address before placing this order."
+        }, status=409)
     try:
         with transaction.atomic():
             with connection.cursor() as c:
