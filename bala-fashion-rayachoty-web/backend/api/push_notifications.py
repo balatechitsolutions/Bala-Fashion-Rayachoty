@@ -85,10 +85,16 @@ def notification_devices(request):
                 cursor.execute(
                     """insert into public.push_notification_devices(user_id,token,platform,updated_at)
                        values(%s,%s,'web',now())
-                       on conflict(token) do update set user_id=excluded.user_id,
-                         platform='web',updated_at=now()""",
+                       on conflict(token) do update set
+                         user_id=case when public.push_notification_devices.user_id=excluded.user_id
+                                      then excluded.user_id else public.push_notification_devices.user_id end,
+                         platform='web',updated_at=now()
+                       where public.push_notification_devices.user_id=excluded.user_id
+                       returning user_id""",
                     [user["id"], token],
                 )
+                if not cursor.fetchone():
+                    return Response({"detail": "This browser token is already registered to another account. Unregister it there before reusing it."}, status=409)
                 return Response({"registered": True})
             cursor.execute(
                 "delete from public.push_notification_devices where user_id=%s and token=%s",
