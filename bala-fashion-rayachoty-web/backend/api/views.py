@@ -33,6 +33,31 @@ def _coordinate(value, name):
         raise ValueError(f"Choose a valid map location for {name}.")
     return result
 
+def _order_address_issues(address):
+    """Return missing/invalid fields that make an order unsafe to hand to delivery."""
+    if not isinstance(address, dict):
+        return ["saved order delivery address"]
+    issues = []
+    recipient = str(address.get("recipient_name") or "").strip()
+    phone = str(address.get("phone") or "").strip()
+    line1 = str(address.get("line1") or "").strip()
+    digits = sum(character.isdigit() for character in phone)
+    if not recipient:
+        issues.append("recipient name")
+    if not (re.fullmatch(r"[0-9+() \-]{10,16}", phone) and 10 <= digits <= 15):
+        issues.append("valid recipient phone number")
+    if not line1:
+        issues.append("house/street address")
+    city = str(address.get("city") or "").strip().casefold()
+    if city not in {"rayachoty", "rayachoti"}:
+        issues.append("Rayachoty delivery city")
+    try:
+        _coordinate(address.get("latitude"), "latitude")
+        _coordinate(address.get("longitude"), "longitude")
+    except ValueError:
+        issues.append("valid map coordinates")
+    return issues
+
 def delivery_fee_for_distance(distance_meters):
     """Charge ₹5 for each started 500-metre road-distance block."""
     try:
@@ -639,18 +664,15 @@ def orders(request):
     if not isinstance(address, dict):
         return Response({"detail": "Enter the delivery address and drop-off contact details."}, status=400)
 
+    address_issues = _order_address_issues(address)
+    if address_issues:
+        return Response({
+            "detail": "Delivery address is incomplete or invalid. Correct these fields before placing the order: " + ", ".join(address_issues) + "."
+        }, status=400)
     recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
-    phone_digits=sum(character.isdigit() for character in phone)
-    if not recipient or not line1 or not re.fullmatch(r"[0-9+() \-]{10,16}",phone) or not 10<=phone_digits<=15:
-        return Response({"detail":"Delivery address is incomplete. Enter the drop-off recipient name, a valid 10–15 digit mobile number and house/street address."},status=400)
     city_name = str(address.get("city", "Rayachoty")).strip()[:100] or "Rayachoty"
-    if city_name.casefold() not in {"rayachoty", "rayachoti"}:
-        return Response({"detail": "Bala Fashion currently delivers only within the Rayachoty local service area."}, status=400)
-    try:
-        customer_latitude = _coordinate(address.get("latitude"), "latitude")
-        customer_longitude = _coordinate(address.get("longitude"), "longitude")
-    except ValueError as exc:
-        return Response({"detail": str(exc)}, status=400)
+    customer_latitude = _coordinate(address.get("latitude"), "latitude")
+    customer_longitude = _coordinate(address.get("longitude"), "longitude")
     snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude}
     try:
         with transaction.atomic():
