@@ -1,6 +1,3 @@
--- Freeze seller identity/contact/pickup location on each order.
--- Existing rows are backfilled from the current vendor profile because no historical
--- vendor snapshot existed before this migration; future orders capture checkout-time values.
 alter table public.orders
   add column if not exists vendor_name_snapshot text not null default '',
   add column if not exists vendor_phone_snapshot text not null default '',
@@ -24,13 +21,8 @@ where v.id = o.vendor_id
 
 comment on column public.orders.address_snapshot is
   'Customer delivery address and map coordinates captured at checkout; never resolve from the live address book for an existing order.';
-comment on column public.orders.vendor_name_snapshot is
-  'Vendor/store name captured when this order was placed.';
-comment on column public.orders.vendor_phone_snapshot is
-  'Vendor contact phone captured when this order was placed.';
-comment on column public.orders.vendor_address_snapshot is
-  'Vendor pickup address captured when this order was placed.';
-comment on column public.orders.vendor_latitude_snapshot is
-  'Vendor pickup latitude captured when this order was placed.';
-comment on column public.orders.vendor_longitude_snapshot is
-  'Vendor pickup longitude captured when this order was placed.';
+comment on column public.orders.vendor_name_snapshot is 'Vendor/store name captured when this order was placed.';
+comment on column public.orders.vendor_phone_snapshot is 'Vendor contact phone captured when this order was placed.';
+comment on column public.orders.vendor_address_snapshot is 'Vendor pickup address captured when this order was placed.';
+comment on column public.orders.vendor_latitude_snapshot is 'Vendor pickup latitude captured when this order was placed.';
+comment on column public.orders.vendor_longitude_snapshot is 'Vendor pickup longitude captured when this order was placed.';

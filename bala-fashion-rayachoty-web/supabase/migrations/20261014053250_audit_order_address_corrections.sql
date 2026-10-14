@@ -11,5 +11,4 @@ create index if not exists order_address_audit_order_created_idx
   on public.order_address_audit(order_id, created_at desc);
 alter table public.order_address_audit enable row level security;
 revoke all on public.order_address_audit from anon, authenticated;
-comment on table public.order_address_audit is
-  'Private audit trail for administrator corrections to immutable order delivery addresses.';
+comment on table public.order_address_audit is 'Private audit trail for administrator corrections to immutable order delivery addresses.';
