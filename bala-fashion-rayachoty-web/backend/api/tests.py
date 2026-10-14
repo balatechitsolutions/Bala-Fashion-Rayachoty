@@ -279,3 +279,47 @@ class EndpointTests(SimpleTestCase):
         with patch.object(views, "_user", return_value=(user, None)), patch.object(views, "_profile", return_value=profile):
             response = delivery.delivery_staff(req)
         self.assertEqual(response.status_code, 403)
+
+
+    def test_admin_order_list_uses_immutable_order_address_and_vendor_snapshots(self):
+        req = self.factory.get("/api/orders/manage/", HTTP_AUTHORIZATION="Bearer test")
+        user = {"id": "2d0f5b2c-cf10-463e-9190-ab2561a84229"}
+        profile = {"id": user["id"], "full_name": "Admin", "phone": "", "role": "admin"}
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.description = []
+        cursor.fetchall.return_value = []
+        with patch.object(views, "_role_user", return_value=(user, profile, None)), \\
+             patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+            response = views.manage_orders(req)
+
+        self.assertEqual(response.status_code, 200)
+        sql = cursor.execute.call_args.args[0].lower()
+        self.assertIn("coalesce(o.address_snapshot, '{}'::jsonb) as address_snapshot", sql)
+        self.assertIn("o.vendor_name_snapshot as vendor_name", sql)
+        self.assertIn("o.vendor_address_snapshot as vendor_address", sql)
+        self.assertIn("o.vendor_phone_snapshot as vendor_phone", sql)
+        self.assertNotIn("from public.customer_addresses", sql)
+        self.assertNotIn("v.name as vendor_name", sql)
+
+    def test_delivery_order_list_uses_immutable_order_snapshots(self):
+        from . import delivery
+
+        req = self.factory.get("/api/delivery/orders/", HTTP_AUTHORIZATION="Bearer test")
+        user = {"id": "b0e0f7e0-4b72-4d47-9ef9-a1b7c6c8e8ab"}
+        profile = {"id": user["id"], "full_name": "Delivery", "phone": "", "role": "delivery_boy"}
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.description = []
+        cursor.fetchall.return_value = []
+        with patch.object(delivery, "_role_user", return_value=(user, profile, None)), \\
+             patch.object(delivery, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
+            response = delivery.my_delivery_orders(req)
+
+        self.assertEqual(response.status_code, 200)
+        sql = cursor.execute.call_args.args[0].lower()
+        self.assertIn("o.address_snapshot as address_snapshot", sql)
+        self.assertIn("o.vendor_name_snapshot as vendor_name", sql)
+        self.assertIn("o.vendor_address_snapshot as vendor_address", sql)
+        self.assertIn("o.vendor_phone_snapshot as vendor_phone", sql)
+        self.assertIn("where o.assigned_delivery_boy_id=%s", sql)
