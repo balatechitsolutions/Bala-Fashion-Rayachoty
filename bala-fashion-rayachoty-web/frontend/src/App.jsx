@@ -126,7 +126,7 @@ export default function App() {
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
  const [installPrompt,setInstallPrompt]=useState(null),[pushEnabled,setPushEnabled]=useState(false),[soundEnabled,setSoundEnabled]=useState(false),[alertsBusy,setAlertsBusy]=useState(false)
  const seenNotificationIds=useRef(null)
- const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),[sellerOrderSearch,setSellerOrderSearch]=useState(''),searchInputRef=useRef(null),[addressReturnDrawer,setAddressReturnDrawer]=useState('account'),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:''}),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
+ const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),[sellerOrderSearch,setSellerOrderSearch]=useState(''),searchInputRef=useRef(null),[addressReturnDrawer,setAddressReturnDrawer]=useState('account'),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:'',id:''}),[orderNotes,setOrderNotes]=useState(''),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
  const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
@@ -143,6 +143,20 @@ export default function App() {
   return()=>{window.removeEventListener('beforeinstallprompt',capture);window.removeEventListener('appinstalled',installed)}
  },[])
  useEffect(()=>{const canonical='bala-fashion-rayachoty-omega.vercel.app';const isVercelPreview=location.hostname.endsWith('.vercel.app')&&location.hostname!==canonical;if(isVercelPreview){const callbackHash=location.hash;const callbackQuery=location.search;const isOAuthCallback=callbackHash.includes('access_token=')||callbackHash.includes('refresh_token=')||callbackQuery.includes('code=')||callbackQuery.includes('error=');if(!isOAuthCallback)location.replace(`https://${canonical}${location.pathname}${location.search}${location.hash}`)}},[])
+ useEffect(()=>{
+  if(drawer!=='checkout'||!session?.access_token)return
+  let active=true
+  api('/addresses/',{token:session.access_token}).then(data=>{
+   const saved=(data.results||[]).find(item=>item.is_default)
+   if(!active||!saved)return
+   setAddress(current=>{
+    if(current.id||current.recipient_name||current.phone||current.line1)return current
+    return {...saved,latitude:String(saved.latitude??''),longitude:String(saved.longitude??'')}
+   })
+  }).catch(error=>{if(active)console.warn('Saved default delivery address could not be loaded:',error.message)})
+  return ()=>{active=false}
+ },[drawer,session?.access_token])
+
  useEffect(()=>{
   const vendorId=cart[0]?.vendor_id
   const lat=address.latitude,lng=address.longitude
@@ -492,6 +506,7 @@ export default function App() {
   e.preventDefault();if(busy)return
   if(subtotal<MINIMUM_ORDER_AMOUNT){notify(`Minimum order amount is ${money(MINIMUM_ORDER_AMOUNT)}. Add ${money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.`);setDrawer('cart');return}
   if(!session)return login()
+  if(!address.id)return notify('Choose a saved delivery address before placing your order.')
   if(vendors.length>1)return notify('Checkout one seller at a time.')
   setBusy(true)
   try{
@@ -507,7 +522,7 @@ export default function App() {
    const checkoutQuote=await api('/delivery/quote/',{method:'POST',token:session.access_token,body:JSON.stringify({vendor_id:cart[0]?.vendor_id,latitude,longitude})})
    if(!checkoutQuote||checkoutQuote.vendor_id!==cart[0]?.vendor_id)return notify('Could not verify delivery for this address. Please review the pin and retry.')
    const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
-   const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:checkoutAddress.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
+   const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:{...payload,saved_address_id:checkoutAddress.id},notes:orderNotes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
    const fallbackItems=cart.map(i=>({product_id:i.id,product_name:i.name,image_url:i.image_url,quantity:i.quantity,size:i.size,color:i.color,unit_price:i.price,line_total:Number(i.price)*i.quantity}))
    let createdOrder={...r,address_snapshot:r.address_snapshot||payload,items:fallbackItems}
    // Prefer the persisted server-side order representation for the details screen.
@@ -518,7 +533,7 @@ export default function App() {
     const match=persistedRows.find(item=>String(item.id)===String(r.id))
     if(match)createdOrder={...createdOrder,...match,address_snapshot:match.address_snapshot||createdOrder.address_snapshot,items:Array.isArray(match.items)?match.items:fallbackItems}
    }catch(readError){console.warn('Order created, but the refreshed order details could not be loaded:',readError.message)}
-   setCart([]);setAddress({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:''});setOrders(o=>[createdOrder,...o.filter(item=>String(item.id)!==String(createdOrder.id))]);setSelectedOrder(createdOrder);setOrderReturnDrawer('orders');setDeliveryQuote(null);setDrawer('order-details');notify(`Order ${r.order_number} placed successfully`)
+   setCart([]);setAddress({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:'',id:''});setOrderNotes('');setOrders(o=>[createdOrder,...o.filter(item=>String(item.id)!==String(createdOrder.id))]);setSelectedOrder(createdOrder);setOrderReturnDrawer('orders');setDeliveryQuote(null);setDrawer('order-details');notify(`Order ${r.order_number} placed successfully`)
   }catch(err){notify(err.message)}finally{setBusy(false)}
  }
  const catalogContent = <>
@@ -587,19 +602,23 @@ export default function App() {
    {drawer==='cart'&&<div className="drawer-body">{!cart.length?<div className="empty"><FiShoppingBag/><h3>Your bag is taking a break.</h3><p>Find a piece you love and add it here.</p><button className="primary" onClick={()=>setDrawer('')}>Keep exploring</button></div>:<>{cart.map(i=><div className="cart-item" key={i.key}><img src={i.image_url} alt={i.name}/><div><b>{i.name}</b><small>{i.size} {i.color&&`· ${i.color}`}</small><strong>{money(i.price)}</strong><div className="qty"><button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.max(1,x.quantity-1)}:x))}><FiMinus size={13}/></button>{i.quantity}<button onClick={()=>setCart(c=>c.map(x=>x.key===i.key?{...x,quantity:Math.min(Number(x.stock_quantity||20),x.quantity+1)}:x))}><FiPlus size={13}/></button><button className="remove" onClick={()=>setCart(c=>c.filter(x=>x.key!==i.key))}>Remove</button></div></div></div>)}{vendors.length>1&&<div className="warning">Please check out one seller at a time.</div>}{subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to continue.</div>}<div className="summary"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><small>Cash on delivery · Rayachoty service area</small><button className="primary full" disabled={vendors.length>1||subtotal<MINIMUM_ORDER_AMOUNT} onClick={()=>session?setDrawer('checkout'):setDrawer('account')}>Continue to checkout <FiArrowRight size={16}/></button></div></>}</div>}
    {drawer==='checkout'&&<form className="drawer-body form" onSubmit={place}>
     <p>Delivery is available only in Rayachoty. The final distance and fee are calculated on the server using the road route from this store.</p>
-     <p>Enter the contact person and exact drop-off location for this order. These details are saved with the order and are not taken from your saved customer addresses.</p>
-     <label>Drop-off recipient name<input required autoComplete="name" value={address.recipient_name} onChange={e=>setAddress({...address,recipient_name:e.target.value})} placeholder="Name of person receiving the order"/></label>
-     <label>Drop-off contact mobile<input required type="tel" inputMode="tel" autoComplete="tel" value={address.phone} onChange={e=>setAddress({...address,phone:e.target.value})} placeholder="10–15 digit mobile number"/></label>
-     <label>House / street address<input required autoComplete="street-address" value={address.line1} onChange={e=>setAddress({...address,line1:e.target.value})} placeholder="House number, street, area"/></label>
-     <label>Apartment / additional address details<input value={address.line2} onChange={e=>setAddress({...address,line2:e.target.value})} placeholder="Apartment, floor (optional)"/></label>
-     <label>Landmark<input value={address.landmark} onChange={e=>setAddress({...address,landmark:e.target.value})} placeholder="Nearby landmark (optional)"/></label>
-     <label>PIN code<input inputMode="numeric" autoComplete="postal-code" value={address.postal_code||''} onChange={e=>setAddress({...address,postal_code:e.target.value})} placeholder="PIN code (optional)"/></label>
-     <LocationPicker label="Pin the exact order drop-off location" latitude={address.latitude} longitude={address.longitude} onChange={({latitude,longitude})=>setAddress({...address,latitude,longitude})}/>
+     <p>Checkout uses a saved delivery address. The server reads the selected address from your account and freezes its details and map pin into this order when you place it.</p>
+    {address.id?<section className="notice">
+     <b>Delivery address {address.is_default?'· Default':''}</b>
+     <p>{address.recipient_name} · {address.phone}</p>
+     <p>{[address.line1,address.line2,address.landmark,address.city,address.state,address.postal_code].filter(Boolean).join(', ')}</p>
+     <p>Saved map pin: {address.latitude}, {address.longitude}</p>
+     <button type="button" className="secondary full" onClick={()=>{setAddressReturnDrawer('checkout');setDrawer('addresses')}}>Change saved address</button>
+    </section>:<section className="notice">
+     <b>Select a saved delivery address</b>
+     <p>Your default address is selected automatically. If you have not saved an address yet, add one and select it here before placing the order.</p>
+     <button type="button" className="secondary full" onClick={()=>{setAddressReturnDrawer('checkout');setDrawer('addresses')}}>Choose or add saved address</button>
+    </section>}
     <div className="local-service-note"><FiMapPin size={16}/> Rayachoty, Andhra Pradesh · Maximum 5 km road distance from the selling vendor</div>
     <div className="delivery-fee-preview">
      {deliveryQuoteLoading?<span>Calculating road route and delivery charge…</span>:deliveryQuoteError?<span className="location-error">{deliveryQuoteError}</span>:deliveryQuote?<><div><span>Road distance · {deliveryQuote.distance_km} km</span><b>{money(deliveryQuote.delivery_fee)}</b></div><small>₹5 per started 500 metres · maximum 5 km road distance · OpenStreetMap-compatible routing</small></>:<span>{deliveryAddressComplete(address)?'Calculating delivery fee for this order location…':'Enter the drop-off details and select a map pin to calculate delivery.'}</span>}
     </div>
-    <label>Delivery notes<textarea rows="2" value={address.notes} onChange={e=>setAddress({...address,notes:e.target.value})}/></label>
+    <label>Delivery notes<textarea rows="2" maxLength={500} value={orderNotes} onChange={e=>setOrderNotes(e.target.value)}/></label>
     <div className="cod"><FiCheck size={17}/><span><b>Cash on delivery</b><small>Pay in cash when your order arrives.</small></span></div>
     <div className="summary">
      {subtotal<MINIMUM_ORDER_AMOUNT&&<div className="warning">Minimum order amount is {money(MINIMUM_ORDER_AMOUNT)}. Add {money(MINIMUM_ORDER_AMOUNT-subtotal)} more to place your order.</div>}
