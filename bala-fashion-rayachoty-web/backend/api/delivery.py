@@ -169,7 +169,7 @@ def assign_delivery_staff(request):
 
 @api_view(["GET", "PATCH"])
 def my_delivery_orders(request):
-    """Assigned delivery staff manage preparation, dispatch, and OTP-verified completion."""
+    """Assigned delivery staff may prepare orders and dispatch only to OTP verification."""
     user, profile, error = _role_user(request, {"delivery_boy"})
     if error:
         return error
@@ -178,113 +178,88 @@ def my_delivery_orders(request):
         order_id = _valid_uuid(request.data.get("order_id") or request.data.get("id"))
         next_status = str(request.data.get("status") or "").strip().lower()
         if not order_id or next_status not in {"confirmed", "cancelled", "packed"}:
-            return Response({"detail": "Provide an assigned order and valid status."}, status=400)
+            return Response({"detail": "Provide an assigned order and valid preparation status."}, status=400)
         try:
-            with transaction.atomic():
-                with connection.cursor() as cursor:
-                    cursor.execute("""select o.id,o.order_number,o.status,o.customer_id
-                        from public.orders o where o.id=%s and o.assigned_delivery_boy_id=%s for update""",
-                        [order_id,user["id"]])
-                    current=cursor.fetchone()
-                    if not current:
-                        return Response({"detail":"Order not found or not assigned to your account."},status=404)
-                    transitions={"placed":{"confirmed","cancelled"},"confirmed":{"packed"},"packed":set()}
-                    if next_status not in transitions.get(current[2],set()):
-                        return Response({"detail":f"Order cannot move from {current[2]} to {next_status}."},status=409)
-                    cursor.execute("""update public.orders set status=%s,updated_at=now()
-                        where id=%s and assigned_delivery_boy_id=%s and status=%s
-                        returning id,order_number,status""",[next_status,order_id,user["id"],current[2]])
-                    updated=cursor.fetchone()
-                    if next_status in {"confirmed","cancelled"}:
-                        title="Order confirmed" if next_status=="confirmed" else "Order cancelled"
-                        _insert_account_notification(cursor,current[3],next_status,title,
-                            f"Your order {current[1]} was {next_status}.",current[0])
-                        _notify_admins(cursor,next_status,title,
-                            f"Order {current[1]} was {next_status} by delivery staff.",current[0])
-            return Response({"id":str(updated[0]),"order_number":updated[1],"status":updated[2]})
+            with transaction.atomic(), connection.cursor() as cursor:
+                cursor.execute(
+                    """select o.id,o.order_number,o.status,o.customer_id
+                       from public.orders o
+                       where o.id=%s and o.assigned_delivery_boy_id=%s
+                       for update""",
+                    [order_id, user["id"]],
+                )
+                current = cursor.fetchone()
+                if not current:
+                    return Response({"detail": "Order not found or not assigned to your account."}, status=404)
+                transitions = {"placed": {"confirmed", "cancelled"}, "confirmed": {"packed"},
+                               "packed": set(), "out_for_delivery": set(),
+                               "delivered": set(), "cancelled": set()}
+                if next_status not in transitions.get(current[2], set()):
+                    return Response({"detail": f"Order cannot move from {current[2]} to {next_status}."}, status=409)
+                cursor.execute(
+                    """update public.orders set status=%s,updated_at=now()
+                       where id=%s and assigned_delivery_boy_id=%s and status=%s
+                       returning id,order_number,status""",
+                    [next_status, order_id, user["id"], current[2]],
+                )
+                updated = cursor.fetchone()
+                if not updated:
+                    return Response({"detail": "The order changed concurrently. Refresh and retry."}, status=409)
+                if next_status in {"confirmed", "cancelled"}:
+                    title = "Order confirmed" if next_status == "confirmed" else "Order cancelled"
+                    _insert_account_notification(cursor, current[3], next_status, title,
+                        f"Your order {current[1]} was {next_status}.", current[0])
+                    _notify_admins(cursor, next_status, title,
+                        f"Order {current[1]} was {next_status} by delivery staff.", current[0])
+            return Response({"id": str(updated[0]), "order_number": updated[1], "status": updated[2]})
         except Exception:
-            return Response({"detail":"Order status could not be updated. Please retry."},status=503)
-        if not order_id:
-            return Response({"detail": "Choose a valid order."}, status=400)
-        try:
-            with transaction.atomic():
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        """select o.id, o.order_number, o.status, o.payment_method,
-                                  o.payment_status, o.customer_id
-                           from public.orders o
-                           where o.id=%s and o.assigned_delivery_boy_id=%s
-                           for update""",
-                        [order_id, user["id"]],
-                    )
-                    order = cursor.fetchone()
-                    if not order:
-                        return Response({"detail": "Order not found or not assigned to your account."}, status=404)
-                    if order[2] != "out_for_delivery":
-                        return Response({"detail": "Only orders marked out for delivery can be completed."}, status=409)
-                    cursor.execute(
-                        """update public.orders
-                           set status='delivered',
-                               payment_status=case
-                                 when payment_method='cod' and payment_status='pending' then 'paid'
-                                 else payment_status end,
-                               updated_at=now()
-                           where id=%s
-                           returning id, order_number, status, payment_status, total, created_at""",
-                        [order_id],
-                    )
-                    updated = cursor.fetchone()
-                    _insert_account_notification(
-                        cursor, order[5], "delivered", "Your order was delivered",
-                        f"Order {order[1]} has been delivered.", order[0],
-                    )
-                    _notify_admins(
-                        cursor, "delivered", "Order delivered",
-                        f"Order {order[1]} has been delivered by delivery staff.", order[0],
-                    )
-            return Response({
-                "id": str(updated[0]), "order_number": updated[1], "status": updated[2],
-                "payment_status": updated[3], "total": str(updated[4]),
-                "created_at": updated[5].isoformat() if hasattr(updated[5], "isoformat") else updated[5],
-            })
-        except Exception:
-            return Response({"detail": "Delivery status could not be updated. Please retry."}, status=503)
+            return Response({"detail": "Order status could not be updated. Check backend logs."}, status=503)
 
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                """select o.id, o.order_number, o.status, o.payment_method, o.payment_status,
-                          o.subtotal, o.delivery_fee, o.total,
-                          o.address_snapshot as address_snapshot, o.notes,
-                          o.created_at, o.vendor_name_snapshot as vendor_name,
+                """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
+                          o.subtotal,o.delivery_fee,o.total,
+                          coalesce(o.address_snapshot,'{}'::jsonb) as address_snapshot,
+                          o.notes,o.created_at,
+                          o.vendor_name_snapshot as vendor_name,
                           o.vendor_address_snapshot as vendor_address,
                           o.vendor_phone_snapshot as vendor_phone,
                           o.vendor_latitude_snapshot as vendor_latitude,
                           o.vendor_longitude_snapshot as vendor_longitude,
                           cu.email as customer_email,
                           coalesce(json_agg(json_build_object(
-                            'product_name', oi.product_name, 'image_url', oi.image_url,
-                            'quantity', oi.quantity, 'size', oi.size, 'color', oi.color,
-                            'unit_price', oi.unit_price, 'line_total', oi.line_total
-                          )) filter (where oi.id is not null), '[]'::json) as items
+                            'product_name',oi.product_name,'image_url',oi.image_url,
+                            'quantity',oi.quantity,'size',oi.size,'color',oi.color,
+                            'unit_price',oi.unit_price,'line_total',oi.line_total
+                          )) filter(where oi.id is not null),'[]'::json) as items
                    from public.orders o
-                   join public.vendors v on v.id=o.vendor_id
                    left join auth.users cu on cu.id=o.customer_id
                    left join public.order_items oi on oi.order_id=o.id
                    where o.assigned_delivery_boy_id=%s
-                   group by o.id, cu.email
+                   group by o.id,cu.email
                    order by case o.status when 'out_for_delivery' then 0 when 'packed' then 1 else 2 end,
-                            o.created_at desc
-                   limit 100""",
+                            o.created_at desc limit 100""",
                 [user["id"]],
             )
             rows = _rows(cursor)
-            cursor.execute("""select id,order_number,message,created_at from public.delivery_assignment_notifications
-                where recipient_id=%s and read_at is null order by created_at desc limit 20""", [user["id"]])
+            cursor.execute(
+                """select id,order_number,message,created_at
+                   from public.delivery_assignment_notifications
+                   where recipient_id=%s and read_at is null
+                   order by created_at desc limit 20""",
+                [user["id"]],
+            )
             notifications = _rows(cursor)
             if notifications:
-                cursor.execute("update public.delivery_assignment_notifications set read_at=now() where recipient_id=%s and read_at is null", [user["id"]])
-            cursor.execute("select coalesce(is_active,false),coalesce(availability_status,'offline') from public.profiles where id=%s and role='delivery_boy'", [user["id"]])
+                cursor.execute(
+                    "update public.delivery_assignment_notifications set read_at=now() where recipient_id=%s and read_at is null",
+                    [user["id"]],
+                )
+            cursor.execute(
+                "select coalesce(is_active,false),coalesce(availability_status,'offline') from public.profiles where id=%s and role='delivery_boy'",
+                [user["id"]],
+            )
             availability_row = cursor.fetchone()
         return Response({
             "results": rows, "count": len(rows), "notifications": notifications,
@@ -292,7 +267,8 @@ def my_delivery_orders(request):
             "availability_status": availability_row[1] if availability_row else "offline",
         })
     except Exception:
-        return Response({"detail": "Assigned deliveries could not be loaded. Apply the delivery-role SQL migration first."}, status=503)
+        return Response({"detail": "Assigned deliveries could not be loaded. Verify the delivery-role schema and database logs."}, status=503)
+
 
 @api_view(["POST"])
 def delivery_location(request):
