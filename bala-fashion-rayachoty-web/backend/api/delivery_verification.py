@@ -1,4 +1,6 @@
 import os
+import re
+import math
 import hashlib
 import logging
 import hmac
@@ -65,7 +67,8 @@ def delivery_verification(request):
     try:
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute(
-                """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.customer_id
+                """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.customer_id,
+                          coalesce(o.address_snapshot, '{}'::jsonb)
                    from public.orders o
                    where o.id=%s and o.assigned_delivery_boy_id=%s for update""",
                 [order_id, user["id"]],
@@ -81,6 +84,35 @@ def delivery_verification(request):
                     return Response({"detail": "A verification code can only be resent for an order already out for delivery."}, status=409)
                 if action == "mailjet" and order[2] not in {"packed", "out_for_delivery"}:
                     return Response({"detail": "Mailjet OTP is available only for packed or out-for-delivery orders."}, status=409)
+
+                if action == "start":
+                    address = order[6] if isinstance(order[6], dict) else {}
+                    recipient_name = str(address.get("recipient_name") or "").strip()
+                    phone = str(address.get("phone") or "").strip()
+                    line1 = str(address.get("line1") or "").strip()
+                    phone_valid = bool(re.fullmatch(r"[0-9+() \-]{10,16}", phone))
+                    try:
+                        latitude = float(address.get("latitude"))
+                        longitude = float(address.get("longitude"))
+                        coordinates_valid = (
+                            math.isfinite(latitude) and math.isfinite(longitude)
+                            and -90 <= latitude <= 90 and -180 <= longitude <= 180
+                        )
+                    except (TypeError, ValueError, OverflowError):
+                        coordinates_valid = False
+                    missing = []
+                    if not recipient_name:
+                        missing.append("customer name")
+                    if not phone_valid:
+                        missing.append("valid customer phone number")
+                    if not line1:
+                        missing.append("complete delivery address")
+                    if not coordinates_valid:
+                        missing.append("valid delivery map location")
+                    if missing:
+                        return Response({
+                            "detail": "Delivery cannot start. Ask the administrator to correct and verify the order's saved delivery address: " + ", ".join(missing) + "."
+                        }, status=409)
 
                 cursor.execute("select email from auth.users where id=%s", [order[5]])
                 email_row = cursor.fetchone()
