@@ -35,9 +35,12 @@ alter table public.account_notifications enable row level security;
 alter table public.delivery_assignment_notifications enable row level security;
 alter table public.order_address_audit enable row level security;
 grant select on public.vendors,public.categories,public.products to anon,authenticated;
-grant select,insert,update on public.profiles to authenticated;
+grant select on public.profiles to authenticated;
+grant insert (id,full_name,phone) on public.profiles to authenticated;
+grant update (full_name,phone) on public.profiles to authenticated;
 grant select,insert,update,delete on public.customer_addresses to authenticated;
-grant select on public.orders,public.order_items to authenticated;
+-- Order and order-item reads go through Django API so OTP hashes and internal fields are never directly exposed.
+revoke all on public.orders,public.order_items from anon,authenticated;
 revoke all on public.order_address_audit from anon,authenticated;
 revoke all on public.account_notifications from anon,authenticated;
 revoke all on public.delivery_assignment_notifications from anon,authenticated;
