@@ -44,7 +44,7 @@ def repair_order_address(request):
     state = str(data.get("state") or "Andhra Pradesh").strip()[:100]
     postal_code = str(data.get("postal_code") or "").strip()[:12]
     coords = _valid_coordinates(data)
-    if not recipient or not PHONE_RE.fullmatch(phone) or not line1:
+    if not recipient or not PHONE_RE.fullmatch(phone) or sum(ch.isdigit() for ch in phone) < 10 or sum(ch.isdigit() for ch in phone) > 15 or not line1:
         return Response({"detail": "Enter the recipient name, valid phone number and house/street address."}, status=400)
     if city.casefold() not in {"rayachoty", "rayachoti"}:
         return Response({"detail": "Bala Fashion currently delivers only within Rayachoty."}, status=400)
