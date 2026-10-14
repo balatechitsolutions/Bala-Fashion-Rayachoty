@@ -683,12 +683,19 @@ def orders(request):
                 if not vendor_row:
                     return Response({"detail": "The seller is no longer available for checkout."}, status=409)
                 vendor_snapshot = {
-                    "vendor_name": str(vendor_row[1] or ""),
-                    "vendor_phone": str(vendor_row[2] or ""),
-                    "vendor_address": str(vendor_row[3] or ""),
+                    "vendor_name": str(vendor_row[1] or "").strip(),
+                    "vendor_phone": str(vendor_row[2] or "").strip(),
+                    "vendor_address": str(vendor_row[3] or "").strip(),
                     "vendor_latitude": vendor_row[4],
                     "vendor_longitude": vendor_row[5],
                 }
+                if not vendor_snapshot["vendor_name"] or not vendor_snapshot["vendor_phone"] or not vendor_snapshot["vendor_address"]:
+                    return Response({"detail": "The seller's contact and pickup address are incomplete. Contact support before ordering."}, status=409)
+                try:
+                    vendor_snapshot["vendor_latitude"] = _coordinate(vendor_snapshot["vendor_latitude"], "latitude")
+                    vendor_snapshot["vendor_longitude"] = _coordinate(vendor_snapshot["vendor_longitude"], "longitude")
+                except ValueError:
+                    return Response({"detail": "The seller's pickup map location is incomplete. Contact support before ordering."}, status=409)
                 c.execute("""insert into public.orders(
                     order_number,customer_id,vendor_id,status,payment_method,payment_status,
                     subtotal,delivery_fee,total,address_snapshot,notes,
