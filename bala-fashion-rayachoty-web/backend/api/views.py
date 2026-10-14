@@ -111,6 +111,43 @@ def _profile(user_id):
     return {"id":str(row[0]),"full_name":row[1],"phone":row[2],"role":row[3]} if row else {"id":str(user_id),"full_name":"","phone":"","role":"customer"}
 
 
+def _resolve_order_address(cursor, user_id, requested_address_id=""):
+    """Load an address owned by this customer; never trust checkout address fields."""
+    fields = (
+        "id", "recipient_name", "phone", "line1", "line2", "landmark", "city",
+        "state", "postal_code", "latitude", "longitude", "notes",
+    )
+    requested_address_id = str(requested_address_id or "").strip()
+    if requested_address_id:
+        try:
+            requested_address_id = str(uuid.UUID(requested_address_id))
+        except (ValueError, TypeError, AttributeError):
+            raise ValueError("Choose a valid saved delivery address.")
+        cursor.execute(
+            """select id,recipient_name,phone,line1,line2,landmark,city,state,postal_code,
+                      latitude,longitude,notes
+               from public.customer_addresses where id=%s and user_id=%s""",
+            [requested_address_id, user_id],
+        )
+    else:
+        cursor.execute(
+            """select id,recipient_name,phone,line1,line2,landmark,city,state,postal_code,
+                      latitude,longitude,notes
+               from public.customer_addresses
+               where user_id=%s and is_default=true
+               order by updated_at desc, created_at desc limit 1""",
+            [user_id],
+        )
+    row = cursor.fetchone()
+    if not row:
+        if requested_address_id:
+            raise ValueError("Selected saved address was not found in your account. Choose one of your saved addresses.")
+        raise ValueError("No default delivery address is saved. Add an address and mark it as default before placing an order.")
+    resolved = dict(zip(fields, row))
+    resolved["id"] = str(resolved["id"])
+    return resolved
+
+
 def _insert_account_notification(cursor, recipient_id, event_type, title, body, order_id):
     """Persist one account-scoped notification; uniqueness prevents duplicate events."""
     if not recipient_id:
@@ -589,38 +626,24 @@ def orders(request):
                 rows=_rows(c)
             return Response({"results":rows,"count":len(rows)})
         except Exception:return Response({"detail":"Order history is unavailable."},status=503)
-    data=request.data;address=data.get("address");items=data.get("items")
-    if not isinstance(address,dict) or not isinstance(items,list) or not 1<=len(items)<=30:return Response({"detail":"Provide a delivery address and 1–30 cart items."},status=400)
+    data=request.data
+    submitted_address=data.get("address") if isinstance(data.get("address"),dict) else {}
+    items=data.get("items")
+    if not isinstance(items,list) or not 1<=len(items)<=30:
+        return Response({"detail":"Provide 1–30 cart items."},status=400)
 
-    # Resolve an optional saved-address ID against this authenticated customer.
-    # Checkout clients can hold a partially edited/stale form; fill only blank
-    # values from the customer's own saved address instead of losing a valid pin.
-    address=dict(address)
-    requested_address_id=str(address.get("saved_address_id") or address.get("id") or "").strip()
-    saved_address_id=""
-    if requested_address_id:
-        try:
-            requested_address_id=str(uuid.UUID(requested_address_id))
-        except (ValueError,TypeError,AttributeError):
-            requested_address_id=""
-        if requested_address_id:
-            with connection.cursor() as c:
-                c.execute(
-                    """select id,recipient_name,phone,line1,line2,landmark,city,state,postal_code,
-                              latitude,longitude,notes
-                       from public.customer_addresses where id=%s and user_id=%s""",
-                    [requested_address_id,user["id"]],
-                )
-                saved=c.fetchone()
-            if saved:
-                saved_address_id=str(saved[0])
-                saved_fields=dict(zip(
-                    ("id","recipient_name","phone","line1","line2","landmark","city","state",
-                     "postal_code","latitude","longitude","notes"),saved
-                ))
-                for key,value in saved_fields.items():
-                    if address.get(key) is None or str(address.get(key)).strip()=="":
-                        address[key]=value
+    # The database is authoritative for delivery details. A selected saved-address
+    # ID is accepted only when it belongs to this customer; otherwise use the
+    # customer's default. Never accept edited/stale client fields as the order address.
+    requested_address_id = submitted_address.get("saved_address_id") or submitted_address.get("id") or data.get("saved_address_id") or ""
+    try:
+        with connection.cursor() as address_cursor:
+            address = _resolve_order_address(address_cursor, user["id"], requested_address_id)
+    except ValueError as exc:
+        return Response({"detail":str(exc)},status=400)
+    except Exception:
+        return Response({"detail":"Could not load your saved delivery address. Please retry."},status=503)
+    saved_address_id = address["id"]
 
     recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
     phone_digits=sum(character.isdigit() for character in phone)
