@@ -165,9 +165,30 @@ export default function App() {
   if(drawer!=='checkout'||!session?.access_token)return
   let active=true
   api('/addresses/',{token:session.access_token}).then(data=>{
-   const preferred=(data.results||[]).find(item=>item.is_default)
-   if(active&&preferred)setAddress(current=>current.id?current:{...current,...preferred,latitude:preferred.latitude==null?'':String(preferred.latitude),longitude:preferred.longitude==null?'':String(preferred.longitude)})
-  }).catch(()=>{})
+   const saved=data.results||[]
+   if(!active||!saved.length)return
+   setAddress(current=>{
+    // Keep a complete address the customer is actively using. If the form is
+    // incomplete (or its saved ID was deleted), restore the best owned address.
+    if(deliveryAddressComplete(current))return current
+    const preferred=saved.find(item=>item.id===current.id)||saved.find(item=>item.is_default)||saved[0]
+    const nonempty=value=>value!=null&&String(value).trim()!==''
+    return {
+     ...preferred,...current,id:preferred.id,
+     recipient_name:nonempty(current.recipient_name)?current.recipient_name:preferred.recipient_name||'',
+     phone:nonempty(current.phone)?current.phone:preferred.phone||'',
+     line1:nonempty(current.line1)?current.line1:preferred.line1||'',
+     line2:nonempty(current.line2)?current.line2:preferred.line2||'',
+     landmark:nonempty(current.landmark)?current.landmark:preferred.landmark||'',
+     city:nonempty(current.city)?current.city:preferred.city||'Rayachoty',
+     state:nonempty(current.state)?current.state:preferred.state||'Andhra Pradesh',
+     postal_code:nonempty(current.postal_code)?current.postal_code:preferred.postal_code||'',
+     latitude:nonempty(current.latitude)?String(current.latitude):String(preferred.latitude??''),
+     longitude:nonempty(current.longitude)?String(current.longitude):String(preferred.longitude??''),
+     notes:nonempty(current.notes)?current.notes:preferred.notes||''
+    }
+   })
+  }).catch(error=>{if(active)notify(error.message||'Saved addresses could not be loaded. You can retry in Saved addresses.')})
   return()=>{active=false}
  },[drawer,session?.access_token])
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
@@ -507,16 +528,31 @@ export default function App() {
    // Resolve the saved default at submit time as well as on checkout open, so a
    // slow address request cannot create an order with an empty address snapshot.
    let checkoutAddress={...address}
-   if(!String(checkoutAddress.line1||'').trim()){
+   if(!deliveryAddressComplete(checkoutAddress)){
     const saved=await api('/addresses/',{token:session.access_token})
-    const preferred=(saved.results||[]).find(item=>item.is_default)
+    const list=saved.results||[]
+    const preferred=list.find(item=>item.id===checkoutAddress.id)||list.find(item=>item.is_default)||list[0]
     if(preferred){
-     checkoutAddress={...preferred,...checkoutAddress,recipient_name:preferred.recipient_name,phone:preferred.phone,line1:preferred.line1,line2:preferred.line2||'',landmark:preferred.landmark||'',city:preferred.city||'Rayachoty',state:preferred.state||'Andhra Pradesh',postal_code:preferred.postal_code||'',latitude:String(preferred.latitude??''),longitude:String(preferred.longitude??''),notes:preferred.notes||''}
+     const nonempty=value=>value!=null&&String(value).trim()!==''
+     checkoutAddress={
+      ...preferred,...checkoutAddress,id:preferred.id,
+      recipient_name:nonempty(checkoutAddress.recipient_name)?checkoutAddress.recipient_name:preferred.recipient_name||'',
+      phone:nonempty(checkoutAddress.phone)?checkoutAddress.phone:preferred.phone||'',
+      line1:nonempty(checkoutAddress.line1)?checkoutAddress.line1:preferred.line1||'',
+      line2:nonempty(checkoutAddress.line2)?checkoutAddress.line2:preferred.line2||'',
+      landmark:nonempty(checkoutAddress.landmark)?checkoutAddress.landmark:preferred.landmark||'',
+      city:nonempty(checkoutAddress.city)?checkoutAddress.city:preferred.city||'Rayachoty',
+      state:nonempty(checkoutAddress.state)?checkoutAddress.state:preferred.state||'Andhra Pradesh',
+      postal_code:nonempty(checkoutAddress.postal_code)?checkoutAddress.postal_code:preferred.postal_code||'',
+      latitude:nonempty(checkoutAddress.latitude)?String(checkoutAddress.latitude):String(preferred.latitude??''),
+      longitude:nonempty(checkoutAddress.longitude)?String(checkoutAddress.longitude):String(preferred.longitude??''),
+      notes:nonempty(checkoutAddress.notes)?checkoutAddress.notes:preferred.notes||''
+     }
      setAddress(checkoutAddress)
+     return notify('Your saved delivery address was restored. Confirm the updated delivery charge, then place the order again.')
     }
    }
-   if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.phone||'').trim()||!String(checkoutAddress.line1||'').trim())return notify('Add or select a saved delivery address before placing your order.')
-   if(checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null)return notify('Select your delivery location on the map or use your current location.')
+   if(!deliveryAddressComplete(checkoutAddress))return notify('Delivery address is incomplete. Select a saved address or enter the recipient, valid mobile number, street address, and map pin.')
    if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote for this address before placing the order.')
    const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
    const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:checkoutAddress.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
