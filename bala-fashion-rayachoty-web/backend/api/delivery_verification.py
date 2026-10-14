@@ -90,7 +90,7 @@ def delivery_verification(request):
                     recipient_name = str(address.get("recipient_name") or "").strip()
                     phone = str(address.get("phone") or "").strip()
                     line1 = str(address.get("line1") or "").strip()
-                    phone_valid = bool(re.fullmatch(r"[0-9+() \-]{10,16}", phone))
+                    phone_valid = bool(re.fullmatch(r"[0-9+() \-]{10,16}", phone)) and 10 <= sum(ch.isdigit() for ch in phone) <= 15
                     try:
                         latitude = float(address.get("latitude"))
                         longitude = float(address.get("longitude"))
