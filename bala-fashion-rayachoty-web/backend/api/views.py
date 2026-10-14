@@ -585,7 +585,7 @@ def orders(request):
     if request.method=="GET":
         try:
             with connection.cursor() as c:
-                c.execute("""select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.subtotal,o.delivery_fee,o.total,o.created_at,o.address_snapshot,o.notes,coalesce(json_agg(json_build_object('product_id',oi.product_id,'product_name',oi.product_name,'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,'color',oi.color,'unit_price',oi.unit_price,'line_total',oi.line_total)) filter(where oi.id is not null),'[]'::json) as items from public.orders o left join public.order_items oi on oi.order_id=o.id where o.customer_id=%s group by o.id order by o.created_at desc limit 50""",[user["id"]])
+                c.execute("""select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.subtotal,o.delivery_fee,o.total,o.created_at,o.address_snapshot,o.notes,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,o.vendor_latitude_snapshot as vendor_latitude,o.vendor_longitude_snapshot as vendor_longitude,coalesce(json_agg(json_build_object('product_id',oi.product_id,'product_name',oi.product_name,'image_url',oi.image_url,'quantity',oi.quantity,'size',oi.size,'color',oi.color,'unit_price',oi.unit_price,'line_total',oi.line_total)) filter(where oi.id is not null),'[]'::json) as items from public.orders o left join public.order_items oi on oi.order_id=o.id where o.customer_id=%s group by o.id order by o.created_at desc limit 50""",[user["id"]])
                 rows=_rows(c)
             return Response({"results":rows,"count":len(rows)})
         except Exception:return Response({"detail":"Order history is unavailable."},status=503)
@@ -677,7 +677,36 @@ def orders(request):
             snapshot["delivery_distance_meters"] = int(round(distance_meters))
             total=subtotal+fee;number="BFR-"+uuid.uuid4().hex[:10].upper()
             with connection.cursor() as c:
-                c.execute("""insert into public.orders(order_number,customer_id,vendor_id,status,payment_method,payment_status,subtotal,delivery_fee,total,address_snapshot,notes) values(%s,%s,%s,'placed','cod','pending',%s,%s,%s,%s::jsonb,%s) returning id,order_number,status,payment_method,subtotal,delivery_fee,total,created_at""",[number,user["id"],vendor,subtotal,fee,total,json.dumps(snapshot),str(data.get("notes",""))[:500]])
+                c.execute("""select id,name,phone,address,latitude,longitude,owner_id
+                             from public.vendors where id=%s and status='approved' for share""", [str(vendor)])
+                vendor_row = c.fetchone()
+                if not vendor_row:
+                    return Response({"detail": "The seller is no longer available for checkout."}, status=409)
+                vendor_snapshot = {
+                    "vendor_name": str(vendor_row[1] or "").strip(),
+                    "vendor_phone": str(vendor_row[2] or "").strip(),
+                    "vendor_address": str(vendor_row[3] or "").strip(),
+                    "vendor_latitude": vendor_row[4],
+                    "vendor_longitude": vendor_row[5],
+                }
+                if not vendor_snapshot["vendor_name"] or not vendor_snapshot["vendor_phone"] or not vendor_snapshot["vendor_address"]:
+                    return Response({"detail": "The seller's contact and pickup address are incomplete. Contact support before ordering."}, status=409)
+                try:
+                    vendor_snapshot["vendor_latitude"] = _coordinate(vendor_snapshot["vendor_latitude"], "latitude")
+                    vendor_snapshot["vendor_longitude"] = _coordinate(vendor_snapshot["vendor_longitude"], "longitude")
+                except ValueError:
+                    return Response({"detail": "The seller's pickup map location is incomplete. Contact support before ordering."}, status=409)
+                c.execute("""insert into public.orders(
+                    order_number,customer_id,vendor_id,status,payment_method,payment_status,
+                    subtotal,delivery_fee,total,address_snapshot,notes,
+                    vendor_name_snapshot,vendor_phone_snapshot,vendor_address_snapshot,
+                    vendor_latitude_snapshot,vendor_longitude_snapshot
+                ) values(%s,%s,%s,'placed','cod','pending',%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s)
+                returning id,order_number,status,payment_method,subtotal,delivery_fee,total,created_at""",
+                [number,user["id"],vendor,subtotal,fee,total,json.dumps(snapshot),
+                 str(data.get("notes",""))[:500],vendor_snapshot["vendor_name"],
+                 vendor_snapshot["vendor_phone"],vendor_snapshot["vendor_address"],
+                 vendor_snapshot["vendor_latitude"],vendor_snapshot["vendor_longitude"]])
                 order=c.fetchone();order_id=order[0]
                 for i in verified:
                     c.execute("update public.products set stock_quantity=stock_quantity-%s,updated_at=now() where id=%s and stock_quantity >= %s",[i["qty"],i["id"],i["qty"]])
@@ -685,18 +714,16 @@ def orders(request):
                     c.execute("""insert into public.order_items(order_id,product_id,product_name,image_url,size,color,quantity,unit_price,line_total) values(%s,%s,%s,%s,%s,%s,%s,%s,%s)""",[order_id,i["id"],i["name"],i["image"],i["size"],i["color"],i["qty"],i["price"],i["line"]])
 
                 # Only the two requested events are persisted: placed and delivered.
-                c.execute("select owner_id from public.vendors where id=%s", [str(vendor)])
-                seller_row = c.fetchone()
-                if seller_row and seller_row[0]:
+                if vendor_row and vendor_row[6]:
                     _insert_account_notification(
-                        c, seller_row[0], "placed", "New order placed",
+                        c, vendor_row[6], "placed", "New order placed",
                         f"Order {order[1]} has been placed.", order_id,
                     )
                 _notify_admins(
                     c, "placed", "New order placed",
                     f"Order {order[1]} has been placed.", order_id,
                 )
-            return Response({"id":str(order[0]),"order_number":order[1],"status":order[2],"payment_method":order[3],"subtotal":str(order[4]),"delivery_fee":str(order[5]),"total":str(order[6]),"created_at":order[7].isoformat(),"address_snapshot":snapshot,"notes":str(data.get("notes",""))[:500]},status=201)
+            return Response({"id":str(order[0]),"order_number":order[1],"status":order[2],"payment_method":order[3],"subtotal":str(order[4]),"delivery_fee":str(order[5]),"total":str(order[6]),"created_at":order[7].isoformat(),"address_snapshot":snapshot,"vendor_snapshot":vendor_snapshot,"notes":str(data.get("notes",""))[:500]},status=201)
     except ValueError as e:return Response({"detail":str(e)},status=409)
     except Exception:return Response({"detail":"Could not place order. Please retry or contact support."},status=503)
 
@@ -857,7 +884,7 @@ def manage_orders(request):
                        left join auth.users cu on cu.id=o.customer_id
                        left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                        left join public.order_items oi on oi.order_id=o.id
-                       group by o.id,v.name,v.address,v.phone,cu.email,dp.full_name,dp.phone
+                       group by o.id,cu.email,dp.full_name,dp.phone
                        order by o.created_at desc limit 200"""
                 )
             rows = _rows(c)
