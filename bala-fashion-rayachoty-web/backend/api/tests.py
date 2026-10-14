@@ -313,12 +313,13 @@ class EndpointTests(SimpleTestCase):
         cursor.description = []
         cursor.fetchall.return_value = []
         with patch.object(delivery, "_role_user", return_value=(user, profile, None)), \
+             patch.object(views, "_role_user", return_value=(user, profile, None)), \
              patch.object(delivery, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
             response = delivery.my_delivery_orders(req)
 
         self.assertEqual(response.status_code, 200)
-        sql = cursor.execute.call_args.args[0].lower()
-        self.assertIn("o.address_snapshot as address_snapshot", sql)
+        queries = [call.args[0].lower() for call in cursor.execute.call_args_list]
+        sql = next(query for query in queries if "o.address_snapshot as address_snapshot" in query)
         self.assertIn("o.vendor_name_snapshot as vendor_name", sql)
         self.assertIn("o.vendor_address_snapshot as vendor_address", sql)
         self.assertIn("o.vendor_phone_snapshot as vendor_phone", sql)
