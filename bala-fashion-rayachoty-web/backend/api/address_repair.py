@@ -1,7 +1,10 @@
 """Safe order-address repair for incomplete historical snapshots."""
 import math
+import json
 import re
 import uuid
+
+from django.utils import timezone
 
 from django.db import connection, transaction
 from rest_framework.decorators import api_view
@@ -9,7 +12,7 @@ from rest_framework.response import Response
 
 from .views import _role_user
 
-PHONE_RE = re.compile(r"^[0-9+() \\-]{10,16}$")
+PHONE_RE = re.compile(r"^[0-9+() -]{10,16}$")
 
 
 def _valid_coordinates(data):
@@ -52,7 +55,6 @@ def repair_order_address(request):
         return Response({"detail": "Choose a valid delivery location using the map or current-location button."}, status=400)
 
     is_admin = profile["role"] == "admin"
-    replace_existing = is_admin and data.get("replace_existing") is True
     supplied = {
         "recipient_name": recipient, "phone": phone, "line1": line1,
         "line2": line2, "landmark": landmark, "city": "Rayachoty",
@@ -79,10 +81,10 @@ def repair_order_address(request):
             # before packing; admins can correct them at any stage.
             repaired.update(supplied)
             repaired["address_completion_source"] = "admin_corrected" if is_admin else "customer_supplied"
-            repaired["address_completed_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            repaired["address_completed_at"] = timezone.now().isoformat()
             cursor.execute(
                 "update public.orders set address_snapshot=%s::jsonb, updated_at=now() where id=%s",
-                [__import__("json").dumps(repaired), order_id],
+                [json.dumps(repaired), order_id],
             )
             # Keep the customer's saved address in sync only when this snapshot
             # already points to an address owned by the same customer.
