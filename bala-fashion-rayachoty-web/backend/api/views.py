@@ -730,110 +730,64 @@ def orders(request):
 
 @api_view(["GET", "PATCH", "DELETE"])
 def manage_orders(request):
-    """Admins manage accounts/assignments and may delete orders; vendors and assigned delivery staff process orders."""
+    """Role-scoped order management. Every order retains its address and audit history."""
     user, prof, error = _role_user(request, {"vendor", "admin"})
     if error:
         return error
 
-    # Order deletion is an explicit admin-only maintenance action. Vendors and
-    # delivery staff cannot delete records; processing permissions remain separate.
+    # Do not hard-delete order records from the routine API.
     if request.method == "DELETE":
-        if prof["role"] != "admin":
-            return Response({"detail": "Only an administrator can delete an order."}, status=403)
-        order_id = str(request.data.get("id") or request.data.get("order_id") or request.query_params.get("id") or "").strip()
-        try:
-            uuid.UUID(order_id)
-        except (ValueError, TypeError, AttributeError):
-            return Response({"detail": "Choose a valid order."}, status=400)
-        try:
-            with transaction.atomic():
-                with connection.cursor() as c:
-                    c.execute(
-                        "delete from public.orders where id=%s returning id,order_number",
-                        [order_id],
-                    )
-                    deleted = c.fetchone()
-            if not deleted:
-                return Response({"detail": "Order not found."}, status=404)
-            return Response({"id": str(deleted[0]), "order_number": deleted[1], "deleted": True})
-        except Exception:
-            return Response({"detail": "Order could not be deleted. Check dependent records and database constraints."}, status=409)
+        return Response({"detail": "Orders are retained for history and audit. Cancel eligible orders instead of deleting them."}, status=405)
 
     if request.method == "PATCH":
         if prof["role"] != "vendor":
-            return Response({"detail": "Only the vendor who owns this order can confirm, reject, or pack it. Delivery status is handled by the assigned delivery person."}, status=403)
+            return Response({"detail": "Only the vendor who owns this order can confirm, pack, or cancel it. Delivery completion is OTP-controlled."}, status=403)
         order_id = str(request.data.get("id") or request.data.get("order_id") or request.query_params.get("id") or "").strip()
         try:
             uuid.UUID(order_id)
         except (ValueError, TypeError, AttributeError):
             return Response({"detail": "Choose a valid order."}, status=400)
-
         status_value = str(request.data.get("status") or "").strip().lower()
-        allowed_statuses = {"placed", "confirmed", "packed", "out_for_delivery", "delivered", "cancelled"}
-        if status_value not in allowed_statuses:
-            return Response({"detail": "Choose a valid order status."}, status=400)
-
+        if status_value not in {"confirmed", "packed", "cancelled"}:
+            return Response({"detail": "Vendors can confirm, pack, or cancel eligible orders. Delivery completion is OTP-controlled."}, status=400)
         try:
-            with transaction.atomic():
-                with connection.cursor() as c:
-                    if prof["role"] == "vendor":
-                        c.execute(
-                            """select o.id, o.status, o.payment_method, o.payment_status, o.customer_id, o.order_number
-                               from public.orders o
-                               join public.vendors v on v.id=o.vendor_id
-                               where o.id=%s and v.owner_id=%s and v.status='approved'
-                               for update of o""",
-                            [order_id, user["id"]],
-                        )
-                    current = c.fetchone()
-                    if not current:
-                        return Response({"detail": "Order not found or you do not have permission to manage it."}, status=404)
-
-                    current_status = current[1]
-                    transitions = {
-                        "placed": {"confirmed", "cancelled"},
-                        "confirmed": {"packed", "cancelled"},
-                        "packed": set(),
-                        "out_for_delivery": set(),
-                        "delivered": set(),
-                        "cancelled": set(),
-                    }
-                    if status_value != current_status and status_value not in transitions.get(current_status, set()):
-                        return Response(
-                            {"detail": f"Order cannot move from {current_status} to {status_value}."},
-                            status=409,
-                        )
-                    c.execute(
-                        """update public.orders
-                           set status=%s,
-                               payment_status=case
-                                   when %s='delivered' and payment_method='cod' and payment_status='pending'
-                                   then 'paid'
-                                   else payment_status
-                               end,
-                               updated_at=now()
-                           where id=%s
-                           returning id, order_number, status, payment_status, total, created_at""",
-                        [status_value, status_value, order_id],
-                    )
-                    row = c.fetchone()
-                    if status_value == "delivered" and current_status != "delivered":
-                        customer_id, order_number = current[4], current[5]
-                        _insert_account_notification(
-                            c, customer_id, "delivered", "Your order was delivered",
-                            f"Order {order_number} has been delivered.", current[0],
-                        )
-                        _notify_admins(
-                            c, "delivered", "Order delivered",
-                            f"Order {order_number} has been delivered.", current[0],
-                        )
+            with transaction.atomic(), connection.cursor() as c:
+                c.execute(
+                    """select o.id,o.status,o.customer_id,o.order_number
+                       from public.orders o
+                       join public.vendors v on v.id=o.vendor_id
+                       where o.id=%s and v.owner_id=%s and v.status='approved'
+                       for update of o""",
+                    [order_id, user["id"]],
+                )
+                current = c.fetchone()
+                if not current:
+                    return Response({"detail": "Order not found or you do not have permission to manage it."}, status=404)
+                transitions = {
+                    "placed": {"confirmed", "cancelled"},
+                    "confirmed": {"packed", "cancelled"},
+                    "packed": set(), "out_for_delivery": set(), "delivered": set(), "cancelled": set(),
+                }
+                if status_value not in transitions.get(current[1], set()):
+                    return Response({"detail": f"Order cannot move from {current[1]} to {status_value}."}, status=409)
+                c.execute(
+                    """update public.orders set status=%s,updated_at=now()
+                       where id=%s returning id,order_number,status,payment_status,total,created_at""",
+                    [status_value, order_id],
+                )
+                row = c.fetchone()
+                if status_value in {"confirmed", "cancelled"}:
+                    title = "Order confirmed" if status_value == "confirmed" else "Order cancelled"
+                    _insert_account_notification(c, current[2], status_value, title,
+                        f"Your order {current[3]} was {status_value}.", current[0])
+                    _notify_admins(c, status_value, title, f"Order {current[3]} was {status_value}.", current[0])
             return Response({
                 "id": str(row[0]), "order_number": row[1], "status": row[2],
                 "payment_status": row[3], "total": str(row[4]),
                 "created_at": row[5].isoformat() if hasattr(row[5], "isoformat") else row[5],
             })
         except Exception:
-            return Response({"detail": "Order status could not be updated. Please retry."}, status=503)
+            return Response({"detail": "Order status could not be updated. Check backend logs."}, status=503)
 
     try:
         with connection.cursor() as c:
@@ -842,35 +796,29 @@ def manage_orders(request):
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
                               '{}'::jsonb as address_snapshot,
-                              o.notes,o.created_at,v.name as vendor_name,
+                              o.notes,o.created_at,o.vendor_name_snapshot as vendor_name,
+                              o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,
+                              o.vendor_latitude_snapshot as vendor_latitude,o.vendor_longitude_snapshot as vendor_longitude,
                               coalesce(json_agg(json_build_object(
                                 'product_name',oi.product_name,'image_url',oi.image_url,
                                 'quantity',oi.quantity,'size',oi.size,'color',oi.color,
-                                'line_total',oi.line_total
+                                'unit_price',oi.unit_price,'line_total',oi.line_total
                               )) filter(where oi.id is not null),'[]'::json) as items
                        from public.orders o
                        join public.vendors v on v.id=o.vendor_id
                        left join public.order_items oi on oi.order_id=o.id
                        where v.owner_id=%s and v.status='approved'
-                       group by o.id,v.name order by o.created_at desc limit 100""",
+                       group by o.id order by o.created_at desc limit 100""",
                     [user["id"]],
                 )
             else:
                 c.execute(
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
-                              (coalesce(
-                                (select jsonb_build_object(
-                                  'recipient_name',ca.recipient_name,'phone',ca.phone,
-                                  'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
-                                  'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
-                                  'latitude',ca.latitude,'longitude',ca.longitude
-                                ) from public.customer_addresses ca
-                                 where ca.user_id=o.customer_id
-                                 order by ca.is_default desc,ca.created_at desc limit 1),
-                                '{}'::jsonb
-                              ) || coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)) as address_snapshot,
-                              o.notes,o.created_at,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,
+                              coalesce(o.address_snapshot, '{}'::jsonb) as address_snapshot,
+                              o.notes,o.created_at,o.vendor_name_snapshot as vendor_name,
+                              o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,
+                              o.vendor_latitude_snapshot as vendor_latitude,o.vendor_longitude_snapshot as vendor_longitude,
                               cu.email as customer_email,
                               dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
                               o.assigned_delivery_boy_id,
