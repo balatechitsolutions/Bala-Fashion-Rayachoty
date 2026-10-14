@@ -882,18 +882,8 @@ def manage_orders(request):
                 c.execute(
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
-                              (coalesce(
-                                (select jsonb_build_object(
-                                  'recipient_name',ca.recipient_name,'phone',ca.phone,
-                                  'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
-                                  'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
-                                  'latitude',ca.latitude,'longitude',ca.longitude
-                                ) from public.customer_addresses ca
-                                 where ca.user_id=o.customer_id
-                                 order by ca.is_default desc,ca.created_at desc limit 1),
-                                '{}'::jsonb
-                              ) || coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)) as address_snapshot,
-                              o.notes,o.created_at,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,
+                              coalesce(o.address_snapshot, '{}'::jsonb) as address_snapshot,
+                              o.notes,o.created_at,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,
                               cu.email as customer_email,
                               dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
                               o.assigned_delivery_boy_id,
@@ -1019,24 +1009,14 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
-                          o.assigned_delivery_boy_id,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
+                          o.assigned_delivery_boy_id,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
                           case when %s='admin' then jsonb_build_object(
                             'latitude',o.address_snapshot->>'latitude',
                             'longitude',o.address_snapshot->>'longitude'
                           ) else null end as delivery_coordinates,
                           case when %s='admin' then (
-                            coalesce(
-                              (select jsonb_build_object(
-                                'recipient_name',ca.recipient_name,'phone',ca.phone,
-                                'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
-                                'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
-                                'latitude',ca.latitude,'longitude',ca.longitude
-                              ) from public.customer_addresses ca
-                               where ca.user_id=o.customer_id
-                               order by ca.is_default desc,ca.created_at desc limit 1),
-                              '{}'::jsonb
-                            ) || coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)
+                            coalesce(o.address_snapshot, '{}'::jsonb)
                           ) else null end as address_snapshot,
                           cu.email as customer_email,
                           dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
