@@ -62,7 +62,7 @@ def repair_order_address(request):
     try:
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute(
-                """select customer_id, coalesce(address_snapshot, '{}'::jsonb)
+                """select customer_id, status, coalesce(address_snapshot, '{}'::jsonb)
                    from public.orders where id=%s for update""",
                 [order_id],
             )
@@ -71,14 +71,14 @@ def repair_order_address(request):
                 return Response({"detail": "Order not found."}, status=404)
             if not is_admin and str(order[0]) != str(user["id"]):
                 return Response({"detail": "You can only repair the address on your own orders."}, status=403)
-            snapshot = order[1] if isinstance(order[1], dict) else {}
+            if not is_admin and order[1] not in {"placed", "confirmed"}:
+                return Response({"detail": "Customer address changes are closed once an order is packed or dispatched. Ask the administrator to correct it."}, status=409)
+            snapshot = order[2] if isinstance(order[2], dict) else {}
             repaired = dict(snapshot)
-            for key, value in supplied.items():
-                existing = repaired.get(key)
-                missing = existing is None or (isinstance(existing, str) and not existing.strip())
-                if replace_existing or missing:
-                    repaired[key] = value
-            repaired["address_completion_source"] = "admin_corrected" if replace_existing else "customer_supplied"
+            # The authenticated customer may correct their own delivery details
+            # before packing; admins can correct them at any stage.
+            repaired.update(supplied)
+            repaired["address_completion_source"] = "admin_corrected" if is_admin else "customer_supplied"
             repaired["address_completed_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
             cursor.execute(
                 "update public.orders set address_snapshot=%s::jsonb, updated_at=now() where id=%s",
