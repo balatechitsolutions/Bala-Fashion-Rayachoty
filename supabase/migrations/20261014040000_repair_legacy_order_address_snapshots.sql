@@ -21,8 +21,8 @@ set address_snapshot =
     'city', coalesce(nullif(btrim(o.address_snapshot->>'city'), ''), nullif(btrim(a.city), 'Rayachoty'), 'Rayachoty'),
     'state', coalesce(nullif(btrim(o.address_snapshot->>'state'), ''), nullif(btrim(a.state), 'Andhra Pradesh'), 'Andhra Pradesh'),
     'postal_code', coalesce(nullif(btrim(o.address_snapshot->>'postal_code'), ''), nullif(btrim(a.postal_code), '')),
-    'latitude', coalesce(o.address_snapshot->'latitude', to_jsonb(a.latitude)),
-    'longitude', coalesce(o.address_snapshot->'longitude', to_jsonb(a.longitude)),
+    'latitude', case when nullif(o.address_snapshot->>'latitude','') is null then to_jsonb(a.latitude) else o.address_snapshot->'latitude' end,
+    'longitude', case when nullif(o.address_snapshot->>'longitude','') is null then to_jsonb(a.longitude) else o.address_snapshot->'longitude' end,
     'saved_address_id', coalesce(nullif(o.address_snapshot->>'saved_address_id', ''), a.id::text)
   )),
   updated_at = now()
