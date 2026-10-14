@@ -15,7 +15,7 @@ import { enableFirebaseNotifications, firebaseConfigured, subscribeToFirebaseMes
 
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
-const deliveryAddressComplete = address => { const phone=String(address?.phone||''); const digits=phone.replace(/\\D/g,'').length; const lat=Number(address?.latitude),lng=Number(address?.longitude); return Boolean(String(address?.recipient_name||'').trim()&&/^[0-9+() \\-]{10,16}$/.test(phone)&&digits>=10&&digits<=15&&String(address?.line1||'').trim()&&address?.latitude!=null&&address?.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180) }
+const deliveryAddressComplete = address => { const phone=String(address?.phone||''); const digits=phone.replace(/[^0-9]/g,'').length; const lat=Number(address?.latitude),lng=Number(address?.longitude); return Boolean(String(address?.recipient_name||'').trim()&&/^[0-9+() -]{10,16}$/.test(phone)&&digits>=10&&digits<=15&&String(address?.line1||'').trim()&&address?.latitude!=null&&address?.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180) }
 const MINIMUM_ORDER_AMOUNT = 250
 const RAYACHOTY_MAP_CENTER = [14.05742, 78.74865]
 const DELIVERY_RADIUS_METERS = 5000
