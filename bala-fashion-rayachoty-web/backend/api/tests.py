@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
 from contextlib import nullcontext
@@ -37,6 +38,8 @@ class EndpointTests(SimpleTestCase):
             "longitude": 78.74865,
         }
         self.assertEqual(views._order_address_issues(valid), [])
+        # PostgreSQL drivers/configurations may expose JSONB as serialized text.
+        self.assertEqual(views._order_address_issues(json.dumps(valid)), [])
         cases = [
             ({**valid, "recipient_name": ""}, "recipient name"),
             ({**valid, "phone": "123"}, "valid recipient phone number"),
