@@ -553,7 +553,8 @@ export default function App() {
    // If the follow-up read fails, the successful POST response remains sufficient.
    try{
     const persisted=await api('/orders/',{token:session.access_token})
-    const match=(persisted.results||persisted||[]).find(item=>String(item.id)===String(r.id))
+    const persistedRows=Array.isArray(persisted.results)?persisted.results:(Array.isArray(persisted)?persisted:[])
+    const match=persistedRows.find(item=>String(item.id)===String(r.id))
     if(match)createdOrder={...createdOrder,...match,address_snapshot:match.address_snapshot||createdOrder.address_snapshot,items:Array.isArray(match.items)?match.items:fallbackItems}
    }catch(readError){console.warn('Order created, but the refreshed order details could not be loaded:',readError.message)}
    setCart([]);setOrders(o=>[createdOrder,...o.filter(item=>String(item.id)!==String(createdOrder.id))]);setSelectedOrder(createdOrder);setOrderReturnDrawer('orders');setDeliveryQuote(null);setDrawer('order-details');notify(`Order ${r.order_number} placed successfully`)
