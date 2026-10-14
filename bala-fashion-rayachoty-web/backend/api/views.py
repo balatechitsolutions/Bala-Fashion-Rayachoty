@@ -858,7 +858,7 @@ def manage_orders(request):
                 c.execute(
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
-                              '{}'::jsonb as address_snapshot,
+                              coalesce(o.address_snapshot, '{}'::jsonb) as address_snapshot,
                               o.notes,o.created_at,v.name as vendor_name,
                               coalesce(json_agg(json_build_object(
                                 'product_name',oi.product_name,'image_url',oi.image_url,
@@ -1005,11 +1005,11 @@ def seller_dashboard(request):
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
                           o.assigned_delivery_boy_id,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
-                          case when %s='admin' then jsonb_build_object(
+                          case when %s in ('admin','vendor') then jsonb_build_object(
                             'latitude',o.address_snapshot->>'latitude',
                             'longitude',o.address_snapshot->>'longitude'
                           ) else null end as delivery_coordinates,
-                          case when %s='admin' then (
+                          case when %s in ('admin','vendor') then (
                             coalesce(o.address_snapshot, '{}'::jsonb)
                           ) else null end as address_snapshot,
                           cu.email as customer_email,
