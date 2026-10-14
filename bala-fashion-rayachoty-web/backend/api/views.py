@@ -44,7 +44,7 @@ def _order_address_issues(address):
     digits = sum(character.isdigit() for character in phone)
     if not recipient:
         issues.append("recipient name")
-    if not (re.fullmatch(r"[0-9+() \\-]{10,16}", phone) and 10 <= digits <= 15):
+    if not (re.fullmatch(r"[0-9+() \-]{10,16}", phone) and 10 <= digits <= 15):
         issues.append("valid recipient phone number")
     if not line1:
         issues.append("house/street address")
