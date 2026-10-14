@@ -515,7 +515,34 @@ export default function App() {
    } catch(error) {
     if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.phone||'').trim()||!String(checkoutAddress.line1||'').trim()||checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null)throw error
    }
-   const preferred=savedAddresses.find(item=>item.id&&item.id===checkoutAddress.id)||savedAddresses.find(item=>item.is_default)
+   let preferred=savedAddresses.find(item=>item.id&&item.id===checkoutAddress.id)||savedAddresses.find(item=>item.is_default)||savedAddresses[0]
+   // A checkout form is not proof that an address exists in the database.
+   // If this customer has no saved address yet, persist the completed form first
+   // and use the server-returned ID for order creation. The order endpoint then
+   // copies that database record into the immutable order-time snapshot.
+   if(!preferred){
+    const recipient=String(checkoutAddress.recipient_name||'').trim()
+    const phone=String(checkoutAddress.phone||'').trim()
+    const line1=String(checkoutAddress.line1||'').trim()
+    const latitude=Number(checkoutAddress.latitude),longitude=Number(checkoutAddress.longitude)
+    const phoneDigits=phone.replace(/\\D/g,'').length
+    const validPhone=/^[0-9+() \\-]{10,16}$/.test(phone)&&phoneDigits>=10&&phoneDigits<=15
+    const validCoordinates=checkoutAddress.latitude!==''&&checkoutAddress.longitude!==''&&checkoutAddress.latitude!=null&&checkoutAddress.longitude!=null&&Number.isFinite(latitude)&&Number.isFinite(longitude)&&latitude>=-90&&latitude<=90&&longitude>=-180&&longitude<=180
+    if(recipient&&line1&&validPhone&&validCoordinates){
+     const saved=await api('/addresses/',{method:'POST',token:session.access_token,body:JSON.stringify({
+      recipient_name:recipient,phone,line1,
+      line2:String(checkoutAddress.line2||''),landmark:String(checkoutAddress.landmark||''),
+      city:'Rayachoty',state:'Andhra Pradesh',postal_code:String(checkoutAddress.postal_code||''),
+      latitude,longitude,notes:String(checkoutAddress.notes||''),is_default:true
+     })})
+     if(saved?.id){
+      preferred=saved
+      savedAddresses=[saved,...savedAddresses]
+      checkoutAddress={...saved,latitude:String(saved.latitude??''),longitude:String(saved.longitude??'')}
+      setAddress(checkoutAddress)
+     }
+    }
+   }
    if(preferred){
     const keep=(value,fallback)=>String(value??'').trim()!==''?value:(fallback??'')
     const currentCoordinates=checkoutAddress.latitude!==''&&checkoutAddress.longitude!==''&&checkoutAddress.latitude!=null&&checkoutAddress.longitude!=null&&Number.isFinite(Number(checkoutAddress.latitude))&&Number.isFinite(Number(checkoutAddress.longitude))
