@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from . import delivery
 from . import addresses
+from . import address_repair
 from . import delivery_verification
 from . import push_notifications
 
@@ -13,6 +14,7 @@ urlpatterns = [
     path("products/", views.products),
     path("profile/", views.profile),
     path("addresses/", addresses.customer_addresses),
+    path("orders/repair-address/", address_repair.repair_order_address),
     path("users/manage/", views.manage_auth_users),
     path("orders/", views.orders),
     path("delivery/quote/", views.delivery_quote),
