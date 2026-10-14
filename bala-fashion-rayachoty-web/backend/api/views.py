@@ -151,7 +151,8 @@ def _resolve_order_address(cursor, user_id, requested_address_id=""):
         cursor.execute(
             """select id,recipient_name,phone,line1,line2,landmark,city,state,postal_code,
                       latitude,longitude,notes
-               from public.customer_addresses where id=%s and user_id=%s""",
+               from public.customer_addresses where id=%s and user_id=%s
+               for share""",
             [requested_address_id, user_id],
         )
     else:
@@ -160,7 +161,8 @@ def _resolve_order_address(cursor, user_id, requested_address_id=""):
                       latitude,longitude,notes
                from public.customer_addresses
                where user_id=%s and is_default=true
-               order by updated_at desc, created_at desc limit 1""",
+               order by updated_at desc, created_at desc limit 1
+               for share""",
             [user_id],
         )
     row = cursor.fetchone()
@@ -657,25 +659,40 @@ def orders(request):
     if not isinstance(items,list) or not 1<=len(items)<=30:
         return Response({"detail":"Provide 1–30 cart items."},status=400)
 
-    # The order owns its drop-off address and recipient contact details.
-    # Snapshot the checkout payload at placement time; never resolve against
-    # customer_addresses or a mutable customer profile/default address.
-    address = submitted_address
-    if not isinstance(address, dict):
-        return Response({"detail": "Enter the delivery address and drop-off contact details."}, status=400)
-
-    address_issues = _order_address_issues(address)
-    if address_issues:
-        return Response({
-            "detail": "Delivery address is incomplete or invalid. Correct these fields before placing the order: " + ", ".join(address_issues) + "."
-        }, status=400)
-    recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
-    city_name = str(address.get("city", "Rayachoty")).strip()[:100] or "Rayachoty"
-    customer_latitude = _coordinate(address.get("latitude"), "latitude")
-    customer_longitude = _coordinate(address.get("longitude"), "longitude")
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude}
+    # Resolve the selected/default saved address on the server. Never trust
+    # address fields sent by the browser: the order receives a checkout-time snapshot.
+    requested_address_id = submitted_address.get("saved_address_id") or submitted_address.get("id") or ""
     try:
         with transaction.atomic():
+            with connection.cursor() as c:
+                try:
+                    address = _resolve_order_address(c, user["id"], requested_address_id)
+                except ValueError as exc:
+                    return Response({"detail": str(exc)}, status=400)
+
+            address_issues = _order_address_issues(address)
+            if address_issues:
+                return Response({
+                    "detail": "Saved delivery address is incomplete or invalid. Update it before placing the order: " + ", ".join(address_issues) + "."
+                }, status=400)
+            recipient = str(address.get("recipient_name", "")).strip()[:120]
+            phone = str(address.get("phone", "")).strip()[:30]
+            line1 = str(address.get("line1", "")).strip()[:200]
+            customer_latitude = _coordinate(address.get("latitude"), "latitude")
+            customer_longitude = _coordinate(address.get("longitude"), "longitude")
+            snapshot = {
+                "saved_address_id": address["id"],
+                "recipient_name": recipient,
+                "phone": phone,
+                "line1": line1,
+                "line2": str(address.get("line2", ""))[:200],
+                "landmark": str(address.get("landmark", ""))[:160],
+                "city": "Rayachoty",
+                "state": "Andhra Pradesh",
+                "postal_code": str(address.get("postal_code", ""))[:20],
+                "latitude": customer_latitude,
+                "longitude": customer_longitude,
+            }
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
             for raw in items:
                 pid=str(raw.get("product_id",""))
