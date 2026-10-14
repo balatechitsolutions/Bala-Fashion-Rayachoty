@@ -24,6 +24,7 @@ export function OrderAddressRepair({ session, order, role, onSaved, notify }) {
     postal_code: current.postal_code || '',
     latitude: current.latitude == null ? '' : String(current.latitude),
     longitude: current.longitude == null ? '' : String(current.longitude),
+    correction_reason: '',
   }))
   const [saving, setSaving] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -60,6 +61,7 @@ export function OrderAddressRepair({ session, order, role, onSaved, notify }) {
   return <form className="form order-address-repair" onSubmit={submit}>
     <div className="notice"><b>Complete delivery details</b><p>Enter verified contact and address details. Delivery remains blocked until the address and map location are complete.</p></div>
     {fields.map(([key, label, required]) => <label key={key}>{label}<input value={form[key]} required={required} maxLength={key === 'line1' ? 200 : 160} inputMode={key === 'phone' ? 'tel' : undefined} onChange={event => update(key, event.target.value)} /></label>)}
+    {role === 'admin' && <label>Correction reason<input value={form.correction_reason} required maxLength={500} onChange={event => update('correction_reason', event.target.value)} placeholder="Why this saved order address needs correction" /></label>}
     <div className="form-two">
       <label>Latitude<input required type="number" min="-90" max="90" step="any" value={form.latitude} onChange={event => update('latitude', event.target.value)} /></label>
       <label>Longitude<input required type="number" min="-180" max="180" step="any" value={form.longitude} onChange={event => update('longitude', event.target.value)} /></label>
