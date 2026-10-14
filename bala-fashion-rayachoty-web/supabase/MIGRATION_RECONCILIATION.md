@@ -6,7 +6,7 @@ Audited against the connected production project's `supabase_migrations.schema_m
 
 The production migration table stores each applied migration's `version`, `name`, and SQL `statements` array. The versioned SQL files in `migrations/` are restored from those stored statements, not guessed from the current schema and not regenerated as new migration history. The existing database history is left unchanged.
 
-The production history contains **22 records**:
+The production history contains **23 records** (including the follow-up restrictive deny-policy migration applied during the security audit):
 
 | Version | Recorded migration |
 | --- | --- |
@@ -32,6 +32,7 @@ The production history contains **22 records**:
 | 20261014083904 | least_privilege_public_table_grants |
 | 20261014084011 | restrict_profile_client_write_columns |
 | 20261014084514 | restrict_direct_order_table_reads |
+| 20261014092151 | reinforce_backend_only_table_rls |
 
 ## Important reconciliation notes
 
@@ -46,7 +47,7 @@ The production history contains **22 records**:
 - Public catalog reads are granted to `anon` and `authenticated`, with RLS policies limiting rows to approved vendors and active categories/products.
 - Customers can access only their own saved addresses and own order rows through RLS. Order/order-item direct client table grants are revoked so role-filtered order details are served by Django APIs.
 - Profile inserts/updates are column-restricted for authenticated clients to `id, full_name, phone` on insert and `full_name, phone` on update; role, activation, availability, and live-location changes remain backend/admin controlled.
-- Django internal tables, order-address audit, and notification tables remain backend-only for direct PostgREST client access. RLS is enabled without client policies intentionally; the trusted backend connection is not forced under RLS, preserving Django Admin and migrations.
+- Django internal tables, order-address audit, and notification/device tables remain backend-only for direct PostgREST client access. They now have restrictive `USING (false)` / `WITH CHECK (false)` policies for `anon` and `authenticated`, in addition to revoked direct grants. The trusted backend connection is not forced under RLS, preserving Django Admin and migrations.
 
 ## Remaining operational verification
 
