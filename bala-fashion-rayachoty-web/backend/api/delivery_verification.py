@@ -67,8 +67,7 @@ def delivery_verification(request):
     try:
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute(
-                """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.customer_id,
-                          coalesce(o.address_snapshot, '{}'::jsonb)
+                """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.customer_id
                    from public.orders o
                    where o.id=%s and o.assigned_delivery_boy_id=%s for update""",
                 [order_id, user["id"]],
