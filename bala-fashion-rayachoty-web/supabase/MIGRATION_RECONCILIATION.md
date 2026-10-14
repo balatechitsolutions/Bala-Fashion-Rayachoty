@@ -37,6 +37,7 @@ Canonical schema/migration location: `bala-fashion-rayachoty-web/supabase/`
 | 20261014082934 | remove_duplicate_delivery_notification_index | SQL source aligned to the applied statement and recorded version |
 | 20261014083904 | least_privilege_public_table_grants | SQL source recorded from the statement applied to the live project |
 | 20261014084011 | restrict_profile_client_write_columns | SQL source recorded from the statement applied to the live project |
+| 20261014084514 | restrict_direct_order_table_reads | SQL source recorded from the statement applied to the live project |
 
 ## Recovery candidates
 
@@ -44,4 +45,4 @@ The four candidate files were preserved without editing their SQL bodies. They h
 
 ## Remaining source recovery
 
-There are 14 recorded versions whose SQL bodies are not currently present in the repository or recoverable from the checked Git history. Recover those from an authoritative original (developer machine/export, saved SQL, or database/audit backup where available). If exact originals cannot be recovered, create a separately named **new baseline/snapshot** from the live schema and keep the historical gaps explicitly documented; do not backfill invented files under old migration timestamps.
+There are 14 recorded versions whose SQL bodies are not currently present in the repository or recoverable from the checked Git history. The current frontend uses the Django API for order reads; direct client SELECT on `orders` and `order_items` is therefore revoked to prevent access to OTP hashes and internal delivery fields. Recover those from an authoritative original (developer machine/export, saved SQL, or database/audit backup where available). If exact originals cannot be recovered, create a separately named **new baseline/snapshot** from the live schema and keep the historical gaps explicitly documented; do not backfill invented files under old migration timestamps.
