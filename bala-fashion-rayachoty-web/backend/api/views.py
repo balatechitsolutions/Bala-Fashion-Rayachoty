@@ -883,7 +883,7 @@ def manage_orders(request):
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
                               coalesce(o.address_snapshot, '{}'::jsonb) as address_snapshot,
-                              o.notes,o.created_at,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,
+                              o.notes,o.created_at,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,
                               cu.email as customer_email,
                               dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
                               o.assigned_delivery_boy_id,
@@ -1009,7 +1009,7 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
-                          o.assigned_delivery_boy_id,v.name as vendor_name,v.address as vendor_address,v.phone as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
+                          o.assigned_delivery_boy_id,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
                           case when %s='admin' then jsonb_build_object(
                             'latitude',o.address_snapshot->>'latitude',
