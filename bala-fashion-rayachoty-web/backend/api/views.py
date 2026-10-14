@@ -632,23 +632,17 @@ def orders(request):
     if not isinstance(items,list) or not 1<=len(items)<=30:
         return Response({"detail":"Provide 1–30 cart items."},status=400)
 
-    # The database is authoritative for delivery details. A selected saved-address
-    # ID is accepted only when it belongs to this customer; otherwise use the
-    # customer's default. Never accept edited/stale client fields as the order address.
-    requested_address_id = submitted_address.get("saved_address_id") or submitted_address.get("id") or data.get("saved_address_id") or ""
-    try:
-        with connection.cursor() as address_cursor:
-            address = _resolve_order_address(address_cursor, user["id"], requested_address_id)
-    except ValueError as exc:
-        return Response({"detail":str(exc)},status=400)
-    except Exception:
-        return Response({"detail":"Could not load your saved delivery address. Please retry."},status=503)
-    saved_address_id = address["id"]
+    # The order owns its drop-off address and recipient contact details.
+    # Snapshot the checkout payload at placement time; never resolve against
+    # customer_addresses or a mutable customer profile/default address.
+    address = submitted_address
+    if not isinstance(address, dict):
+        return Response({"detail": "Enter the delivery address and drop-off contact details."}, status=400)
 
     recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
     phone_digits=sum(character.isdigit() for character in phone)
     if not recipient or not line1 or not re.fullmatch(r"[0-9+() \-]{10,16}",phone) or not 10<=phone_digits<=15:
-        return Response({"detail":"Delivery address is incomplete. Enter recipient name, a valid 10–15 digit mobile number and house/street address, or select a saved address."},status=400)
+        return Response({"detail":"Delivery address is incomplete. Enter the drop-off recipient name, a valid 10–15 digit mobile number and house/street address."},status=400)
     city_name = str(address.get("city", "Rayachoty")).strip()[:100] or "Rayachoty"
     if city_name.casefold() not in {"rayachoty", "rayachoti"}:
         return Response({"detail": "Bala Fashion currently delivers only within the Rayachoty local service area."}, status=400)
@@ -657,7 +651,7 @@ def orders(request):
         customer_longitude = _coordinate(address.get("longitude"), "longitude")
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=400)
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude,"saved_address_id":saved_address_id}
+    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude}
     try:
         with transaction.atomic():
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
