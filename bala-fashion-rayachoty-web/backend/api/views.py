@@ -591,8 +591,41 @@ def orders(request):
         except Exception:return Response({"detail":"Order history is unavailable."},status=503)
     data=request.data;address=data.get("address");items=data.get("items")
     if not isinstance(address,dict) or not isinstance(items,list) or not 1<=len(items)<=30:return Response({"detail":"Provide a delivery address and 1–30 cart items."},status=400)
+
+    # Resolve an optional saved-address ID against this authenticated customer.
+    # Checkout clients can hold a partially edited/stale form; fill only blank
+    # values from the customer's own saved address instead of losing a valid pin.
+    address=dict(address)
+    requested_address_id=str(address.get("saved_address_id") or address.get("id") or "").strip()
+    saved_address_id=""
+    if requested_address_id:
+        try:
+            requested_address_id=str(uuid.UUID(requested_address_id))
+        except (ValueError,TypeError,AttributeError):
+            requested_address_id=""
+        if requested_address_id:
+            with connection.cursor() as c:
+                c.execute(
+                    """select id,recipient_name,phone,line1,line2,landmark,city,state,postal_code,
+                              latitude,longitude,notes
+                       from public.customer_addresses where id=%s and user_id=%s""",
+                    [requested_address_id,user["id"]],
+                )
+                saved=c.fetchone()
+            if saved:
+                saved_address_id=str(saved[0])
+                saved_fields=dict(zip(
+                    ("id","recipient_name","phone","line1","line2","landmark","city","state",
+                     "postal_code","latitude","longitude","notes"),saved
+                ))
+                for key,value in saved_fields.items():
+                    if address.get(key) is None or str(address.get(key)).strip()=="":
+                        address[key]=value
+
     recipient=str(address.get("recipient_name","")).strip()[:120];phone=str(address.get("phone","")).strip()[:30];line1=str(address.get("line1","")).strip()[:200]
-    if not recipient or not line1 or not re.fullmatch(r"[0-9+() \-]{10,16}",phone):return Response({"detail":"Enter recipient name, valid mobile number and street address."},status=400)
+    phone_digits=sum(character.isdigit() for character in phone)
+    if not recipient or not line1 or not re.fullmatch(r"[0-9+() \-]{10,16}",phone) or not 10<=phone_digits<=15:
+        return Response({"detail":"Delivery address is incomplete. Enter recipient name, a valid 10–15 digit mobile number and house/street address, or select a saved address."},status=400)
     city_name = str(address.get("city", "Rayachoty")).strip()[:100] or "Rayachoty"
     if city_name.casefold() not in {"rayachoty", "rayachoti"}:
         return Response({"detail": "Bala Fashion currently delivers only within the Rayachoty local service area."}, status=400)
@@ -601,7 +634,7 @@ def orders(request):
         customer_longitude = _coordinate(address.get("longitude"), "longitude")
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=400)
-    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude,"saved_address_id":str(address.get("id") or "")[:80]}
+    snapshot={"recipient_name":recipient,"phone":phone,"line1":line1,"line2":str(address.get("line2",""))[:200],"landmark":str(address.get("landmark",""))[:160],"city":"Rayachoty","state":"Andhra Pradesh","postal_code":str(address.get("postal_code",""))[:20],"latitude":customer_latitude,"longitude":customer_longitude,"saved_address_id":saved_address_id}
     try:
         with transaction.atomic():
             vendor=None;subtotal=Decimal("0.00");verified=[];seen=set()
