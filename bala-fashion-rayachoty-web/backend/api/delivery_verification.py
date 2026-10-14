@@ -14,7 +14,7 @@ import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .views import _insert_account_notification, _notify_admins, _role_user
+from .views import _insert_account_notification, _notify_admins, _order_address_issues, _role_user
 
 logger = logging.getLogger(__name__)
 
@@ -89,28 +89,7 @@ def delivery_verification(request):
                     # The order's stored address is the only delivery source of truth.
                     # Customer address-book edits must never redirect an existing order.
                     address = dict(order[6]) if isinstance(order[6], dict) else {}
-                    recipient_name = str(address.get("recipient_name") or "").strip()
-                    phone = str(address.get("phone") or "").strip()
-                    line1 = str(address.get("line1") or "").strip()
-                    phone_valid = bool(re.fullmatch(r"[0-9+() \-]{10,16}", phone)) and 10 <= sum(ch.isdigit() for ch in phone) <= 15
-                    try:
-                        latitude = float(address.get("latitude"))
-                        longitude = float(address.get("longitude"))
-                        coordinates_valid = (
-                            math.isfinite(latitude) and math.isfinite(longitude)
-                            and -90 <= latitude <= 90 and -180 <= longitude <= 180
-                        )
-                    except (TypeError, ValueError, OverflowError):
-                        coordinates_valid = False
-                    missing = []
-                    if not recipient_name:
-                        missing.append("customer name")
-                    if not phone_valid:
-                        missing.append("valid customer phone number")
-                    if not line1:
-                        missing.append("complete delivery address")
-                    if not coordinates_valid:
-                        missing.append("valid delivery map location")
+                    missing = _order_address_issues(address)
                     if missing:
                         return Response({
                             "detail": "Delivery cannot start. Ask the administrator to correct and verify the order's saved delivery address: " + ", ".join(missing) + "."
