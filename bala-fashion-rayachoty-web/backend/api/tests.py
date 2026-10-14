@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
+from contextlib import nullcontext
 from decimal import Decimal
 from django.test import SimpleTestCase
 from rest_framework.test import APIRequestFactory
@@ -92,6 +93,7 @@ class EndpointTests(SimpleTestCase):
         self.assertEqual(resolved["line1"], "12 Main Road")
         self.assertEqual(resolved["id"], "a1b2c3d4-1111-4222-8333-123456789abc")
         self.assertIn("is_default=true", cursor.execute.call_args.args[0])
+        self.assertIn("for share", cursor.execute.call_args.args[0].lower())
 
     def test_order_address_rejects_address_not_owned_by_customer(self):
         cursor = MagicMock()
@@ -256,6 +258,37 @@ class EndpointTests(SimpleTestCase):
         with patch.object(views,"_user",return_value=({"id":"f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"},None)):
             res=views.orders(req)
         self.assertEqual(res.status_code,400)
+
+    def test_checkout_ignores_client_address_fields_and_requires_saved_address(self):
+        user = {"id": "f2cb3c32-51d4-46aa-8ec2-785f18b7fd11"}
+        req = self.factory.post(
+            "/api/orders/",
+            {
+                "address": {
+                    "recipient_name": "Forged Client Value",
+                    "phone": "9876543210",
+                    "line1": "Client Supplied Street",
+                    "city": "Rayachoty",
+                    "latitude": 14.05742,
+                    "longitude": 78.74865,
+                },
+                "items": [{"product_id": "a1b2c3d4-1111-4222-8333-123456789abc", "quantity": 1}],
+            },
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test",
+        )
+        cursor = MagicMock()
+        cursor.__enter__.return_value = cursor
+        cursor.fetchone.return_value = None
+        fake_connection = SimpleNamespace(cursor=MagicMock(return_value=cursor))
+        with patch.object(views, "_user", return_value=(user, None)), \
+             patch.object(views, "connection", fake_connection), \
+             patch.object(views, "transaction", SimpleNamespace(atomic=lambda: nullcontext())):
+            response = views.orders(req)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("No default delivery address", response.data["detail"])
+        executed_sql = [str(call.args[0]).lower() for call in cursor.execute.call_args_list]
+        self.assertFalse(any("insert into public.orders" in statement for statement in executed_sql))
 
     def test_standard_django_admin_dashboard_is_registered(self):
         from django.urls import resolve
