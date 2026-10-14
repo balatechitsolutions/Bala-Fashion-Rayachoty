@@ -74,6 +74,10 @@ def repair_order_address(request):
             order = cursor.fetchone()
             if not order:
                 return Response({"detail": "Order not found."}, status=404)
+            # Delivered/cancelled orders are immutable history. Correct only active
+            # orders that may still be delivered, before delivery dispatch starts.
+            if order[1] in {"out_for_delivery", "delivered", "cancelled"}:
+                return Response({"detail": "This order can no longer be address-corrected because delivery has started or the order is closed."}, status=409)
             snapshot = order[2] if isinstance(order[2], dict) else {}
             repaired = dict(snapshot)
             repaired.update(supplied)
