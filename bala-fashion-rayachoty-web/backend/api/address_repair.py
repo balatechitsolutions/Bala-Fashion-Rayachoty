@@ -28,8 +28,8 @@ def _valid_coordinates(data):
 
 @api_view(["PATCH"])
 def repair_order_address(request):
-    """Customers fill missing fields on their own order; admins can correct a snapshot."""
-    user, profile, error = _role_user(request, {"customer", "admin"})
+    """Only administrators can correct an order address; every correction is audited."""
+    user, profile, error = _role_user(request, {"admin"})
     if error:
         return error
     data = request.data
@@ -55,6 +55,9 @@ def repair_order_address(request):
         return Response({"detail": "Choose a valid delivery location using the map or current-location button."}, status=400)
 
     is_admin = profile["role"] == "admin"
+    correction_reason = str(data.get("correction_reason") or "").strip()[:500]
+    if not correction_reason:
+        return Response({"detail": "An audit reason is required for an order-address correction."}, status=400)
     supplied = {
         "recipient_name": recipient, "phone": phone, "line1": line1,
         "line2": line2, "landmark": landmark, "city": "Rayachoty",
@@ -71,38 +74,22 @@ def repair_order_address(request):
             order = cursor.fetchone()
             if not order:
                 return Response({"detail": "Order not found."}, status=404)
-            if not is_admin and str(order[0]) != str(user["id"]):
-                return Response({"detail": "You can only repair the address on your own orders."}, status=403)
-            if not is_admin and order[1] not in {"placed", "confirmed"}:
-                return Response({"detail": "Customer address changes are closed once an order is packed or dispatched. Ask the administrator to correct it."}, status=409)
             snapshot = order[2] if isinstance(order[2], dict) else {}
             repaired = dict(snapshot)
-            # The authenticated customer may correct their own delivery details
-            # before packing; admins can correct them at any stage.
             repaired.update(supplied)
-            repaired["address_completion_source"] = "admin_corrected" if is_admin else "customer_supplied"
+            repaired["address_completion_source"] = "admin_corrected"
             repaired["address_completed_at"] = timezone.now().isoformat()
+            cursor.execute(
+                """insert into public.order_address_audit
+                   (order_id, changed_by, correction_reason, previous_address, corrected_address)
+                   values (%s, %s, %s, %s::jsonb, %s::jsonb)""",
+                [order_id, user["id"], correction_reason, json.dumps(snapshot), json.dumps(repaired)],
+            )
             cursor.execute(
                 "update public.orders set address_snapshot=%s::jsonb, updated_at=now() where id=%s",
                 [json.dumps(repaired), order_id],
             )
-            # Keep the customer's saved address in sync only when this snapshot
-            # already points to an address owned by the same customer.
-            saved_id = str(snapshot.get("saved_address_id") or "")
-            try:
-                saved_id = str(uuid.UUID(saved_id))
-            except (ValueError, TypeError, AttributeError):
-                saved_id = ""
-            if saved_id and not is_admin:
-                cursor.execute(
-                    """update public.customer_addresses set recipient_name=%s, phone=%s, line1=%s,
-                       line2=%s, landmark=%s, city=%s, state=%s, postal_code=%s,
-                       latitude=%s, longitude=%s, updated_at=now()
-                       where id=%s and user_id=%s""",
-                    [recipient, phone, line1, line2, landmark, "Rayachoty", "Andhra Pradesh",
-                     postal_code, coords[0], coords[1], saved_id, user["id"]],
-                )
         return Response({"order_id": order_id, "address_snapshot": repaired,
-                         "detail": "Delivery address updated. Delivery can start only after all required fields are complete."})
+                         "detail": "Order delivery address corrected and audit record saved."})
     except Exception:
         return Response({"detail": "Could not update this delivery address. Please retry."}, status=503)
