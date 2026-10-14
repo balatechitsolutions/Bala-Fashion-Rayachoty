@@ -34,7 +34,17 @@ def _coordinate(value, name):
     return result
 
 def _order_address_issues(address):
-    """Return missing/invalid fields that make an order unsafe to hand to delivery."""
+    """Return missing/invalid fields that make an order unsafe to hand to delivery.
+
+    PostgreSQL JSONB normally arrives as a dict, but some database driver/config
+    combinations return serialized JSON text. Normalize both forms before
+    validation so a complete immutable order snapshot is not falsely rejected.
+    """
+    if isinstance(address, str):
+        try:
+            address = json.loads(address)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return ["saved order delivery address"]
     if not isinstance(address, dict):
         return ["saved order delivery address"]
     issues = []
