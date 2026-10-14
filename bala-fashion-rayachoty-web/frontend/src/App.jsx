@@ -541,7 +541,10 @@ export default function App() {
    if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.line1||'').trim()||! /^[0-9+() \-]{10,16}$/.test(phone)||phoneDigits<10||phoneDigits>15)return notify('Address incomplete: enter recipient name, a valid 10–15 digit mobile number, and house/street address.')
    const latitude=Number(checkoutAddress.latitude),longitude=Number(checkoutAddress.longitude)
    if(checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null||!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude < -90||latitude > 90||longitude < -180||longitude > 180)return notify('Address incomplete: select a valid delivery location on the map or use your current location.')
-   if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote for this address before placing the order.')
+   // Quote against the final resolved coordinates, not an earlier address
+   // state captured before the saved default was restored.
+   const checkoutQuote=await api('/delivery/quote/',{method:'POST',token:session.access_token,body:JSON.stringify({vendor_id:cart[0]?.vendor_id,latitude,longitude})})
+   if(!checkoutQuote||checkoutQuote.vendor_id!==cart[0]?.vendor_id)return notify('Could not verify delivery for this address. Please review the pin and retry.')
    const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
    const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:checkoutAddress.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
    setCart([]);setOrders(o=>[{...r,address_snapshot:r.address_snapshot||payload,items:cart.map(i=>({product_name:i.name,image_url:i.image_url,quantity:i.quantity,size:i.size,color:i.color,unit_price:i.price,line_total:Number(i.price)*i.quantity}))},...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed with delivery address saved`)
