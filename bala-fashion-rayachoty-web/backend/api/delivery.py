@@ -251,26 +251,13 @@ def my_delivery_orders(request):
             cursor.execute(
                 """select o.id, o.order_number, o.status, o.payment_method, o.payment_status,
                           o.subtotal, o.delivery_fee, o.total,
-                          (coalesce(
-                            (select jsonb_build_object(
-                              'recipient_name',ca.recipient_name,'phone',ca.phone,
-                              'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
-                              'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
-                              'latitude',ca.latitude,'longitude',ca.longitude
-                            ) from public.customer_addresses ca
-                             where ca.user_id=o.customer_id
-                             order by ca.is_default desc,ca.updated_at desc,ca.created_at desc limit 1),
-                            '{}'::jsonb
-                          ) || (
-                            coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)
-                            - ARRAY(
-                              select e.key from jsonb_each(coalesce(o.address_snapshot,'{}'::jsonb)) as e(key,value)
-                              where e.value='null'::jsonb
-                                 or (jsonb_typeof(e.value)='string' and btrim(e.value #>> '{}')='')
-                            )
-                          )) as address_snapshot, o.notes,
-                          o.created_at, v.name as vendor_name, v.address as vendor_address,
-                          v.phone as vendor_phone, cu.email as customer_email,
+                          o.address_snapshot as address_snapshot, o.notes,
+                          o.created_at, o.vendor_name_snapshot as vendor_name,
+                          o.vendor_address_snapshot as vendor_address,
+                          o.vendor_phone_snapshot as vendor_phone,
+                          o.vendor_latitude_snapshot as vendor_latitude,
+                          o.vendor_longitude_snapshot as vendor_longitude,
+                          cu.email as customer_email,
                           coalesce(json_agg(json_build_object(
                             'product_name', oi.product_name, 'image_url', oi.image_url,
                             'quantity', oi.quantity, 'size', oi.size, 'color', oi.color,
@@ -281,7 +268,7 @@ def my_delivery_orders(request):
                    left join auth.users cu on cu.id=o.customer_id
                    left join public.order_items oi on oi.order_id=o.id
                    where o.assigned_delivery_boy_id=%s
-                   group by o.id, v.name, v.address, v.phone, cu.email
+                   group by o.id, cu.email
                    order by case o.status when 'out_for_delivery' then 0 when 'packed' then 1 else 2 end,
                             o.created_at desc
                    limit 100""",
