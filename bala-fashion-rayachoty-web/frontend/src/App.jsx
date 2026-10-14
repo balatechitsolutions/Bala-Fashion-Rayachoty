@@ -165,30 +165,9 @@ export default function App() {
   if(drawer!=='checkout'||!session?.access_token)return
   let active=true
   api('/addresses/',{token:session.access_token}).then(data=>{
-   const saved=data.results||[]
-   if(!active||!saved.length)return
-   setAddress(current=>{
-    // Keep a complete address the customer is actively using. If the form is
-    // incomplete (or its saved ID was deleted), restore the best owned address.
-    if(deliveryAddressComplete(current))return current
-    const preferred=saved.find(item=>item.id===current.id)||saved.find(item=>item.is_default)||saved[0]
-    const nonempty=value=>value!=null&&String(value).trim()!==''
-    return {
-     ...preferred,...current,id:preferred.id,
-     recipient_name:nonempty(current.recipient_name)?current.recipient_name:preferred.recipient_name||'',
-     phone:nonempty(current.phone)?current.phone:preferred.phone||'',
-     line1:nonempty(current.line1)?current.line1:preferred.line1||'',
-     line2:nonempty(current.line2)?current.line2:preferred.line2||'',
-     landmark:nonempty(current.landmark)?current.landmark:preferred.landmark||'',
-     city:nonempty(current.city)?current.city:preferred.city||'Rayachoty',
-     state:nonempty(current.state)?current.state:preferred.state||'Andhra Pradesh',
-     postal_code:nonempty(current.postal_code)?current.postal_code:preferred.postal_code||'',
-     latitude:nonempty(current.latitude)?String(current.latitude):String(preferred.latitude??''),
-     longitude:nonempty(current.longitude)?String(current.longitude):String(preferred.longitude??''),
-     notes:nonempty(current.notes)?current.notes:preferred.notes||''
-    }
-   })
-  }).catch(error=>{if(active)notify(error.message||'Saved addresses could not be loaded. You can retry in Saved addresses.')})
+   const preferred=(data.results||[]).find(item=>item.is_default)
+   if(active&&preferred)setAddress(current=>current.id?current:{...current,...preferred,latitude:preferred.latitude==null?'':String(preferred.latitude),longitude:preferred.longitude==null?'':String(preferred.longitude)})
+  }).catch(()=>{})
   return()=>{active=false}
  },[drawer,session?.access_token])
  useEffect(()=>{if(!session){setProfile(null);return}let active=true;api('/profile/',{token:session.access_token}).then(data=>{if(active)setProfile(data)}).catch(()=>{if(active)setProfile(null)});return()=>{active=false}},[session])
@@ -525,35 +504,47 @@ export default function App() {
   if(vendors.length>1)return notify('Checkout one seller at a time.')
   setBusy(true)
   try{
-   // Resolve the saved default at submit time as well as on checkout open, so a
-   // slow address request cannot create an order with an empty address snapshot.
+   // Re-read saved addresses at submit time. The form can contain a partially
+   // edited/stale address (for example, line1 is present but phone/coordinates
+   // are empty), so only checking line1 before loading the default is unsafe.
    let checkoutAddress={...address}
-   if(!deliveryAddressComplete(checkoutAddress)){
+   let savedAddresses=[]
+   try {
     const saved=await api('/addresses/',{token:session.access_token})
-    const list=saved.results||[]
-    const preferred=list.find(item=>item.id===checkoutAddress.id)||list.find(item=>item.is_default)||list[0]
-    if(preferred){
-     const nonempty=value=>value!=null&&String(value).trim()!==''
-     checkoutAddress={
-      ...preferred,...checkoutAddress,id:preferred.id,
-      recipient_name:nonempty(checkoutAddress.recipient_name)?checkoutAddress.recipient_name:preferred.recipient_name||'',
-      phone:nonempty(checkoutAddress.phone)?checkoutAddress.phone:preferred.phone||'',
-      line1:nonempty(checkoutAddress.line1)?checkoutAddress.line1:preferred.line1||'',
-      line2:nonempty(checkoutAddress.line2)?checkoutAddress.line2:preferred.line2||'',
-      landmark:nonempty(checkoutAddress.landmark)?checkoutAddress.landmark:preferred.landmark||'',
-      city:nonempty(checkoutAddress.city)?checkoutAddress.city:preferred.city||'Rayachoty',
-      state:nonempty(checkoutAddress.state)?checkoutAddress.state:preferred.state||'Andhra Pradesh',
-      postal_code:nonempty(checkoutAddress.postal_code)?checkoutAddress.postal_code:preferred.postal_code||'',
-      latitude:nonempty(checkoutAddress.latitude)?String(checkoutAddress.latitude):String(preferred.latitude??''),
-      longitude:nonempty(checkoutAddress.longitude)?String(checkoutAddress.longitude):String(preferred.longitude??''),
-      notes:nonempty(checkoutAddress.notes)?checkoutAddress.notes:preferred.notes||''
-     }
-     setAddress(checkoutAddress)
-     return notify('Your saved delivery address was restored. Confirm the updated delivery charge, then place the order again.')
-    }
+    savedAddresses=Array.isArray(saved.results)?saved.results:[]
+   } catch(error) {
+    if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.phone||'').trim()||!String(checkoutAddress.line1||'').trim()||checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null)throw error
    }
-   if(!deliveryAddressComplete(checkoutAddress))return notify('Delivery address is incomplete. Select a saved address or enter the recipient, valid mobile number, street address, and map pin.')
-   if(!deliveryQuote||deliveryQuote.vendor_id!==cart[0]?.vendor_id)return notify('Wait for a valid road-distance delivery quote for this address before placing the order.')
+   const preferred=savedAddresses.find(item=>item.id&&item.id===checkoutAddress.id)||savedAddresses.find(item=>item.is_default)
+   if(preferred){
+    const keep=(value,fallback)=>String(value??'').trim()!==''?value:(fallback??'')
+    const currentCoordinates=checkoutAddress.latitude!==''&&checkoutAddress.longitude!==''&&checkoutAddress.latitude!=null&&checkoutAddress.longitude!=null&&Number.isFinite(Number(checkoutAddress.latitude))&&Number.isFinite(Number(checkoutAddress.longitude))
+    checkoutAddress={
+     ...preferred,...checkoutAddress,
+     id:preferred.id,
+     recipient_name:keep(checkoutAddress.recipient_name,preferred.recipient_name),
+     phone:keep(checkoutAddress.phone,preferred.phone),
+     line1:keep(checkoutAddress.line1,preferred.line1),
+     line2:keep(checkoutAddress.line2,preferred.line2),
+     landmark:keep(checkoutAddress.landmark,preferred.landmark),
+     city:keep(checkoutAddress.city,preferred.city||'Rayachoty'),
+     state:keep(checkoutAddress.state,preferred.state||'Andhra Pradesh'),
+     postal_code:keep(checkoutAddress.postal_code,preferred.postal_code),
+     latitude:String(currentCoordinates?checkoutAddress.latitude:(preferred.latitude??'')),
+     longitude:String(currentCoordinates?checkoutAddress.longitude:(preferred.longitude??'')),
+     notes:keep(checkoutAddress.notes,preferred.notes),
+    }
+    setAddress(checkoutAddress)
+   }
+   const phone=String(checkoutAddress.phone||'').trim()
+   const phoneDigits=phone.replace(/\D/g,'').length
+   if(!String(checkoutAddress.recipient_name||'').trim()||!String(checkoutAddress.line1||'').trim()||! /^[0-9+() \-]{10,16}$/.test(phone)||phoneDigits<10||phoneDigits>15)return notify('Address incomplete: enter recipient name, a valid 10–15 digit mobile number, and house/street address.')
+   const latitude=Number(checkoutAddress.latitude),longitude=Number(checkoutAddress.longitude)
+   if(checkoutAddress.latitude===''||checkoutAddress.longitude===''||checkoutAddress.latitude==null||checkoutAddress.longitude==null||!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude < -90||latitude > 90||longitude < -180||longitude > 180)return notify('Address incomplete: select a valid delivery location on the map or use your current location.')
+   // Quote against the final resolved coordinates, not an earlier address
+   // state captured before the saved default was restored.
+   const checkoutQuote=await api('/delivery/quote/',{method:'POST',token:session.access_token,body:JSON.stringify({vendor_id:cart[0]?.vendor_id,latitude,longitude})})
+   if(!checkoutQuote||checkoutQuote.vendor_id!==cart[0]?.vendor_id)return notify('Could not verify delivery for this address. Please review the pin and retry.')
    const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
    const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:checkoutAddress.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
    setCart([]);setOrders(o=>[{...r,address_snapshot:r.address_snapshot||payload,items:cart.map(i=>({product_name:i.name,image_url:i.image_url,quantity:i.quantity,size:i.size,color:i.color,unit_price:i.price,line_total:Number(i.price)*i.quantity}))},...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed with delivery address saved`)
