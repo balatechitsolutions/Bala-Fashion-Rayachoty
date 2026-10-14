@@ -68,7 +68,15 @@ def delivery_verification(request):
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute(
                 """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,o.customer_id,
-                          coalesce(o.address_snapshot, '{}'::jsonb)
+                          coalesce(o.address_snapshot, '{}'::jsonb),
+                          (select jsonb_build_object(
+                              'recipient_name',ca.recipient_name,'phone',ca.phone,
+                              'line1',ca.line1,'line2',ca.line2,'landmark',ca.landmark,
+                              'city',ca.city,'state',ca.state,'postal_code',ca.postal_code,
+                              'latitude',ca.latitude,'longitude',ca.longitude
+                           ) from public.customer_addresses ca
+                           where ca.user_id=o.customer_id
+                           order by ca.is_default desc,ca.updated_at desc,ca.created_at desc limit 1)
                    from public.orders o
                    where o.id=%s and o.assigned_delivery_boy_id=%s for update""",
                 [order_id, user["id"]],
@@ -86,7 +94,14 @@ def delivery_verification(request):
                     return Response({"detail": "Mailjet OTP is available only for packed or out-for-delivery orders."}, status=409)
 
                 if action == "start":
-                    address = order[6] if isinstance(order[6], dict) else {}
+                    # Use the saved address as fallback for missing/null/blank snapshot
+                    # fields. Non-empty order snapshot values remain authoritative.
+                    address = dict(order[7]) if isinstance(order[7], dict) else {}
+                    snapshot = order[6] if isinstance(order[6], dict) else {}
+                    for key, value in snapshot.items():
+                        if value is None or (isinstance(value, str) and not value.strip()):
+                            continue
+                        address[key] = value
                     recipient_name = str(address.get("recipient_name") or "").strip()
                     phone = str(address.get("phone") or "").strip()
                     line1 = str(address.get("line1") or "").strip()

@@ -259,9 +259,16 @@ def my_delivery_orders(request):
                               'latitude',ca.latitude,'longitude',ca.longitude
                             ) from public.customer_addresses ca
                              where ca.user_id=o.customer_id
-                             order by ca.is_default desc,ca.created_at desc limit 1),
+                             order by ca.is_default desc,ca.updated_at desc,ca.created_at desc limit 1),
                             '{}'::jsonb
-                          ) || coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)) as address_snapshot, o.notes,
+                          ) || (
+                            coalesce(nullif(o.address_snapshot,'{}'::jsonb), '{}'::jsonb)
+                            - ARRAY(
+                              select e.key from jsonb_each(coalesce(o.address_snapshot,'{}'::jsonb)) as e(key,value)
+                              where e.value='null'::jsonb
+                                 or (jsonb_typeof(e.value)='string' and btrim(e.value #>> '{}')='')
+                            )
+                          )) as address_snapshot, o.notes,
                           o.created_at, v.name as vendor_name, v.address as vendor_address,
                           v.phone as vendor_phone, cu.email as customer_email,
                           coalesce(json_agg(json_build_object(
