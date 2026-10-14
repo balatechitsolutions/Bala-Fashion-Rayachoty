@@ -547,7 +547,16 @@ export default function App() {
    if(!checkoutQuote||checkoutQuote.vendor_id!==cart[0]?.vendor_id)return notify('Could not verify delivery for this address. Please review the pin and retry.')
    const payload={...checkoutAddress,city:'Rayachoty',state:'Andhra Pradesh',latitude:Number(checkoutAddress.latitude),longitude:Number(checkoutAddress.longitude)}
    const r=await api('/orders/',{method:'POST',token:session.access_token,body:JSON.stringify({address:payload,notes:checkoutAddress.notes,items:cart.map(i=>({product_id:i.id,quantity:i.quantity,size:i.size,color:i.color}))})})
-   setCart([]);setOrders(o=>[{...r,address_snapshot:r.address_snapshot||payload,items:cart.map(i=>({product_name:i.name,image_url:i.image_url,quantity:i.quantity,size:i.size,color:i.color,unit_price:i.price,line_total:Number(i.price)*i.quantity}))},...o]);setDeliveryQuote(null);setDrawer('orders');notify(`Order ${r.order_number} placed with delivery address saved`)
+   const fallbackItems=cart.map(i=>({product_id:i.id,product_name:i.name,image_url:i.image_url,quantity:i.quantity,size:i.size,color:i.color,unit_price:i.price,line_total:Number(i.price)*i.quantity}))
+   let createdOrder={...r,address_snapshot:r.address_snapshot||payload,items:fallbackItems}
+   // Prefer the persisted server-side order representation for the details screen.
+   // If the follow-up read fails, the successful POST response remains sufficient.
+   try{
+    const persisted=await api('/orders/',{token:session.access_token})
+    const match=(persisted.results||persisted||[]).find(item=>String(item.id)===String(r.id))
+    if(match)createdOrder={...createdOrder,...match,address_snapshot:match.address_snapshot||createdOrder.address_snapshot,items:Array.isArray(match.items)?match.items:fallbackItems}
+   }catch(readError){console.warn('Order created, but the refreshed order details could not be loaded:',readError.message)}
+   setCart([]);setOrders(o=>[createdOrder,...o.filter(item=>String(item.id)!==String(createdOrder.id))]);setSelectedOrder(createdOrder);setOrderReturnDrawer('orders');setDeliveryQuote(null);setDrawer('order-details');notify(`Order ${r.order_number} placed successfully`)
   }catch(err){notify(err.message)}finally{setBusy(false)}
  }
  const catalogContent = <>
