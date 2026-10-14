@@ -26,6 +26,39 @@ class EndpointTests(SimpleTestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 views._coordinate(value, "latitude")
 
+    def test_order_address_snapshot_requires_recipient_phone_street_city_and_coordinates(self):
+        valid = {
+            "recipient_name": "Drop-off Recipient",
+            "phone": "+91 98765 43210",
+            "line1": "12 Main Road",
+            "city": "Rayachoty",
+            "latitude": 14.05742,
+            "longitude": 78.74865,
+        }
+        self.assertEqual(views._order_address_issues(valid), [])
+        cases = [
+            ({**valid, "recipient_name": ""}, "recipient name"),
+            ({**valid, "phone": "123"}, "valid recipient phone number"),
+            ({**valid, "line1": ""}, "house/street address"),
+            ({**valid, "latitude": None}, "valid map coordinates"),
+            ({**valid, "longitude": 181}, "valid map coordinates"),
+            ({**valid, "city": "Bengaluru"}, "Rayachoty delivery city"),
+        ]
+        for address, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertIn(expected, views._order_address_issues(address))
+
+    def test_order_address_snapshot_rejects_non_finite_coordinates(self):
+        address = {
+            "recipient_name": "Recipient",
+            "phone": "9876543210",
+            "line1": "12 Main Road",
+            "city": "Rayachoty",
+            "latitude": float("nan"),
+            "longitude": 78.75,
+        }
+        self.assertIn("valid map coordinates", views._order_address_issues(address))
+
     @patch.object(views.requests, "get")
     def test_road_distance_uses_osrm_route_distance(self, get):
         response = MagicMock()
