@@ -289,7 +289,7 @@ class EndpointTests(SimpleTestCase):
         cursor.__enter__.return_value = cursor
         cursor.description = []
         cursor.fetchall.return_value = []
-        with patch.object(views, "_role_user", return_value=(user, profile, None)), \\
+        with patch.object(views, "_role_user", return_value=(user, profile, None)), \
              patch.object(views, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
             response = views.manage_orders(req)
 
@@ -312,7 +312,7 @@ class EndpointTests(SimpleTestCase):
         cursor.__enter__.return_value = cursor
         cursor.description = []
         cursor.fetchall.return_value = []
-        with patch.object(delivery, "_role_user", return_value=(user, profile, None)), \\
+        with patch.object(delivery, "_role_user", return_value=(user, profile, None)), \
              patch.object(delivery, "connection", SimpleNamespace(cursor=MagicMock(return_value=cursor))):
             response = delivery.my_delivery_orders(req)
 
