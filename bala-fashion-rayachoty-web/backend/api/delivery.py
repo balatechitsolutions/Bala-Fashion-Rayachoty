@@ -72,7 +72,10 @@ def delivery_staff(request):
                     cursor.execute("select id from public.profiles where id=%s and role='delivery_boy' for update", [staff_id])
                     if not cursor.fetchone():
                         return Response({"detail": "Delivery staff account not found."}, status=404)
-                    cursor.execute("update public.orders set assigned_delivery_boy_id=NULL, updated_at=now() where assigned_delivery_boy_id=%s and status<>'delivered'", [staff_id])
+                    cursor.execute("select count(*) from public.orders where assigned_delivery_boy_id=%s and status not in ('delivered','cancelled')", [staff_id])
+                    active_assignments = int(cursor.fetchone()[0])
+                    if active_assignments:
+                        return Response({"detail": "Reassign or complete active deliveries before removing this delivery person."}, status=409)
                     cursor.execute("update public.profiles set role='customer', updated_at=now() where id=%s and role='delivery_boy'", [staff_id])
             return Response({"id": staff_id, "deleted": True, "role": "customer"})
         except Exception:
@@ -189,7 +192,8 @@ def my_delivery_orders(request):
                     if next_status not in transitions.get(current[2],set()):
                         return Response({"detail":f"Order cannot move from {current[2]} to {next_status}."},status=409)
                     cursor.execute("""update public.orders set status=%s,updated_at=now()
-                        where id=%s returning id,order_number,status""",[next_status,order_id])
+                        where id=%s and assigned_delivery_boy_id=%s and status=%s
+                        returning id,order_number,status""",[next_status,order_id,user["id"],current[2]])
                     updated=cursor.fetchone()
                     if next_status in {"confirmed","cancelled"}:
                         title="Order confirmed" if next_status=="confirmed" else "Order cancelled"
