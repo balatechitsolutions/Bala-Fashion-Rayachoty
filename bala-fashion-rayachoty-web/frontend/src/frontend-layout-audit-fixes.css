@@ -459,3 +459,172 @@
   .app-shell .delivery-order-card { padding: 6px; }
   .app-shell .delivery-order-details { padding: 10px 8px; }
 }
+
+/* Address component layer — saved-address row, its controls, and editor child fields. */
+.app-shell .address-management .saved-address-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e8e1e3;
+  border-radius: 15px;
+  background: #fff;
+}
+.app-shell .address-management .saved-address-row > span:first-child {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.app-shell .address-management .saved-address-row > span:first-child b {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  color: #18181b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.app-shell .address-management .saved-address-row > span:first-child small:not(.seller-status) {
+  color: #686b75;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.app-shell .address-management .saved-address-row .address-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.app-shell .address-management .address-actions button {
+  min-height: 40px;
+  max-width: 100%;
+}
+.app-shell .address-management .address-editor {
+  gap: 14px;
+  min-width: 0;
+  margin-top: 12px;
+  padding: 17px;
+  border: 1px solid #e8e1e3;
+  border-radius: 16px;
+  background: #fff;
+}
+.app-shell .address-management .address-editor h3 {
+  margin: 0;
+  color: #18181b;
+  font-size: 16px;
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+.app-shell .address-management .address-editor label {
+  min-width: 0;
+}
+.app-shell .address-management .address-editor input:not([type="checkbox"]),
+.app-shell .address-management .address-editor textarea,
+.app-shell .address-management .address-editor select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 11px;
+}
+.app-shell .address-management .address-editor .form-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.app-shell .address-management .address-editor .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+}
+.app-shell .address-management .address-editor .checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-top: 1px;
+  accent-color: #bf1730;
+}
+.app-shell .address-location-picker {
+  min-width: 0;
+  border-radius: 14px;
+}
+.app-shell .address-location-picker .location-picker-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.app-shell .address-location-picker .location-picker-head b {
+  min-width: 0;
+}
+.app-shell .address-location-picker .location-map {
+  width: 100%;
+  min-width: 0;
+  min-height: 240px;
+  border: 1px solid #e7e0e2;
+}
+.app-shell .address-management .location-coordinates {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.app-shell .order-address-repair {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.app-shell .order-address-repair .notice {
+  border-radius: 13px;
+  padding: 14px;
+}
+.app-shell .order-address-repair .notice p {
+  margin: 6px 0 0;
+  line-height: 1.55;
+}
+.app-shell .order-address-repair label {
+  min-width: 0;
+}
+.app-shell .order-address-repair input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 11px;
+}
+.app-shell .order-address-repair .form-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.app-shell .order-address-repair .full {
+  width: 100%;
+  min-height: 46px;
+}
+@media (max-width: 760px) {
+  .app-shell .address-management .saved-address-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+  .app-shell .address-management .saved-address-row .address-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+  }
+  .app-shell .address-management .address-actions button { width: 100%; min-height: 44px; }
+  .app-shell .address-management .address-editor { padding: 13px; }
+  .app-shell .address-management .address-editor .form-two,
+  .app-shell .order-address-repair .form-two { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .address-location-picker .location-picker-head { flex-direction: column; }
+  .app-shell .address-location-picker .location-picker-head button { width: 100%; min-height: 44px; }
+  .app-shell .address-location-picker .location-map { min-height: 220px; }
+}
+@media (max-width: 340px) {
+  .app-shell .address-management .saved-address-row .address-actions { grid-template-columns: minmax(0, 1fr); }
+}
