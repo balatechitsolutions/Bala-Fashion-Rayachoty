@@ -729,3 +729,60 @@
     min-height: 36px;
   }
 }
+
+/* Search page field: keep bottom-navigation Search usable when the header search is hidden on mobile. */
+.app-shell .app-search-page-field {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  margin: 0 0 18px;
+  padding: 0 14px;
+  border: 1px solid #dedfe5;
+  border-radius: 13px;
+  background: #fff;
+  color: #71717a;
+  box-shadow: 0 3px 12px #18181b08;
+}
+.app-shell .app-search-page-field:focus-within {
+  border-color: #bf1730;
+  box-shadow: 0 0 0 3px #e52d4518;
+}
+.app-shell .app-search-page-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #18181b;
+  font-size: 16px;
+  box-shadow: none;
+}
+.app-shell .app-search-page-field input:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+.app-shell .app-search-page-field .clear-search-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: #f5f1f2;
+  color: #52525b;
+}
+@media (min-width: 761px) {
+  .app-shell .app-search-page-field { max-width: 620px; }
+}
+@media (max-width: 380px) {
+  .app-shell .app-search-page-field { gap: 8px; min-height: 46px; padding-inline: 11px; }
+  .app-shell .app-search-page-field input { font-size: 16px; }
+}
