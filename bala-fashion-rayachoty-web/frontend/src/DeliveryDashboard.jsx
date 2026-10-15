@@ -152,6 +152,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
 export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }) {
   const [orders, setOrders] = useState([])
   const [orderSearch, setOrderSearch] = useState('')
+  const [expandedOrderIds, setExpandedOrderIds] = useState({})
   const [loading, setLoading] = useState(true)
   const [busyOrder, setBusyOrder] = useState('')
   const [error, setError] = useState('')
@@ -303,10 +304,13 @@ export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }
         const navigation = address.latitude != null && address.longitude != null
           ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address.latitude + ',' + address.longitude)}&travelmode=driving`
           : ''
+        const expanded = Boolean(expandedOrderIds[order.id])
         return <article className="seller-order-row delivery-order-card" key={order.id}>
-          <span className="delivery-order-details">
-            <b className="delivery-order-number">{order.order_number}</b>
-            <small>Status: {order.status.replaceAll('_', ' ')}</small>
+          <button type="button" className="delivery-order-summary" aria-expanded={expanded} onClick={() => setExpandedOrderIds(current => ({ ...current, [order.id]: !current[order.id] }))}>
+            <span className="delivery-order-summary-text"><b className="delivery-order-number">{order.order_number}</b><small>Status: {order.status.replaceAll('_', ' ')}</small></span>
+            <FiArrowRight size={18} className={expanded ? 'delivery-order-chevron expanded' : 'delivery-order-chevron'}/>
+          </button>
+          {expanded && <span className="delivery-order-details">
             <b>Vendor / pickup</b>
             <small>{order.vendor_name || 'Vendor name unavailable'}</small>
             <small>{order.vendor_address || 'Vendor address not provided'}</small>
@@ -327,7 +331,7 @@ export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }
           </span>
           <span className="delivery-order-actions">
             {canConfirm ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'confirmed')}>Confirm order</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'cancelled')}>Reject order</button></span> : canPack ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => updatePreparationStatus(order,'packed')}><FiPackage size={15}/> Mark packed</button></span> : canStart ? <span className="delivery-otp-controls"><button className="primary" disabled={busyOrder === order.id} onClick={() => startDelivery(order)}><FiTruck size={15}/>{busyOrder === order.id ? 'Sending OTP…' : 'Start delivery & send OTP'}</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Start & send OTP via Mailjet</button></span> : canDeliver ? <span className="delivery-otp-controls"><label>Customer email OTP<input aria-label={`Delivery OTP for ${order.order_number}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpInputs[order.id] || ''} onChange={event=>setOtpInputs(current=>({...current,[order.id]:event.target.value.replace(/\D/g,'').slice(0,6)}))} placeholder="6-digit code"/></label><button className="secondary" disabled={busyOrder === order.id} onClick={() => resendDeliveryCode(order)}>Resend delivery OTP</button><button className="secondary" disabled={busyOrder === order.id} onClick={() => sendMailjetDeliveryCode(order)}>Send OTP via Mailjet</button><button className="primary" disabled={busyOrder === order.id || String(otpInputs[order.id] || '').length !== 6} onClick={() => verifyDelivery(order)}><FiCheck size={15}/>{busyOrder === order.id ? 'Verifying…' : 'Verify & deliver'}</button></span> : <span className="seller-status approved">{order.status.replaceAll('_', ' ')}</span>}
-          </span>
+          </span>}
         </article>
       })
     }
