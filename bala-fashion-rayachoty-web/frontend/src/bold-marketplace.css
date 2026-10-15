@@ -498,3 +498,78 @@ input, select, textarea { max-width: 100%; }
   .seller-dashboard .warning { align-items:stretch; }
   .seller-dashboard .warning button { width:100%; }
 }
+
+/* Address-management leaf controls: location picker and saved-address actions */
+.address-management .address-location-picker {
+  display:grid; gap:12px; margin:8px 0 2px; padding:16px;
+  border:1px solid #e8e3e6; border-radius:16px; background:#fff;
+}
+.address-management .location-picker-head {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+}
+.address-management .location-picker-head b { color:#18181b; font-size:14px; font-weight:900; }
+.address-management .location-picker-head button { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+.address-management .address-location-picker > p { margin:0; color:#71717a; font-size:12px; line-height:1.65; }
+.address-management .location-map {
+  min-height:270px; border:1px solid #e4e4e7; border-radius:13px; background:#f4f4f5;
+}
+.address-management .location-coordinates {
+  display:flex; flex-wrap:wrap; gap:8px;
+}
+.address-management .location-coordinates span {
+  border:1px solid #eee5e8; border-radius:8px; background:#fff8f9; padding:7px 9px;
+  color:#52525b; font-size:10px; font-variant-numeric:tabular-nums;
+}
+.address-management .location-error { display:block; border-radius:9px; background:#fff1f2; padding:9px 10px; color:#9f1239; font-size:11px; line-height:1.5; }
+.address-management .address-editor {
+  display:grid; gap:13px; margin-top:22px; padding:20px;
+  border:1px solid #e7e3e6; border-radius:18px; background:linear-gradient(145deg,#fff 0%,#fffafb 100%);
+}
+.address-management .address-editor h3 { margin:0 0 3px; color:#18181b; font-size:19px; font-weight:900; letter-spacing:-.03em; }
+.address-management .address-editor > label:not(.checkbox-label),
+.address-management .address-editor .form-two > label {
+  display:grid; gap:7px; min-width:0; color:#45454f; font-size:11px; font-weight:850;
+}
+.address-management .address-editor .form-two { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.address-management .address-editor input:not([type=checkbox]),
+.address-management .address-editor textarea {
+  width:100%; min-width:0; border:1px solid #dedee5; border-radius:10px; background:#fff;
+  padding:11px 12px; color:#18181b; font-size:13px;
+}
+.address-management .address-editor input:focus,
+.address-management .address-editor textarea:focus {
+  border-color:#e52d45; outline:0; box-shadow:0 0 0 4px #e52d4514;
+}
+.address-management .address-editor .checkbox-label {
+  display:flex; align-items:center; gap:10px; border:1px solid #f0e3e6; border-radius:11px;
+  background:#fff5f6; padding:12px; color:#45454f; font-size:12px; font-weight:750;
+}
+.address-management .address-editor .checkbox-label input { width:17px; height:17px; accent-color:#e52d45; }
+.address-management .address-editor > button.full { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:46px; }
+.address-management .saved-address-row { border:1px solid #e9e6e8; border-radius:14px; background:#fff; padding:15px; }
+.address-management .saved-address-row > span:first-child { display:grid; min-width:0; gap:7px; }
+.address-management .saved-address-row > span:first-child b { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.address-management .saved-address-row > span:first-child small { overflow-wrap:anywhere; color:#71717a; font-size:11px; line-height:1.55; }
+.address-management .address-actions { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.address-management .address-actions button { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:38px; }
+.order-address-repair { display:grid; gap:13px; padding:18px; border:1px solid #e8e2e5; border-radius:16px; background:#fff; }
+.order-address-repair .notice { margin:0; padding:14px; }
+.order-address-repair .notice b { font-size:13px; font-weight:900; }
+.order-address-repair .notice p { margin:6px 0 0; font-size:12px; line-height:1.6; }
+.order-address-repair > label,
+.order-address-repair .form-two > label { display:grid; gap:7px; min-width:0; color:#45454f; font-size:11px; font-weight:850; }
+.order-address-repair input { width:100%; min-width:0; min-height:43px; border:1px solid #dedee5; border-radius:10px; background:#fff; padding:10px 12px; color:#18181b; font-size:13px; }
+.order-address-repair input:focus { border-color:#e52d45; outline:0; box-shadow:0 0 0 4px #e52d4514; }
+.order-address-repair > button.full { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:44px; }
+@media (max-width:760px) {
+  .address-management .address-location-picker { padding:12px; }
+  .address-management .location-picker-head { align-items:stretch; flex-direction:column; }
+  .address-management .location-picker-head button { width:100%; min-height:43px; }
+  .address-management .location-map { min-height:230px; }
+  .address-management .address-editor { padding:14px; }
+  .address-management .address-editor .form-two,
+  .order-address-repair .form-two { grid-template-columns:minmax(0,1fr); }
+  .address-management .address-actions { width:100%; }
+  .address-management .address-actions button { flex:1 1 calc(50% - 7px); min-height:42px; }
+  .order-address-repair { padding:13px; }
+}
