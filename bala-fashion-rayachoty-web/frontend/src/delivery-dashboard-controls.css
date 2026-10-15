@@ -1,0 +1,63 @@
+/* Delivery dashboard child controls: presentation-only, no workflow changes. */
+.seller-dashboard .admin-vendor-create {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px;
+  margin:18px 0; padding:20px; border:1px solid #e9e4e7; border-radius:17px;
+  background:linear-gradient(145deg,#fff 0%,#fffafb 100%); box-shadow:0 6px 20px #18181b06;
+}
+.seller-dashboard .admin-vendor-create h3 {
+  display:flex; align-items:center; gap:9px; grid-column:1/-1; margin:0;
+  color:#18181b; font-size:16px; font-weight:900;
+}
+.seller-dashboard .admin-vendor-create h3 svg { color:#bf1730; }
+.seller-dashboard .admin-vendor-create > label {
+  display:grid; align-content:start; gap:7px; min-width:0; color:#45454f; font-size:11px; font-weight:850;
+}
+.seller-dashboard .admin-vendor-create input,
+.seller-dashboard .admin-vendor-create select {
+  width:100%; min-width:0; min-height:44px; border:1px solid #dedee5; border-radius:11px;
+  background:#fff; padding:10px 12px; color:#18181b; font-size:13px;
+}
+.seller-dashboard .admin-vendor-create input:focus,
+.seller-dashboard .admin-vendor-create select:focus {
+  border-color:#e52d45; outline:0; box-shadow:0 0 0 4px #e52d4515;
+}
+.seller-dashboard .admin-vendor-create > small { align-self:center; color:#71717a; font-size:11px; }
+.seller-dashboard .admin-vendor-create > button.full { grid-column:1/-1; width:100%; min-height:46px; }
+.seller-dashboard .seller-dashboard-head-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+.seller-dashboard .seller-dashboard-head-actions button,
+.seller-dashboard .seller-product-actions button { display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+.seller-dashboard .seller-status { white-space:nowrap; letter-spacing:.02em; }
+.seller-dashboard .seller-store-row > span:first-child { display:grid; min-width:0; gap:5px; }
+.seller-dashboard .seller-store-row > span:first-child small,
+.seller-dashboard .seller-store-row > small { overflow-wrap:anywhere; color:#71717a; font-size:11px; line-height:1.5; }
+.seller-dashboard .seller-product-actions button { min-height:36px; padding:8px 12px; }
+.seller-dashboard .delivery-assignment-controls { display:flex; align-items:center; gap:8px; min-width:min(100%,340px); }
+.seller-dashboard .delivery-assignment-controls select {
+  flex:1 1 220px; min-width:0; min-height:42px; border:1px solid #dedee5; border-radius:10px;
+  background:#fff; padding:9px 11px; color:#27272a; font-size:12px;
+}
+.seller-dashboard .delivery-assignment-controls select:focus-visible { outline:3px solid #e52d4538; border-color:#e52d45; }
+.seller-dashboard .delivery-assignment-controls button { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:40px; white-space:nowrap; }
+.seller-dashboard .warning { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-block:12px; }
+.seller-dashboard .seller-empty { margin:12px 0 0; padding:18px; border-color:#e5dce0; background:#fffafb; line-height:1.6; }
+.seller-dashboard .empty { display:grid; justify-items:center; gap:8px; margin-top:18px; padding:30px 18px; text-align:center; }
+.seller-dashboard .empty > svg { box-sizing:content-box; padding:13px; border-radius:15px; background:#fff0f2; color:#bf1730; }
+.seller-dashboard .empty h3 { margin:4px 0 0; font-size:17px; font-weight:900; }
+.seller-dashboard .empty p { max-width:360px; margin:0; color:#71717a; font-size:12px; line-height:1.6; }
+.seller-dashboard .delivery-order-search { display:flex; align-items:center; gap:10px; margin:18px 0 12px; padding:0 12px; }
+.seller-dashboard .delivery-order-search > svg { flex:0 0 auto; color:#a1a1aa; }
+.seller-dashboard .delivery-order-search input { flex:1 1 auto; width:100%; min-width:0; border:0; background:transparent; box-shadow:none; }
+.seller-dashboard .delivery-order-search input:focus { outline:0; box-shadow:none; }
+.seller-dashboard .delivery-order-search button { min-height:31px; padding:5px 10px; }
+@media(max-width:760px) {
+  .seller-dashboard .admin-vendor-create { grid-template-columns:minmax(0,1fr); gap:12px; padding:15px; }
+  .seller-dashboard .admin-vendor-create h3,.seller-dashboard .admin-vendor-create > button.full { grid-column:auto; }
+  .seller-dashboard .seller-dashboard-head-actions { justify-content:flex-start; width:100%; flex-wrap:wrap; }
+  .seller-dashboard .seller-dashboard-head-actions button { flex:1 1 calc(50% - 8px); }
+  .seller-dashboard .seller-product-actions { width:100%; }
+  .seller-dashboard .seller-product-actions button { flex:1 1 auto; min-height:42px; }
+  .seller-dashboard .delivery-assignment-controls { display:flex; flex-direction:column; align-items:stretch; width:100%; min-width:0; }
+  .seller-dashboard .delivery-assignment-controls select,.seller-dashboard .delivery-assignment-controls button { width:100%; min-height:44px; }
+  .seller-dashboard .warning { align-items:stretch; }
+  .seller-dashboard .warning button { width:100%; }
+}
