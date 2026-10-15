@@ -5,4 +5,5 @@ import './styles.css'
 import './modern-ui.css'
 import './bold-marketplace.css'
 import './delivery-dashboard-controls.css'
+import './frontend-layout-audit-fixes.css'
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>)
