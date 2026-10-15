@@ -114,7 +114,7 @@ function AddressLocationPicker({ latitude, longitude, onChange }) {
     </div>
     <p>Tap the map or drag the pin to your house entrance. The pin coordinates are saved with this address.</p>
     <div ref={mapNode} className="location-map" role="application" aria-label="Delivery address map" />
-    <div className="location-coordinates">
+    <div className="location-coordinates" aria-live="polite">
       <span>Latitude: {latitude || 'Not selected'}</span>
       <span>Longitude: {longitude || 'Not selected'}</span>
     </div>
@@ -158,6 +158,12 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
   async function save(event) {
     event.preventDefault()
     if (saving) return
+    const latitude = Number(form.latitude)
+    const longitude = Number(form.longitude)
+    if (form.latitude === '' || form.longitude === '' || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      notify('Select a valid delivery location on the map before saving.')
+      return
+    }
     setSaving(true)
     try {
       const payload = { ...form, latitude:Number(form.latitude), longitude:Number(form.longitude) }
@@ -212,7 +218,7 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
     <form className="form address-editor" onSubmit={save}>
       <h3>{editingId ? 'Edit address' : 'Add a delivery address'}</h3>
       <label>Recipient name<input required maxLength={120} value={form.recipient_name} onChange={e=>setForm({...form,recipient_name:e.target.value})}/></label>
-      <label>Mobile number<input required type="tel" inputMode="tel" maxLength={30} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
+      <label>Mobile number<input required type="tel" inputMode="tel" pattern="[0-9+() -]{10,16}" title="Enter a phone number using 10–16 digits or common phone symbols." maxLength={16} value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/></label>
       <label>House / street address<input required maxLength={200} value={form.line1} onChange={e=>setForm({...form,line1:e.target.value})}/></label>
       <label>Address line 2 (optional)<input maxLength={200} value={form.line2} onChange={e=>setForm({...form,line2:e.target.value})}/></label>
       <label>Landmark<input maxLength={160} value={form.landmark} onChange={e=>setForm({...form,landmark:e.target.value})}/></label>
@@ -222,7 +228,7 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
         longitude={form.longitude}
         onChange={({ latitude, longitude }) => setForm(current => ({ ...current, latitude, longitude }))}
       />
-      {(!form.latitude || !form.longitude) && <small className="location-error">Select a pin on the map or use your current location before saving.</small>}
+      {(!form.latitude || !form.longitude) && <small className="location-error" role="status">Select a pin on the map or use your current location before saving.</small>}
       <label>Delivery instructions (optional)<textarea rows="2" maxLength={500} value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
       <label className="checkbox-label"><input type="checkbox" checked={Boolean(form.is_default)} onChange={e=>setForm({...form,is_default:e.target.checked})}/> Set as my default address</label>
       <button className="primary full" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save address'} <FiCheck size={15}/></button>
