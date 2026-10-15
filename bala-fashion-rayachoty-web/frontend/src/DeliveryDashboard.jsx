@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FiArrowRight, FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus, FiSearch } from 'react-icons/fi'
+import { FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus, FiSearch } from 'react-icons/fi'
+import DeliveryOrderSummary from './DeliveryOrderSummary'
 import { api } from './api'
 
 const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
@@ -306,10 +307,11 @@ export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }
           : ''
         const expanded = Boolean(expandedOrderIds[order.id])
         return <article className="seller-order-row delivery-order-card" key={order.id}>
-          <button type="button" className="delivery-order-summary" aria-expanded={expanded} onClick={() => setExpandedOrderIds(current => ({ ...current, [order.id]: !current[order.id] }))}>
-            <span className="delivery-order-summary-text"><b className="delivery-order-number">{order.order_number}</b><small>Status: {order.status.replaceAll('_', ' ')}</small></span>
-            <FiArrowRight size={18} className={expanded ? 'delivery-order-chevron expanded' : 'delivery-order-chevron'}/>
-          </button>
+          <DeliveryOrderSummary
+            order={order}
+            expanded={expanded}
+            onToggle={() => setExpandedOrderIds(current => ({ ...current, [order.id]: !current[order.id] }))}
+          />
           {expanded && <span className="delivery-order-details">
             <b>Vendor / pickup</b>
             <small>{order.vendor_name || 'Vendor name unavailable'}</small>
