@@ -628,3 +628,104 @@
 @media (max-width: 340px) {
   .app-shell .address-management .saved-address-row .address-actions { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Main app shell layer — mobile header remains compact; search stays in home/search content. */
+@media (max-width: 760px) {
+  .app-shell .app-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding-inline: 11px;
+  }
+  .app-shell .app-mobile-brand {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-right: auto;
+  }
+  .app-shell .app-mobile-brand > span {
+    min-width: 0;
+  }
+  .app-shell .app-breadcrumb,
+  .app-shell .app-topbar > .app-search {
+    display: none !important;
+  }
+  .app-shell .app-topbar .notification-area {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .app-shell .app-topbar .notification-bell,
+  .app-shell .app-topbar .app-account-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 12px;
+  }
+  .app-shell .app-topbar .app-account-button > span {
+    display: none;
+  }
+  .app-shell .app-topbar .app-account-button > img {
+    width: 27px;
+    height: 27px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .app-shell .home-search-shortcut {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 13px;
+  }
+  .app-shell .home-search-shortcut input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 14px;
+  }
+  .app-shell .mobile-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .app-shell .mobile-nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 48px;
+    gap: 4px;
+  }
+  .app-shell .mobile-nav-item > span:last-child {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .app-shell .notification-popover {
+    z-index: 100;
+    width: auto;
+    max-width: calc(100vw - 20px);
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .app-topbar { padding-inline: 8px; gap: 6px; }
+  .app-shell .app-mobile-brand .logo-image {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+  }
+  .app-shell .app-mobile-brand b { font-size: 9px; }
+  .app-shell .app-mobile-brand small { font-size: 8px; }
+  .app-shell .app-topbar .notification-bell,
+  .app-shell .app-topbar .app-account-button {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+}
