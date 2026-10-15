@@ -285,7 +285,7 @@ export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }
         <button className="secondary" onClick={onSignOut}>Sign out</button>
       </div>
     </div>
-    <label className="order-search-field delivery-order-search"><FiSearch size={16}/><input aria-label="Search assigned orders" placeholder="Search order number or status" value={orderSearch} onChange={event=>setOrderSearch(event.target.value)}/></label>
+    <label className="order-search-field delivery-order-search"><FiSearch size={16}/><input aria-label="Search assigned orders by order number" placeholder="Search by order number (e.g. BFR-409E371050)" value={orderSearch} onChange={event=>setOrderSearch(event.target.value)}/>{orderSearch && <button type="button" className="secondary" aria-label="Clear order search" onClick={()=>setOrderSearch("")}>Clear</button>}</label>
     <div className="seller-stat-grid">
       <div><b>{orders.length}</b><small>Assigned orders</small></div>
       <div><b>{orders.filter(order => order.status === 'out_for_delivery').length}</b><small>On the way</small></div>
@@ -305,7 +305,7 @@ export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }
           : ''
         return <article className="seller-order-row delivery-order-card" key={order.id}>
           <span className="delivery-order-details">
-            <button type="button" className="order-detail-link" onClick={()=>onOrderDetails?.(order)}>{order.order_number} <FiArrowRight size={13}/></button>
+            <b className="delivery-order-number">{order.order_number}</b>
             <small>Status: {order.status.replaceAll('_', ' ')}</small>
             <b>Vendor / pickup</b>
             <small>{order.vendor_name || 'Vendor name unavailable'}</small>
