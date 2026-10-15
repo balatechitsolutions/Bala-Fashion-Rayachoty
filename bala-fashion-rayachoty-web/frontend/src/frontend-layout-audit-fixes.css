@@ -162,3 +162,45 @@
     text-align: left;
   }
 }
+
+/* Cart and product detail content can contain user-supplied names and long variants. */
+.app-shell .cart-item {
+  grid-template-columns: 82px minmax(0, 1fr);
+  min-width: 0;
+}
+.app-shell .cart-item > img {
+  width: 100%;
+  max-width: 82px;
+}
+.app-shell .cart-item > div,
+.app-shell .cart-item b,
+.app-shell .cart-item small,
+.app-shell .cart-item strong,
+.app-shell .modal-info,
+.app-shell .modal-info h2,
+.app-shell .modal-info p,
+.app-shell .options {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.app-shell .qty {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.app-shell .app-section-head > *,
+.app-shell .app-category-shortcut,
+.app-shell .app-category-shortcut > * {
+  min-width: 0;
+}
+.app-shell .app-category-shortcut {
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+@media (max-width: 380px) {
+  .app-shell .cart-item {
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .app-shell .cart-item > img { max-width: 62px; }
+}
