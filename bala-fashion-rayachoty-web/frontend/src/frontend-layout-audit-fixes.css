@@ -1,0 +1,155 @@
+/* Frontend layout audit fixes — safe wrapping and responsive content sizing only. */
+.app-shell .app-page,
+.app-shell .app-page > *,
+.app-shell .drawer,
+.app-shell .drawer-head,
+.app-shell .drawer-body,
+.app-shell .form,
+.app-shell .seller-dashboard,
+.app-shell .seller-order-row,
+.app-shell .seller-store-row,
+.app-shell .order-detail-section,
+.app-shell .order-detail-hero,
+.app-shell .order-payment-card,
+.app-shell .order-progress,
+.app-shell .account-order-card,
+.app-shell .account-order-main,
+.app-shell .account-order-total,
+.app-shell .delivery-address-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.app-shell .order-detail-hero h3,
+.app-shell .order-detail-item-copy,
+.app-shell .account-order-main b,
+.app-shell .account-order-main small,
+.app-shell .account-order-total,
+.app-shell .seller-order-row b,
+.app-shell .seller-store-row b,
+.app-shell .seller-store-row small,
+.app-shell .delivery-address-card,
+.app-shell .order-delivery-notes,
+.app-shell .order-detail-muted,
+.app-shell .order-detail-section,
+.app-shell .order-payment-card,
+.app-shell .summary {
+  overflow-wrap: anywhere;
+}
+.app-shell .order-detail-section-title,
+.app-shell .order-detail-item,
+.app-shell .account-order-card,
+.app-shell .account-order-main,
+.app-shell .account-order-total {
+  min-width: 0;
+}
+.app-shell .account-order-card {
+  gap: 12px;
+  align-items: center;
+}
+.app-shell .account-order-thumb {
+  flex: 0 0 58px;
+  width: 58px;
+  max-width: 58px;
+}
+.app-shell .account-order-main {
+  flex: 1 1 auto;
+}
+.app-shell .account-order-total {
+  flex: 0 0 auto;
+  text-align: right;
+}
+.app-shell .order-detail-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.app-shell .order-progress-step > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-shell .order-tracking-section .order-progress {
+  width: 100%;
+}
+.app-shell .load-more-wrap {
+  width: 100%;
+  min-width: 0;
+  padding: 20px 0;
+}
+.app-shell .load-more-wrap > button {
+  max-width: 100%;
+  min-height: 42px;
+  white-space: normal;
+}
+.app-shell .delivery-order-details small,
+.app-shell .delivery-order-details a,
+.app-shell .delivery-order-summary-text,
+.app-shell .delivery-order-number {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-shell .admin-vendor-create > *,
+.app-shell .form > *,
+.app-shell .drawer-body > * {
+  min-width: 0;
+}
+.app-shell .drawer-body input,
+.app-shell .drawer-body select,
+.app-shell .drawer-body textarea,
+.app-shell .form input,
+.app-shell .form select,
+.app-shell .form textarea {
+  width: 100%;
+  max-width: 100%;
+}
+.app-shell .order-search-field,
+.app-shell .home-search-shortcut,
+.app-shell .app-search {
+  min-width: 0;
+  max-width: 100%;
+}
+.app-shell .order-search-field input,
+.app-shell .home-search-shortcut input,
+.app-shell .app-search input {
+  min-width: 0;
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .app-shell .account-order-card {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .app-shell .account-order-thumb {
+    flex-basis: 48px;
+    width: 48px;
+    max-width: 48px;
+  }
+  .app-shell .account-order-total {
+    max-width: 38%;
+    font-size: 12px;
+  }
+  .app-shell .order-detail-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell .order-detail-section-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .app-shell .order-progress {
+    min-width: 0;
+  }
+  .app-shell .order-detail-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell .order-detail-image {
+    max-width: 100%;
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .account-order-card {
+    flex-wrap: wrap;
+  }
+  .app-shell .account-order-total {
+    flex: 1 1 100%;
+    max-width: 100%;
+    text-align: left;
+  }
+}
