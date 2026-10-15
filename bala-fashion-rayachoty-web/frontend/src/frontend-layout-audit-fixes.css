@@ -123,8 +123,11 @@
     max-width: 48px;
   }
   .app-shell .account-order-total {
-    max-width: 38%;
+    grid-column: 2;
+    width: 100%;
+    max-width: 100%;
     font-size: 12px;
+    text-align: left;
   }
   .app-shell .order-detail-item {
     grid-template-columns: minmax(0, 1fr);
@@ -137,7 +140,12 @@
     min-width: 0;
   }
   .app-shell .order-detail-hero {
-    grid-template-columns: minmax(0, 1fr);
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .app-shell .order-detail-hero > div:last-child {
+    min-width: 0;
+    flex: 1 1 180px;
   }
   .app-shell .order-detail-image {
     max-width: 100%;
@@ -145,10 +153,11 @@
 }
 @media (max-width: 380px) {
   .app-shell .account-order-card {
-    flex-wrap: wrap;
+    grid-template-columns: 44px minmax(0, 1fr);
   }
   .app-shell .account-order-total {
-    flex: 1 1 100%;
+    grid-column: 2;
+    width: 100%;
     max-width: 100%;
     text-align: left;
   }
