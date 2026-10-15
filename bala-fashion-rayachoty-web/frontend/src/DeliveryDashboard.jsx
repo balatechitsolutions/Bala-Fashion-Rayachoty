@@ -3,6 +3,17 @@ import { FiArrowRight, FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUse
 import { api } from './api'
 
 const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+const normalizeOrderAddress = value => {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
 
 export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify, authUsers = [] }) {
   const [staff, setStaff] = useState([])
@@ -283,7 +294,7 @@ export function DeliveryDashboard({ session, notify, onSignOut, onOrderDetails }
     {error && <div className="warning">{error}<button className="secondary" onClick={loadOrders}>Retry</button></div>}
     {loading ? <p>Loading assigned deliveries…</p> : !orders.length ? <div className="empty"><FiPackage size={28}/><h3>No assigned deliveries</h3><p>Ask the administrator to assign an order to your account.</p></div> :
       orders.filter(order=>[order.order_number,order.status,order.vendor_name].some(value=>String(value||'').toLowerCase().includes(orderSearch.trim().toLowerCase()))).map(order => {
-        const address = order.address_snapshot || {}
+        const address = normalizeOrderAddress(order.address_snapshot)
         const canConfirm = order.status === 'placed'
         const canPack = order.status === 'confirmed'
         const canStart = order.status === 'packed'
