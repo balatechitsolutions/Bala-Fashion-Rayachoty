@@ -204,3 +204,122 @@
   }
   .app-shell .cart-item > img { max-width: 62px; }
 }
+
+/* Child-first UI audit: DeliveryOrderSummary.
+   Presentation-only styles; order state, callbacks and API contracts are unchanged. */
+.app-shell .delivery-order-summary {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: 74px;
+  padding: 14px 15px;
+  border: 1px solid #e7e0e2;
+  border-radius: 15px;
+  background: #fff;
+  color: #18181b;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 3px 12px #24151a08;
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+.app-shell .delivery-order-summary:hover {
+  border-color: #d9a5b0;
+  background: #fffafb;
+  box-shadow: 0 7px 18px #7f1d2b0e;
+}
+.app-shell .delivery-order-summary:focus-visible {
+  outline: 3px solid #e52d4566;
+  outline-offset: 3px;
+}
+.app-shell .delivery-order-summary-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+}
+.app-shell .delivery-order-number {
+  min-width: 0;
+  color: #18181b;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.35;
+  letter-spacing: -.015em;
+  overflow-wrap: anywhere;
+}
+.app-shell .delivery-order-status {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  color: #52525b;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+  text-transform: capitalize;
+}
+.app-shell .delivery-order-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #71717a;
+}
+.app-shell .delivery-order-status-label {
+  color: #71717a;
+  font-weight: 550;
+  text-transform: none;
+}
+.app-shell .delivery-order-status.is-pending::before { background: #d97706; }
+.app-shell .delivery-order-status.is-confirmed::before { background: #6366f1; }
+.app-shell .delivery-order-status.is-packed::before { background: #0d9488; }
+.app-shell .delivery-order-status.is-out-for-delivery::before { background: #2563eb; }
+.app-shell .delivery-order-status.is-delivered::before { background: #16a34a; }
+.app-shell .delivery-order-status.is-cancelled::before { background: #dc2626; }
+.app-shell .delivery-order-status.is-unknown::before { background: #71717a; }
+.app-shell .delivery-order-chevron-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #f1d5db;
+  border-radius: 11px;
+  background: #fff0f2;
+  color: #bf1730;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.app-shell .delivery-order-chevron {
+  flex: 0 0 auto;
+  transition: transform .18s ease;
+}
+.app-shell .delivery-order-chevron-wrap.expanded {
+  border-color: #bf1730;
+  background: #bf1730;
+  color: #fff;
+}
+.app-shell .delivery-order-chevron-wrap.expanded .delivery-order-chevron {
+  transform: rotate(90deg);
+}
+@media (max-width: 760px) {
+  .app-shell .delivery-order-summary {
+    min-height: 68px;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 13px;
+  }
+  .app-shell .delivery-order-number { font-size: 13px; }
+  .app-shell .delivery-order-status { font-size: 10px; }
+  .app-shell .delivery-order-chevron-wrap { flex-basis: 34px; width: 34px; height: 34px; }
+}
+@media (max-width: 340px) {
+  .app-shell .delivery-order-summary { padding: 10px; }
+  .app-shell .delivery-order-status { gap: 4px; }
+}
