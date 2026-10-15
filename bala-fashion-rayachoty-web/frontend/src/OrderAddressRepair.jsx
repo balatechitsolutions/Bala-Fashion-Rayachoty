@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FiMapPin, FiNavigation, FiSave } from 'react-icons/fi'
 import { api } from './api'
 
@@ -26,6 +26,22 @@ export function OrderAddressRepair({ session, order, role, onSaved, notify }) {
     longitude: current.longitude == null ? '' : String(current.longitude),
     correction_reason: '',
   }))
+  useEffect(() => {
+    setForm({
+      recipient_name: current.recipient_name || '',
+      phone: current.phone || '',
+      line1: current.line1 || '',
+      line2: current.line2 || '',
+      landmark: current.landmark || '',
+      city: current.city || 'Rayachoty',
+      state: current.state || 'Andhra Pradesh',
+      postal_code: current.postal_code || '',
+      latitude: current.latitude == null ? '' : String(current.latitude),
+      longitude: current.longitude == null ? '' : String(current.longitude),
+      correction_reason: '',
+    })
+  }, [order?.id])
+
   const [saving, setSaving] = useState(false)
   const [locating, setLocating] = useState(false)
   function update(key, value) { setForm(previous => ({ ...previous, [key]: value })) }
