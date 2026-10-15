@@ -276,3 +276,86 @@ input, select, textarea { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Component layer 1 — DeliveryOrderSummary (leaf component)
+   Scoped to this component so its parent dashboard and workflows stay untouched. */
+.delivery-order-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  padding: 16px 18px;
+  border: 1px solid #e9e6e8;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #fff 0%, #fff9fa 100%);
+  color: #18181b;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease, transform .18s ease;
+}
+.delivery-order-summary:hover {
+  border-color: #e52d45;
+  background: #fff4f5;
+  box-shadow: 0 8px 22px #bf173014;
+}
+.delivery-order-summary:focus-visible {
+  outline: 3px solid #e52d4555;
+  outline-offset: 3px;
+}
+.delivery-order-summary-text {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+.delivery-order-number {
+  overflow-wrap: anywhere;
+  color: #18181b;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: -.015em;
+}
+.delivery-order-summary-text small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+.delivery-order-summary-text small::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e52d45;
+  content: "";
+}
+.delivery-order-chevron {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  padding: 9px;
+  border-radius: 10px;
+  background: #fff0f2;
+  color: #bf1730;
+  transition: transform .2s ease, background .2s ease;
+}
+.delivery-order-chevron.expanded {
+  transform: rotate(90deg);
+  background: #e52d45;
+  color: #fff;
+}
+@media (max-width: 760px) {
+  .delivery-order-summary {
+    min-height: 68px;
+    gap: 10px;
+    padding: 13px;
+    border-radius: 12px;
+  }
+  .delivery-order-number { font-size: 13px; }
+  .delivery-order-chevron { width: 32px; height: 32px; }
+}
+
