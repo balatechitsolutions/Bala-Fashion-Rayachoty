@@ -158,6 +158,12 @@ export function AddressManagement({ session, notify, onChoose, returnTo = 'accou
   async function save(event) {
     event.preventDefault()
     if (saving) return
+    const latitude = Number(form.latitude)
+    const longitude = Number(form.longitude)
+    if (form.latitude === '' || form.longitude === '' || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      notify('Select a valid delivery location on the map before saving.')
+      return
+    }
     setSaving(true)
     try {
       const payload = { ...form, latitude:Number(form.latitude), longitude:Number(form.longitude) }
