@@ -1318,3 +1318,85 @@
   }
 }
 
+
+/* Account drawer: full-screen panel on mobile instead of a narrow side sheet. */
+@media (max-width: 760px) {
+  .app-shell .overlay:has(> .drawer) {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer {
+    position: relative;
+    inset: auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-head {
+    flex: 0 0 auto;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 68px;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    border-bottom: 1px solid var(--stroke, #e8e7e5);
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-head > div { min-width: 0; }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-head h2 {
+    margin: 2px 0 0;
+    font-size: 21px;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-head > button {
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body.auth-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-head {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
