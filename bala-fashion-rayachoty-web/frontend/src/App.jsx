@@ -347,7 +347,7 @@ export default function App() {
   try{
    const uploaded=[]
    for(const file of selectedFiles){
-    const sign=await api('/uploads/signature/',{method:'POST',token:session.access_token,body:JSON.stringify({folder:'bala-fashion/products/gallery'})})
+    const sign=await api('/uploads/signature/',{method:'POST',token:session.access_token,body:JSON.stringify({folder:'bala-fashion/products'})})
     const form=new FormData()
     Object.entries(sign.params).forEach(([key,value])=>form.append(key,value))
     form.append('api_key',sign.api_key);form.append('signature',sign.signature);form.append('file',file)
