@@ -877,3 +877,41 @@
     gap: 9px;
   }
 }
+
+
+/* Parent layer — category strip: predictable wrapping on desktop and swipe navigation on mobile. */
+.app-shell .app-category-row {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(12px, 1.8vw, 20px);
+  min-width: 0;
+}
+.app-shell .app-category-shortcut {
+  flex: 0 0 auto;
+  min-width: 88px;
+  text-align: center;
+}
+.app-shell .app-category-thumb {
+  display: grid;
+  place-items: center;
+}
+@media (min-width: 761px) {
+  .app-shell .app-category-row {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+@media (max-width: 760px) {
+  .app-shell .app-category-row {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 2px 12px;
+    scrollbar-width: thin;
+  }
+  .app-shell .app-category-shortcut {
+    scroll-snap-align: start;
+  }
+}
