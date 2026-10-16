@@ -1153,3 +1153,168 @@
     padding: 10px 8px;
   }
 }
+
+
+
+/* Order management: stable desktop rows and mobile-first search/list sizing.
+   Scoped to seller/admin order management so delivery cards keep their own layout. */
+.app-shell .seller-dashboard-section,
+.app-shell .seller-dashboard-section > *,
+.app-shell .seller-section-title,
+.app-shell .seller-section-title > *,
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card),
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  width: 100%;
+  overflow: hidden;
+}
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-items: initial;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span:last-child {
+  align-items: flex-end;
+  text-align: right;
+}
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) .seller-product-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+.app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) .seller-product-actions button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app-shell .seller-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+}
+.app-shell .seller-section-title > .order-search-field {
+  display: flex;
+  align-items: center;
+  flex: 0 1 360px;
+  width: min(100%, 360px);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.app-shell .seller-section-title > .order-search-field input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+}
+.app-shell .seller-dashboard .delivery-order-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.app-shell .seller-dashboard .delivery-order-search input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+}
+@media (min-width: 761px) {
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span:last-child {
+    align-items: flex-end;
+  }
+  .app-shell .seller-section-title > .order-search-field {
+    margin-left: auto;
+  }
+}
+@media (max-width: 760px) {
+  .app-shell .seller-dashboard-section {
+    width: 100%;
+    padding: 12px;
+    gap: 12px;
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 13px;
+    overflow: visible;
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span,
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span:last-child {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) > span:last-child {
+    padding-top: 10px;
+    border-top: 1px solid var(--app-line, #ece8df);
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) .seller-product-actions {
+    justify-content: flex-start;
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) .seller-product-actions button {
+    flex: 0 1 auto;
+    min-height: 40px;
+  }
+  .app-shell .seller-section-title {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .app-shell .seller-section-title > .order-search-field {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-height: 46px;
+    margin: 0;
+    padding: 0 12px;
+  }
+  .app-shell .seller-section-title > .order-search-field input,
+  .app-shell .seller-dashboard .delivery-order-search input {
+    font-size: 16px;
+  }
+  .app-shell .seller-dashboard .delivery-order-search {
+    min-height: 46px;
+    margin: 12px 0;
+    padding: 0 12px;
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .seller-dashboard-section {
+    padding: 9px;
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) {
+    padding: 10px;
+  }
+  .app-shell .seller-dashboard-section .seller-order-row:not(.delivery-order-card) .seller-product-actions button {
+    width: 100%;
+  }
+  .app-shell .seller-section-title > .order-search-field,
+  .app-shell .seller-dashboard .delivery-order-search {
+    padding-inline: 9px;
+  }
+}
+
