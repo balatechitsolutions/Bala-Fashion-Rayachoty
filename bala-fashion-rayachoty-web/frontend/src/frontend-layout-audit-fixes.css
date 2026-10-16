@@ -915,3 +915,67 @@
     scroll-snap-align: start;
   }
 }
+
+
+/* Mobile header alignment: keep the logo, notification bell, and account control on one row. */
+@media (max-width: 760px) {
+  .app-shell .app-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px 40px;
+    align-items: center;
+    column-gap: 8px;
+    width: 100%;
+    min-height: 60px;
+  }
+  .app-shell .app-topbar .app-mobile-brand {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+  .app-shell .app-topbar .notification-area {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: end;
+    width: 40px;
+    min-width: 40px;
+    margin: 0;
+    position: relative;
+  }
+  .app-shell .app-topbar > .app-account-button {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    margin: 0;
+  }
+  .app-shell .app-topbar .notification-bell,
+  .app-shell .app-topbar > .app-account-button {
+    box-sizing: border-box;
+    align-self: center;
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .app-topbar {
+    grid-template-columns: minmax(0, 1fr) 36px 36px;
+    column-gap: 6px;
+  }
+  .app-shell .app-topbar .notification-area,
+  .app-shell .app-topbar .notification-bell,
+  .app-shell .app-topbar > .app-account-button {
+    width: 36px;
+    min-width: 36px;
+    flex-basis: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+}
