@@ -1400,3 +1400,110 @@
     padding-right: 12px;
   }
 }
+
+
+/* Mobile usability follow-up: restore independent vertical scrolling in drawers and compact the header. */
+@media (max-width: 760px) {
+  /* The two-row header rules from earlier stylesheets were leaving excess height. */
+  .app-shell .app-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    height: 64px;
+    min-height: 64px;
+    max-height: 64px;
+    padding: 6px 10px;
+    grid-template-rows: none;
+    align-content: center;
+  }
+  .app-shell .app-mobile-brand {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0 auto 0 0;
+  }
+  .app-shell .app-topbar .notification-area {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .app-shell .app-topbar .notification-bell,
+  .app-shell .app-topbar .app-account-button {
+    flex: 0 0 38px;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    max-height: 38px;
+  }
+
+  /* A flex child needs min-height:0 or its contents can prevent the drawer from scrolling. */
+  .app-shell .overlay:has(> .drawer) {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: pan-y;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer {
+    box-sizing: border-box;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+    flex: 1 1 auto;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-head {
+    flex: 0 0 auto;
+    min-height: 60px;
+    padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body {
+    display: block;
+    box-sizing: border-box;
+    flex: 1 1 0%;
+    height: 0;
+    min-height: 0;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 16px 14px calc(24px + env(safe-area-inset-bottom));
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body.auth-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body.auth-panel > * {
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .app-topbar {
+    height: 60px;
+    min-height: 60px;
+    max-height: 60px;
+    padding-inline: 8px;
+    gap: 6px;
+  }
+  .app-shell .app-topbar .notification-bell,
+  .app-shell .app-topbar .app-account-button {
+    flex-basis: 36px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+  }
+  .app-shell .overlay:has(> .drawer) > .drawer > .drawer-body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
