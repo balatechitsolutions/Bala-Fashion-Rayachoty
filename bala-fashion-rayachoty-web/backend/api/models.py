@@ -58,6 +58,7 @@ class Product(models.Model):
     name = models.CharField(max_length=180)
     slug = models.SlugField(max_length=255, unique=True)
     description = models.TextField(blank=True, default="")
+    additional_description = models.TextField(blank=True, default="")
     price = models.DecimalField(max_digits=12, decimal_places=2)
     compare_at_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     sku = models.CharField(max_length=255, blank=True, default="")
@@ -78,6 +79,25 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+
+
+class ProductImage(models.Model):
+    """Supabase-managed gallery row; uploaded image files live in Cloudinary."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product = models.ForeignKey(Product, db_column="product_id", on_delete=models.CASCADE, related_name="gallery_images")
+    image_url = models.TextField()
+    image_public_id = models.TextField(blank=True, default="")
+    alt_text = models.TextField(blank=True, default="")
+    sort_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        managed = False
+        db_table = "product_images"
+        ordering = ("sort_order", "created_at")
+
+    def __str__(self):
+        return f"{self.product.name} image {self.sort_order + 1}"
 
 
 class DeliveryStaff(models.Model):

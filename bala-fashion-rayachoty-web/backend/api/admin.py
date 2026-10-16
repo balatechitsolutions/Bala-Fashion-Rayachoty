@@ -13,7 +13,7 @@ import cloudinary
 import cloudinary.exceptions
 import cloudinary.uploader
 
-from .models import Category, CustomerAddress, DeliveryStaff, OrderRecord, Product, Vendor
+from .models import Category, CustomerAddress, DeliveryStaff, OrderRecord, Product, ProductImage, Vendor
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,46 @@ class ProductAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
         image = self.cleaned_data.get("image_upload")
         self._validate_upload(image)
         return image
+
+
+class ProductImageInlineForm(CloudinaryUploadFormMixin, forms.ModelForm):
+    image_upload = forms.FileField(
+        required=False,
+        label="Upload gallery image to Cloudinary",
+        help_text="JPG, PNG, WebP or GIF. Maximum 8 MB per image.",
+    )
+
+    class Meta:
+        model = ProductImage
+        fields = ("alt_text", "sort_order")
+
+    def clean_image_upload(self):
+        image = self.cleaned_data.get("image_upload")
+        self._validate_upload(image)
+        if self.instance._state.adding and not image:
+            raise ValidationError("Choose an image file for each new gallery row.")
+        return image
+
+
+class ProductImageInline(admin.TabularInline):
+    model = ProductImage
+    form = ProductImageInlineForm
+    extra = 0
+    max_num = 8
+    validate_max = True
+    fields = ("image_upload", "preview", "alt_text", "sort_order")
+    readonly_fields = ("preview",)
+    ordering = ("sort_order", "created_at")
+
+    @admin.display(description="Current Cloudinary image")
+    def preview(self, obj):
+        if obj and obj.image_url:
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener"><img src="{}" alt="Product gallery image" '
+                'style="width:76px;height:76px;object-fit:contain;border-radius:8px;background:#f3f4f6;padding:4px;"></a>',
+                obj.image_url, obj.image_url,
+            )
+        return "Uploaded image preview appears after saving"
 
 
 class VendorAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
@@ -287,6 +327,7 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
         ("Record information", {"fields": ("created_at",)}),
     )
 
+
     @admin.display(description="Preview")
     def thumbnail(self, obj):
         return format_html('<img src="{}" alt="Category image" style="width:56px;height:56px;max-width:56px;max-height:56px;object-fit:contain;border-radius:8px;background:#f3f4f6;padding:4px;box-sizing:border-box;">', obj.image_url) if obj.image_url else "—"
@@ -372,13 +413,52 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     list_editable = ("price", "stock_quantity", "is_active")
     list_select_related = ("category", "vendor")
     readonly_fields = ("created_at", "updated_at")
+    inlines = (ProductImageInline,)
     fieldsets = (
-        ("Product details", {"fields": ("name", "slug", "vendor", "category", "sku", "description")}),
+        ("Product details", {"fields": ("name", "slug", "vendor", "category", "sku", "description", "additional_description")}),
         ("Pricing & inventory", {"fields": ("price", "compare_at_price", "stock_quantity", "sizes_text", "colors_text")}),
-        ("Product image", {"fields": ("image_upload", "image_url", "image_public_id")}),
+        ("Main product image", {"fields": ("image_upload", "image_url", "image_public_id")}),
         ("Store visibility", {"fields": ("is_active",)}),
         ("Record information", {"fields": ("created_at", "updated_at")}),
     )
+
+    def save_formset(self, request, form, formset, change):
+        # Upload selected files server-side; Django Admin never sends files directly from the browser to Cloudinary.
+        if formset.model is ProductImage:
+            for inline_form in formset.forms:
+                if not hasattr(inline_form, "cleaned_data") or not inline_form.cleaned_data:
+                    continue
+                if inline_form.cleaned_data.get("DELETE"):
+                    continue
+                uploaded = inline_form.cleaned_data.get("image_upload")
+                if not uploaded:
+                    continue
+                cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+                api_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
+                api_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+                if not all((cloud_name, api_key, api_secret)):
+                    raise CloudinaryUploadFailure("Cloudinary credentials are not configured on the backend.")
+                cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
+                try:
+                    result = cloudinary.uploader.upload(
+                        uploaded,
+                        folder="Bala_fashon_Rayachoty/products/gallery",
+                        resource_type="image",
+                        allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
+                    )
+                except Exception as exc:
+                    logger.error("Cloudinary gallery upload failed (%s): %s", type(exc).__name__, str(exc)[:500], exc_info=True)
+                    raise CloudinaryUploadFailure(
+                        "Gallery upload failed. Check Render Cloudinary credentials/logs; gallery changes were not saved."
+                    ) from exc
+                if not result.get("secure_url") or not result.get("public_id"):
+                    raise CloudinaryUploadFailure("Cloudinary did not return a secure image URL and public ID.")
+                inline_form.instance.image_url = result["secure_url"]
+                inline_form.instance.image_public_id = result["public_id"]
+                inline_form.instance.product = form.instance
+            formset.save()
+            return
+        super().save_formset(request, form, formset, change)
 
     @admin.display(description="Preview")
     def thumbnail(self, obj):
