@@ -1045,9 +1045,9 @@ def upload_signature(request):
     if error:return error
     if not all([CLOUD_NAME,CLOUD_KEY,CLOUD_SECRET]):return Response({"detail":"Cloudinary credentials are not configured on the backend."},status=503)
     folder=str(request.data.get("folder","bala-fashion/products"))[:100]
-    if folder not in {"bala-fashion/products","bala-fashion/categories"}:
+    if folder not in {"bala-fashion/products","bala-fashion/products/gallery","bala-fashion/categories"}:
         return Response({"detail":"Invalid upload folder."},status=400)
-    if prof["role"] == "vendor" and folder != "bala-fashion/products":
+    if prof["role"] == "vendor" and folder not in {"bala-fashion/products","bala-fashion/products/gallery"}:
         return Response({"detail":"Sellers can upload product images only."},status=403)
     import time
     params={"timestamp":int(time.time()),"folder":folder}
