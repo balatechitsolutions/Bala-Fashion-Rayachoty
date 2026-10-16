@@ -122,14 +122,19 @@ export default function App() {
  const [session,setSession]=useState(null),[profile,setProfile]=useState(null),[authEmail,setAuthEmail]=useState(''),[authPassword,setAuthPassword]=useState(''),[authMode,setAuthMode]=useState('signin'),[authSubmitting,setAuthSubmitting]=useState(false);const sessionRef=useRef(null)
  const [products,setProducts]=useState([]),[categories,setCategories]=useState(defaultCats),[nextOffset,setNextOffset]=useState(null),[hasMore,setHasMore]=useState(false),[loadingMore,setLoadingMore]=useState(false)
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[search,setSearch]=useState(''),[category,setCategory]=useState('all')
- const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState('')
+ const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState(''),[selectedImageIndex,setSelectedImageIndex]=useState(0),[detailLoading,setDetailLoading]=useState(false)
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([]),[selectedOrder,setSelectedOrder]=useState(null),[orderReturnDrawer,setOrderReturnDrawer]=useState('orders')
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
  const [installPrompt,setInstallPrompt]=useState(null),[pushEnabled,setPushEnabled]=useState(false),[soundEnabled,setSoundEnabled]=useState(false),[alertsBusy,setAlertsBusy]=useState(false)
  const seenNotificationIds=useRef(null)
  const selectedOrderAddress = normalizeAddressSnapshot(selectedOrder?.address_snapshot)
+ const selectedImages = selected ? [
+  ...(selected.image_url ? [{id:'primary',image_url:selected.image_url,alt_text:selected.name||'Product image'}] : []),
+  ...(Array.isArray(selected.gallery_images)?selected.gallery_images:[])
+ ] : []
+ const selectedHeroImage = selectedImages[selectedImageIndex] || selectedImages[0] || null
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),[sellerOrderSearch,setSellerOrderSearch]=useState(''),searchInputRef=useRef(null),[addressReturnDrawer,setAddressReturnDrawer]=useState('account'),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:'',id:''}),[orderNotes,setOrderNotes]=useState(''),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
- const [productForm,setProductForm]=useState({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+ const [productForm,setProductForm]=useState({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
  const [authUsers,setAuthUsers]=useState([]),[authUsersLoading,setAuthUsersLoading]=useState(false),[authUsersFetched,setAuthUsersFetched]=useState(false)
@@ -309,6 +314,14 @@ export default function App() {
  function add(p,s=p.sizes?.[0]||'',c=p.colors?.[0]||''){const stock=Number(p.stock_quantity??p.stock??0);if(!Number.isFinite(stock)||stock<1){notify('This item is currently unavailable.');return}const key=`${p.id}:${s}:${c}`;setCart(old=>old.some(i=>i.key===key)?old.map(i=>i.key===key?{...i,quantity:Math.min(i.quantity+1,stock)}:i):[...old,{...p,key,quantity:1,size:s,color:c}]);setSelected(null);setDrawer('cart');notify('Added to your bag')}
  async function getOrders(){if(!session)return login();try{const r=await api('/orders/',{token:session.access_token});setOrders(r.results||r);setSelectedOrder(null);setNotificationOpen(false);setDrawer('orders')}catch(e){notify(e.message)}}
  function openOrderDetails(order,returnTo='orders'){setSelectedOrder(order);setOrderReturnDrawer(returnTo);setNotificationOpen(false);setDrawer('order-details')}
+ async function openProductDetails(product){
+  setSelected(product);setSelectedImageIndex(0);setSize(product.sizes?.[0]||'');setColor(product.colors?.[0]||'');setDetailLoading(true)
+  try{
+   const details=await api('/products/'+encodeURIComponent(product.id)+'/')
+   setSelected(current=>current&&String(current.id)===String(product.id)?{...current,...details}:current)
+  }catch(error){notify(error.message||'Could not load full product details.')}
+  finally{setDetailLoading(false)}
+ }
  async function uploadImage(file){
   if(!file||!session)return notify('Sign in with an approved vendor/admin account first.')
   setBusy(true)
@@ -323,6 +336,30 @@ export default function App() {
    setProductForm(p=>({...p,image_url:data.secure_url,image_public_id:data.public_id}))
    notify('Image uploaded to Cloudinary')
   }catch(e){notify(e.message)}finally{setBusy(false)}
+ }
+ async function uploadGalleryImages(files){
+  const selectedFiles=Array.from(files||[])
+  if(!selectedFiles.length)return
+  if(!session)return notify('Sign in with an approved vendor/admin account first.')
+  if(productForm.extra_images.length+selectedFiles.length>8)return notify('Choose up to 8 additional product images.')
+  if(selectedFiles.some(file=>!file.type.startsWith('image/')||file.size>8*1024*1024))return notify('Each gallery image must be an image smaller than 8 MB.')
+  setBusy(true)
+  try{
+   const uploaded=[]
+   for(const file of selectedFiles){
+    const sign=await api('/uploads/signature/',{method:'POST',token:session.access_token,body:JSON.stringify({folder:'bala-fashion/products'})})
+    const form=new FormData()
+    Object.entries(sign.params).forEach(([key,value])=>form.append(key,value))
+    form.append('api_key',sign.api_key);form.append('signature',sign.signature);form.append('file',file)
+    const response=await fetch(`https://api.cloudinary.com/v1_1/${sign.cloud_name}/image/upload`,{method:'POST',body:form})
+    const data=await response.json()
+    if(!response.ok)throw new Error(data.error?.message||'Gallery image upload failed')
+    uploaded.push({image_url:data.secure_url,image_public_id:data.public_id,alt_text:productForm.name||'Product image',sort_order:productForm.extra_images.length+uploaded.length})
+   }
+   setProductForm(p=>({...p,extra_images:[...p.extra_images,...uploaded]}))
+   notify(`${uploaded.length} additional image(s) uploaded`)
+  }catch(error){notify(error.message||'Could not upload gallery images.')}
+  finally{setBusy(false)}
  }
  async function uploadCategoryImage(file){
   if(!file||!session)return notify('Sign in with an admin account first.')
@@ -472,11 +509,11 @@ export default function App() {
  }
  function startNewProduct(){
   const firstStore=sellerDashboard?.stores?.find(s=>s.status==='approved')
-  setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+  setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
   setDrawer('manage')
  }
  function startEditProduct(product){
-  setProductForm({id:product.id,name:product.name||'',description:product.description||'',price:String(product.price??''),compare_at_price:product.compare_at_price==null?'':String(product.compare_at_price),category_id:product.category_id||'',vendor_id:product.vendor_id||'',image_url:product.image_url||'',image_public_id:product.image_public_id||'',sizes:(product.sizes||[]).join(','),colors:(product.colors||[]).join(','),stock_quantity:String(product.stock_quantity??0)})
+  setProductForm({id:product.id,name:product.name||'',description:product.description||'',additional_description:product.additional_description||'',price:String(product.price??''),compare_at_price:product.compare_at_price==null?'':String(product.compare_at_price),category_id:product.category_id||'',vendor_id:product.vendor_id||'',image_url:product.image_url||'',image_public_id:product.image_public_id||'',extra_images:Array.isArray(product.extra_images)?product.extra_images:[],sizes:(product.sizes||[]).join(','),colors:(product.colors||[]).join(','),stock_quantity:String(product.stock_quantity??0)})
   setDrawer('manage')
  }
  async function hideProduct(product){
@@ -498,9 +535,9 @@ export default function App() {
  async function saveProduct(e){
   e.preventDefault();if(busy)return;if(!session)return login();setBusy(true)
   try{
-   const payload={...productForm,price:Number(productForm.price),compare_at_price:productForm.compare_at_price?Number(productForm.compare_at_price):null,stock_quantity:Number(productForm.stock_quantity),sizes:productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean),colors:productForm.colors.split(',').map(x=>x.trim()).filter(Boolean)}
+   const payload={...productForm,additional_description:productForm.additional_description||'',extra_images:productForm.extra_images.map((image,index)=>({...image,sort_order:index,alt_text:image.alt_text||productForm.name})),price:Number(productForm.price),compare_at_price:productForm.compare_at_price?Number(productForm.compare_at_price):null,stock_quantity:Number(productForm.stock_quantity),sizes:productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean),colors:productForm.colors.split(',').map(x=>x.trim()).filter(Boolean)}
    await api('/products/manage/',{method:productForm.id?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
-   setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+   setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
    await load();await refreshSellerDashboard();setDrawer('seller-dashboard');notify(productForm.id?'Product updated':'Product created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
@@ -540,7 +577,7 @@ export default function App() {
  }
  const catalogContent = <>
   {error&&<div className="notice">{error}<button onClick={()=>load(new AbortController().signal)}>Retry</button></div>}
-  <div className="grid">{loading?Array.from({length:6},(_,i)=><div className="skeleton" key={i}><div/></div>):products.map((p,i)=><article className="product" key={p.id}><button className="photo" onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}}>{p.image_url?<img src={p.image_url} alt={p.name} loading={i>2?'lazy':'eager'} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<small className="sale">SPECIAL PRICE</small>}<span className="quick">Quick view <FiArrowRight size={13}/></span></button><div className="product-info"><div className="meta"><span>{p.category_name||'Curated style'}</span></div><button className="product-name" onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}}>{p.name}</button><div className="price"><b>{money(p.price)}</b>{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<del>{money(p.compare_at_price)}</del>}<button onClick={()=>{setSelected(p);setSize(p.sizes?.[0]||'');setColor(p.colors?.[0]||'')}} aria-label={'Choose options for '+p.name}><FiPlus size={18}/></button></div></div></article>)}</div>
+  <div className="grid">{loading?Array.from({length:6},(_,i)=><div className="skeleton" key={i}><div/></div>):products.map((p,i)=><article className="product" key={p.id}><button className="photo" onClick={()=>openProductDetails(p)}>{p.image_url?<img src={p.image_url} alt={p.name} loading={i>2?'lazy':'eager'} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<small className="sale">SPECIAL PRICE</small>}<span className="quick">Quick view <FiArrowRight size={13}/></span></button><div className="product-info"><div className="meta"><span>{p.category_name||'Curated style'}</span></div><button className="product-name" onClick={()=>openProductDetails(p)}>{p.name}</button><div className="price"><b>{money(p.price)}</b>{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<del>{money(p.compare_at_price)}</del>}<button onClick={()=>openProductDetails(p)} aria-label={'Choose options for '+p.name}><FiPlus size={18}/></button></div></div></article>)}</div>
    {!loading&&!error&&hasMore&&<div className="load-more-wrap" style={{display:"flex",justifyContent:"center",padding:"24px"}}><button className="secondary" onClick={()=>load(undefined,nextOffset,true)} disabled={loadingMore}>{loadingMore?'Loading more styles…':'Load more styles'}</button></div>}
   {!loading&&!error&&!products.length&&<div className="empty"><FiShoppingBag size={27}/><h3>No products here yet</h3><p>Try another category or clear your search to see all available styles.</p><button className="secondary" onClick={()=>{setCategory('all');setSearch('');setMobileActive('home')}}>Show all styles</button></div>}
  </>
@@ -679,16 +716,19 @@ export default function App() {
    </div>}
    {drawer==='manage'&&<form className="drawer-body form" onSubmit={saveProduct}><p>{productForm.id?'Update this product in your approved store.':'Add a product to your approved store.'}</p>
     <label>Product name<input required value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></label>
-    <label>Description<textarea rows="3" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/></label>
+    <label>Short description<textarea rows="3" maxLength="4000" value={productForm.description} onChange={e=>setProductForm({...productForm,description:e.target.value})}/></label>
+    <label>Additional product details<textarea rows="5" maxLength="12000" value={productForm.additional_description} onChange={e=>setProductForm({...productForm,additional_description:e.target.value})} placeholder="Fabric, fit, care instructions, material, occasion and other details"/></label>
     {profile?.role==='admin'?<label>Store<select required value={productForm.vendor_id} onChange={e=>setProductForm({...productForm,vendor_id:e.target.value})}><option value="">Choose approved store</option>{(sellerDashboard?.stores||[]).filter(s=>s.status==='approved').map(store=><option key={store.id} value={store.id}>{store.name}</option>)}</select></label>:<div className="seller-store-note">Store: <b>{sellerDashboard?.stores?.find(s=>s.id===productForm.vendor_id)?.name||sellerDashboard?.stores?.[0]?.name||'Your approved store'}</b><small>The server assigns products to your own approved store.</small></div>}
     <label>Category<select required value={productForm.category_id} onChange={e=>setProductForm({...productForm,category_id:e.target.value})}><option value="">Choose category</option>{categories.filter(c=>c.slug!=='all').map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
     <div className="form-two"><label>Price (₹)<input required type="number" min="0" step="0.01" value={productForm.price} onChange={e=>setProductForm({...productForm,price:e.target.value})}/></label><label>Compare price<input type="number" min="0" step="0.01" value={productForm.compare_at_price} onChange={e=>setProductForm({...productForm,compare_at_price:e.target.value})}/></label></div>
-    <label>Product image (Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadImage(e.target.files?.[0])}/></label>{productForm.image_url&&<img className="upload-preview" src={productForm.image_url} alt="Uploaded product preview"/>}
+    <label>Main product image (Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadImage(e.target.files?.[0])}/></label>{productForm.image_url&&<img className="upload-preview" src={productForm.image_url} alt="Uploaded main product preview"/>}
+     <label>Additional product images (up to 8)<input type="file" accept="image/*" multiple onChange={e=>{uploadGalleryImages(e.target.files);e.target.value=''}}/></label>
+     {productForm.extra_images.length>0&&<div className="product-gallery-editor">{productForm.extra_images.map((image,index)=><div key={image.image_public_id||image.image_url}><img src={image.image_url} alt={image.alt_text||'Additional product image'}/><button type="button" className="secondary" disabled={busy} onClick={()=>setProductForm(p=>({...p,extra_images:p.extra_images.filter((_,i)=>i!==index)}))}><FiX size={13}/> Remove</button></div>)}</div>}
     <label>Sizes (comma separated)<input value={productForm.sizes} onChange={e=>setProductForm({...productForm,sizes:e.target.value})}/></label><label>Colours (comma separated)<input value={productForm.colors} onChange={e=>setProductForm({...productForm,colors:e.target.value})}/></label>
     <label>Stock quantity<input required type="number" min="0" value={productForm.stock_quantity} onChange={e=>setProductForm({...productForm,stock_quantity:e.target.value})}/></label>
     <button className="primary full" disabled={busy}>{busy?'Saving…':(productForm.id?'Update product':'Save product')}</button><button type="button" className="secondary full" onClick={()=>setDrawer('seller-dashboard')}>Cancel</button></form>}
   </aside></div>}
-  {selected&&<div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setSelected(null)}><section className="modal"><button className="icon close" onClick={()=>setSelected(null)}><FiX/></button><div className="modal-photo">{selected.image_url?<img src={selected.image_url} alt={selected.name} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}</div><div className="modal-info"><div className="eyebrow muted">{selected.category_name||'CURATED STYLE'}</div><h2>{selected.name}</h2><h3>{money(selected.price)} {selected.compare_at_price&&<del>{money(selected.compare_at_price)}</del>}</h3><p>{selected.description||'A thoughtfully selected piece for your wardrobe.'}</p>{selected.sizes?.length>0&&<div className="options"><b>Choose size</b><div>{selected.sizes.map(s=><button className={size===s?'selected':''} key={s} onClick={()=>setSize(s)}>{s}</button>)}</div></div>}{selected.colors?.length>0&&<div className="options"><b>Choose colour</b><div>{selected.colors.map(c=><button className={color===c?'selected':''} key={c} onClick={()=>setColor(c)}>{c}</button>)}</div></div>}<button className="primary full" disabled={busy||Number(selected.stock_quantity??selected.stock??0)<1} onClick={()=>add(selected,size,color)}><FiShoppingBag size={16}/> {Number(selected.stock_quantity??selected.stock??0)<1?'Currently unavailable':`Add to bag — ${money(selected.price)}`}</button><small className="delivery"><FiTruck size={14}/> Local delivery · Cash on delivery</small></div></section></div>}
+  {selected&&<div className="modal-backdrop product-detail-backdrop" onMouseDown={e=>e.target===e.currentTarget&&setSelected(null)}><section className="modal product-detail-modal" aria-label={selected.name+' product details'}><button className="icon close product-detail-close" aria-label="Close product details" onClick={()=>setSelected(null)}><FiX/></button><div className="product-detail-media"><div className="product-detail-main-image">{selectedHeroImage?<img src={selectedHeroImage.image_url} alt={selectedHeroImage.alt_text||selected.name} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}{detailLoading&&<span className="product-detail-loading">Loading details…</span>}</div>{selectedImages.length>1&&<div className="product-detail-thumbnails" aria-label="More product images">{selectedImages.map((image,index)=><button type="button" key={image.id||image.image_public_id||image.image_url||index} className={index===selectedImageIndex?'active':''} onClick={()=>setSelectedImageIndex(index)} aria-label={'View product image '+(index+1)}><img src={image.image_url} alt={image.alt_text||selected.name+' image '+(index+1)}/></button>)}</div>}</div><div className="modal-info product-detail-info"><div className="eyebrow muted">{selected.category_name||'CURATED STYLE'}</div><h2>{selected.name}</h2><h3>{money(selected.price)} {selected.compare_at_price&&Number(selected.compare_at_price)>Number(selected.price)&&<del>{money(selected.compare_at_price)}</del>}</h3><p className="product-short-description">{selected.description||'A thoughtfully selected piece for your wardrobe.'}</p>{selected.additional_description&&<section className="product-additional-description"><h3>Product details</h3><p>{selected.additional_description}</p></section>}{selected.sizes?.length>0&&<div className="options"><b>Choose size</b><div>{selected.sizes.map(s=><button className={size===s?'selected':''} key={s} onClick={()=>setSize(s)}>{s}</button>)}</div></div>}{selected.colors?.length>0&&<div className="options"><b>Choose colour</b><div>{selected.colors.map(c=><button className={color===c?'selected':''} key={c} onClick={()=>setColor(c)}>{c}</button>)}</div></div>}<div className="product-detail-buy"><button className="primary full" disabled={busy||detailLoading||Number(selected.stock_quantity??selected.stock??0)<1} onClick={()=>add(selected,size,color)}><FiShoppingBag size={16}/> {Number(selected.stock_quantity??selected.stock??0)<1?'Currently unavailable':`Add to bag — ${money(selected.price)}`}</button><small className="delivery"><FiTruck size={14}/> Local delivery · Cash on delivery</small></div></div></section></div>}
   {toast&&<div className="toast"><FiCheck size={16}/>{toast}</div>}
  </div>
 }
