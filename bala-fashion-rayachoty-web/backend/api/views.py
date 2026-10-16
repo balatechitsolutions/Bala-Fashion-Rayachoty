@@ -588,6 +588,42 @@ def products(request):
     except Exception:
         return Response({"detail":"Products are unavailable. Check the backend database connection."},status=503)
 
+
+
+@api_view(["GET"])
+def product_detail(request, product_id):
+    """Public full product details, including the ordered Cloudinary image gallery."""
+    try:
+        with connection.cursor() as c:
+            c.execute(
+                """select p.id,p.name,p.slug,p.description,p.additional_description,
+                          p.price,p.compare_at_price,p.image_url,p.image_public_id,
+                          p.sizes,p.colors,p.stock_quantity,p.category_id,
+                          cat.name as category_name,cat.slug as category_slug,
+                          p.vendor_id,v.slug as vendor_slug,
+                          coalesce((
+                            select json_agg(json_build_object(
+                              'id',pi.id,'image_url',pi.image_url,
+                              'image_public_id',pi.image_public_id,
+                              'alt_text',pi.alt_text,'sort_order',pi.sort_order
+                            ) order by pi.sort_order,pi.created_at)
+                            from public.product_images pi where pi.product_id=p.id
+                          ), '[]'::json) as gallery_images
+                   from public.products p
+                   join public.vendors v on v.id=p.vendor_id
+                   left join public.categories cat on cat.id=p.category_id
+                   where p.id=%s and p.is_active=true and v.status='approved'
+                   limit 1""",
+                [str(product_id)],
+            )
+            rows = _rows(c)
+        if not rows:
+            return Response({"detail": "This product is unavailable."}, status=404)
+        return Response(rows[0])
+    except Exception:
+        logging.exception("Could not load full product details")
+        return Response({"detail": "Product details are temporarily unavailable."}, status=503)
+
 @api_view(["GET","PATCH"])
 def profile(request):
     user,error=_user(request)
@@ -1126,8 +1162,13 @@ def manage_product(request):
                     c.execute(
                         """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
                                   p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
-                                  p.category_id,p.vendor_id,p.is_active,p.created_at,
-                                  c.name as category_name,v.name as vendor_name
+                                  p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
+                                  c.name as category_name,v.name as vendor_name,
+                                  coalesce((select json_agg(json_build_object(
+                                    'id',pi.id,'image_url',pi.image_url,'image_public_id',pi.image_public_id,
+                                    'alt_text',pi.alt_text,'sort_order',pi.sort_order
+                                  ) order by pi.sort_order,pi.created_at) from public.product_images pi
+                                    where pi.product_id=p.id), '[]'::json) as extra_images
                            from public.products p
                            left join public.categories c on c.id=p.category_id
                            join public.vendors v on v.id=p.vendor_id
@@ -1139,8 +1180,13 @@ def manage_product(request):
                     c.execute(
                         """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
                                   p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
-                                  p.category_id,p.vendor_id,p.is_active,p.created_at,
-                                  c.name as category_name,v.name as vendor_name
+                                  p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
+                                  c.name as category_name,v.name as vendor_name,
+                                  coalesce((select json_agg(json_build_object(
+                                    'id',pi.id,'image_url',pi.image_url,'image_public_id',pi.image_public_id,
+                                    'alt_text',pi.alt_text,'sort_order',pi.sort_order
+                                  ) order by pi.sort_order,pi.created_at) from public.product_images pi
+                                    where pi.product_id=p.id), '[]'::json) as extra_images
                            from public.products p
                            left join public.categories c on c.id=p.category_id
                            join public.vendors v on v.id=p.vendor_id
@@ -1276,8 +1322,24 @@ def manage_product(request):
         return Response({"detail": "Sizes and colours must be arrays."}, status=400)
     image_url = str(data.get("image_url", "")).strip()
     image_public_id = str(data.get("image_public_id", "")).strip()
+    additional_description = str(data.get("additional_description", ""))[:12000]
     if image_url and (not image_url.startswith("https://res.cloudinary.com/") or len(image_url) > 1000):
         return Response({"detail": "Upload the image through the configured Cloudinary uploader."}, status=400)
+    extra_images = data.get("extra_images", [] if request.method == "POST" else None)
+    if extra_images is not None:
+        if not isinstance(extra_images, list) or len(extra_images) > 8:
+            return Response({"detail": "Upload up to 8 additional product images."}, status=400)
+        normalized_images = []
+        for index, image in enumerate(extra_images):
+            if not isinstance(image, dict):
+                return Response({"detail": "Each gallery image must be a valid image object."}, status=400)
+            url = str(image.get("image_url", "")).strip()
+            public_id = str(image.get("image_public_id", "")).strip()
+            alt_text = str(image.get("alt_text") or name)[:180]
+            if not url.startswith("https://res.cloudinary.com/") or len(url) > 1000 or not public_id or len(public_id) > 255:
+                return Response({"detail": "Upload each gallery image through the configured Cloudinary uploader."}, status=400)
+            normalized_images.append((url, public_id, alt_text, index))
+        extra_images = normalized_images
 
     try:
         with transaction.atomic():
@@ -1304,25 +1366,36 @@ def manage_product(request):
                         return Response({"detail": "Product not found or you do not have permission to edit it."}, status=404)
                     c.execute(
                         """update public.products set vendor_id=%s,category_id=%s,name=%s,
-                           description=%s,price=%s,compare_at_price=%s,image_url=%s,image_public_id=%s,
-                           sizes=%s,colors=%s,stock_quantity=%s,updated_at=now()
+                           description=%s,additional_description=%s,price=%s,compare_at_price=%s,
+                           image_url=%s,image_public_id=%s,sizes=%s,colors=%s,stock_quantity=%s,updated_at=now()
                            where id=%s returning id,name,slug,price,stock_quantity,image_url,is_active,vendor_id""",
-                        [vendor, category, name, str(data.get("description", ""))[:4000], price, compare_price,
-                         image_url, image_public_id, [str(x)[:30] for x in sizes],
-                         [str(x)[:50] for x in colors], stock, product_id],
+                        [vendor, category, name, str(data.get("description", ""))[:4000],
+                         additional_description, price, compare_price, image_url, image_public_id,
+                         [str(x)[:30] for x in sizes], [str(x)[:50] for x in colors], stock, product_id],
                     )
                 else:
                     slug = slugify(name)[:150] + "-" + uuid.uuid4().hex[:8]
                     c.execute(
-                        """insert into public.products(vendor_id,category_id,name,slug,description,price,
-                           compare_at_price,image_url,image_public_id,sizes,colors,stock_quantity,is_active)
-                           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
+                        """insert into public.products(vendor_id,category_id,name,slug,description,
+                           additional_description,price,compare_at_price,image_url,image_public_id,
+                           sizes,colors,stock_quantity,is_active)
+                           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
                            returning id,name,slug,price,stock_quantity,image_url,is_active,vendor_id""",
-                        [vendor, category, name, slug, str(data.get("description", ""))[:4000], price,
-                         compare_price, image_url, image_public_id, [str(x)[:30] for x in sizes],
-                         [str(x)[:50] for x in colors], stock],
+                        [vendor, category, name, slug, str(data.get("description", ""))[:4000],
+                         additional_description, price, compare_price, image_url, image_public_id,
+                         [str(x)[:30] for x in sizes], [str(x)[:50] for x in colors], stock],
                     )
                 row = c.fetchone()
+                saved_product_id = str(row[0])
+                if extra_images is not None:
+                    c.execute("delete from public.product_images where product_id=%s", [saved_product_id])
+                    for image_url_value, image_public_id_value, alt_text_value, sort_order_value in extra_images:
+                        c.execute(
+                            """insert into public.product_images
+                               (product_id,image_url,image_public_id,alt_text,sort_order)
+                               values(%s,%s,%s,%s,%s)""",
+                            [saved_product_id, image_url_value, image_public_id_value, alt_text_value, sort_order_value],
+                        )
         return Response({
             "id": str(row[0]), "name": row[1], "slug": row[2], "price": str(row[3]),
             "stock_quantity": row[4], "image_url": row[5], "is_active": row[6],
