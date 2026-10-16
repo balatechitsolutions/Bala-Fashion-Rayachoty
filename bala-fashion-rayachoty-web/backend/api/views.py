@@ -1082,8 +1082,13 @@ def seller_dashboard(request):
             c.execute(
                 """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
                           p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
-                          p.category_id,p.vendor_id,p.is_active,p.created_at,
-                          c.name as category_name,v.name as vendor_name
+                          p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
+                          c.name as category_name,v.name as vendor_name,
+                          coalesce((select json_agg(json_build_object(
+                            'id',pi.id,'image_url',pi.image_url,'image_public_id',pi.image_public_id,
+                            'alt_text',pi.alt_text,'sort_order',pi.sort_order
+                          ) order by pi.sort_order,pi.created_at) from public.product_images pi
+                            where pi.product_id=p.id), '[]'::json) as extra_images
                    from public.products p
                    left join public.categories c on c.id=p.category_id
                    join public.vendors v on v.id=p.vendor_id
