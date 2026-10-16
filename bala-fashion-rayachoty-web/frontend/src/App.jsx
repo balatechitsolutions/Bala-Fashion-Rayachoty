@@ -509,7 +509,7 @@ export default function App() {
  }
  function startNewProduct(){
   const firstStore=sellerDashboard?.stores?.find(s=>s.status==='approved')
-  setProductForm({name:'',description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+  setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
   setDrawer('manage')
  }
  function startEditProduct(product){
