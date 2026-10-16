@@ -156,7 +156,7 @@ class ProductImageInlineForm(CloudinaryUploadFormMixin, forms.ModelForm):
     def clean_image_upload(self):
         image = self.cleaned_data.get("image_upload")
         self._validate_upload(image)
-        if not self.instance.pk and not image:
+        if self.instance._state.adding and not image:
             raise ValidationError("Choose an image file for each new gallery row.")
         return image
 
