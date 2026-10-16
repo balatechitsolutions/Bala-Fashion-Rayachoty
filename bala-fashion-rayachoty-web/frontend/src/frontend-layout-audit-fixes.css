@@ -979,3 +979,177 @@
     min-height: 36px;
   }
 }
+
+/* Delivery dashboard — phone-first layout for staff actions and per-order OTP controls. */
+.app-shell .seller-dashboard {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.app-shell .seller-dashboard-head,
+.app-shell .seller-dashboard-head > div,
+.app-shell .seller-dashboard-head-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+.app-shell .seller-dashboard-head-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-shell .delivery-order-search {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.app-shell .seller-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.app-shell .seller-stat-grid > * {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-shell .delivery-order-card,
+.app-shell .delivery-order-details,
+.app-shell .delivery-order-actions,
+.app-shell .delivery-otp-controls {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.app-shell .delivery-order-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+.app-shell .delivery-otp-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.app-shell .delivery-otp-controls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+.app-shell .delivery-otp-controls > label {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.app-shell .delivery-otp-controls input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 760px) {
+  .app-shell .seller-dashboard-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+  .app-shell .seller-dashboard-head-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+  }
+  .app-shell .seller-dashboard-head-actions > * {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    justify-self: stretch;
+  }
+  .app-shell .seller-dashboard-head-actions > button {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 10px;
+    white-space: normal;
+  }
+  .app-shell .seller-dashboard-head-actions > .seller-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 8px 10px;
+  }
+  .app-shell .delivery-order-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+  }
+  .app-shell .delivery-order-search input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .app-shell .delivery-order-search > button {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 7px 9px;
+  }
+  .app-shell .seller-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .app-shell .seller-stat-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .app-shell .delivery-order-card {
+    padding: 8px;
+  }
+  .app-shell .delivery-order-actions {
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 10px;
+  }
+  .app-shell .delivery-otp-controls {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .app-shell .delivery-otp-controls > button {
+    width: 100%;
+    min-height: 46px;
+    padding: 11px 12px;
+  }
+  .app-shell .delivery-order-details {
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 380px) {
+  .app-shell .seller-dashboard-head-actions {
+    gap: 6px;
+  }
+  .app-shell .seller-dashboard-head-actions > button {
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+  .app-shell .seller-stat-grid {
+    gap: 8px;
+  }
+  .app-shell .delivery-order-card {
+    padding: 6px;
+  }
+  .app-shell .delivery-order-details {
+    padding: 10px 8px;
+  }
+}
