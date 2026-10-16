@@ -328,44 +328,6 @@ class CategoryAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     )
 
 
-    def save_formset(self, request, form, formset, change):
-        # Upload selected files server-side; Django Admin never sends files directly from the browser to Cloudinary.
-        if formset.model is ProductImage:
-            for inline_form in formset.forms:
-                if not hasattr(inline_form, "cleaned_data") or not inline_form.cleaned_data:
-                    continue
-                if inline_form.cleaned_data.get("DELETE"):
-                    continue
-                uploaded = inline_form.cleaned_data.get("image_upload")
-                if not uploaded:
-                    continue
-                cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
-                api_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
-                api_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
-                if not all((cloud_name, api_key, api_secret)):
-                    raise CloudinaryUploadFailure("Cloudinary credentials are not configured on the backend.")
-                cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
-                try:
-                    result = cloudinary.uploader.upload(
-                        uploaded,
-                        folder="Bala_fashon_Rayachoty/products/gallery",
-                        resource_type="image",
-                        allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
-                    )
-                except Exception as exc:
-                    logger.error("Cloudinary gallery upload failed (%s): %s", type(exc).__name__, str(exc)[:500], exc_info=True)
-                    raise CloudinaryUploadFailure(
-                        "Gallery upload failed. Check Render Cloudinary credentials/logs; gallery changes were not saved."
-                    ) from exc
-                if not result.get("secure_url") or not result.get("public_id"):
-                    raise CloudinaryUploadFailure("Cloudinary did not return a secure image URL and public ID.")
-                inline_form.instance.image_url = result["secure_url"]
-                inline_form.instance.image_public_id = result["public_id"]
-                inline_form.instance.product = form.instance
-            formset.save()
-            return
-        super().save_formset(request, form, formset, change)
-
     @admin.display(description="Preview")
     def thumbnail(self, obj):
         return format_html('<img src="{}" alt="Category image" style="width:56px;height:56px;max-width:56px;max-height:56px;object-fit:contain;border-radius:8px;background:#f3f4f6;padding:4px;box-sizing:border-box;">', obj.image_url) if obj.image_url else "—"
@@ -459,6 +421,44 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
         ("Store visibility", {"fields": ("is_active",)}),
         ("Record information", {"fields": ("created_at", "updated_at")}),
     )
+
+    def save_formset(self, request, form, formset, change):
+        # Upload selected files server-side; Django Admin never sends files directly from the browser to Cloudinary.
+        if formset.model is ProductImage:
+            for inline_form in formset.forms:
+                if not hasattr(inline_form, "cleaned_data") or not inline_form.cleaned_data:
+                    continue
+                if inline_form.cleaned_data.get("DELETE"):
+                    continue
+                uploaded = inline_form.cleaned_data.get("image_upload")
+                if not uploaded:
+                    continue
+                cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+                api_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
+                api_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+                if not all((cloud_name, api_key, api_secret)):
+                    raise CloudinaryUploadFailure("Cloudinary credentials are not configured on the backend.")
+                cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
+                try:
+                    result = cloudinary.uploader.upload(
+                        uploaded,
+                        folder="Bala_fashon_Rayachoty/products/gallery",
+                        resource_type="image",
+                        allowed_formats=["jpg", "jpeg", "png", "webp", "gif"],
+                    )
+                except Exception as exc:
+                    logger.error("Cloudinary gallery upload failed (%s): %s", type(exc).__name__, str(exc)[:500], exc_info=True)
+                    raise CloudinaryUploadFailure(
+                        "Gallery upload failed. Check Render Cloudinary credentials/logs; gallery changes were not saved."
+                    ) from exc
+                if not result.get("secure_url") or not result.get("public_id"):
+                    raise CloudinaryUploadFailure("Cloudinary did not return a secure image URL and public ID.")
+                inline_form.instance.image_url = result["secure_url"]
+                inline_form.instance.image_public_id = result["public_id"]
+                inline_form.instance.product = form.instance
+            formset.save()
+            return
+        super().save_formset(request, form, formset, change)
 
     @admin.display(description="Preview")
     def thumbnail(self, obj):
