@@ -83,11 +83,11 @@ def delivery_staff(request):
                     cursor.execute(
                         """update public.profiles
                            set is_active=%s,
-                               availability_status=case when %s then 'offline' else 'offline' end,
+                               availability_status='offline',
                                updated_at=now()
                            where id=%s and role='delivery_boy'
                            returning id, full_name, phone, is_active, availability_status""",
-                        [is_active, is_active, staff_id],
+                        [is_active, staff_id],
                     )
                     row = cursor.fetchone()
                     if not is_active:
