@@ -110,38 +110,24 @@ def delivery_verification(request):
                     "It expires in 15 minutes. Do not share it before the order arrives."
                 )
 
-                # Try SMTP first, then automatically fall back to Mailjet so delivery
-                # staff are not forced to switch providers manually when Render blocks SMTP.
-                sent = False
-                provider = ""
-                smtp_detail = ""
-                if action in {"start", "resend"}:
-                    if settings.EMAIL_HOST and settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
-                        try:
-                            sent = send_mail(
-                                subject, body, settings.DEFAULT_FROM_EMAIL, [recipient],
-                                fail_silently=False,
-                            ) == 1
-                            if sent:
-                                provider = "SMTP"
-                            else:
-                                smtp_detail = "SMTP did not accept the message."
-                                logger.warning("SMTP returned zero sent messages for delivery OTP order %s", order_id)
-                        except Exception as exc:
-                            smtp_detail = "SMTP network/send failure."
-                            logger.warning("Delivery OTP SMTP send failed for order %s (%s); trying Mailjet fallback.", order_id, type(exc).__name__)
-                    else:
-                        smtp_detail = "SMTP is not configured."
-                    if not sent:
-                        sent, mailjet_detail, provider = _send_mailjet_otp(recipient, subject, body, order_id)
-                        if not sent:
-                            return Response({
-                                "detail": f"{smtp_detail} {mailjet_detail} Configure Mailjet credentials and verify the sender in Render."
-                            }, status=503)
-                else:
-                    sent, mailjet_detail, provider = _send_mailjet_otp(recipient, subject, body, order_id)
-                    if not sent:
-                        return Response({"detail": mailjet_detail}, status=503)
+                # Mailjet is the primary transactional email provider for delivery OTPs.
+                # Do not depend on SMTP, which may be blocked or unreliable on the host.
+                sent, mailjet_detail, provider = _send_mailjet_otp(
+                    recipient, subject, body, order_id
+                )
+                if not sent:
+                    logger.error(
+                        "Delivery OTP could not be sent for order %s via Mailjet: %s",
+                        order_id, mailjet_detail,
+                    )
+                    return Response({
+                        "detail": (
+                            "OTP email could not be sent through Mailjet. "
+                            + mailjet_detail
+                            + " Check MAILJET_API_KEY, MAILJET_API_SECRET, "
+                              "MAILJET_SENDER_EMAIL and sender verification in Render/Mailjet."
+                        )
+                    }, status=503)
 
                 cursor.execute(
                     """update public.orders set status='out_for_delivery',delivery_otp_hash=%s,
