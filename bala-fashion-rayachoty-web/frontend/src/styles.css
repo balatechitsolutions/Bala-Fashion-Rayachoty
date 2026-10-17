@@ -1661,3 +1661,47 @@ button:disabled{cursor:not-allowed;opacity:.58}
     padding: 15px 14px calc(28px + env(safe-area-inset-bottom));
   }
 }
+
+
+/* Searchable per-order assignment cards: clear hierarchy and mobile-friendly controls. */
+.delivery-assignment-section{display:flex;flex-direction:column;gap:12px;min-width:0}
+.delivery-assignment-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0}
+.delivery-assignment-heading h3{margin:0 0 5px}
+.delivery-assignment-heading p{margin:0;font-size:12px;line-height:1.5}
+.delivery-assignment-count{flex:0 0 auto;padding:6px 9px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:11px;font-weight:800;color:var(--rose)}
+.delivery-assignment-search{width:100%;box-sizing:border-box;min-height:48px;margin:0 0 2px}
+.delivery-assignment-search input{min-height:26px}
+.seller-order-row.delivery-assignment-card{display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0;padding:14px;border:1px solid var(--line);border-radius:14px;background:#fffdfb}
+.delivery-assignment-order-toggle{display:flex;align-items:center;gap:10px;width:100%;min-width:0;padding:0;border:0;background:transparent;color:var(--ink);text-align:left}
+.delivery-assignment-order-title{display:flex;flex:1 1 auto;flex-direction:column;gap:5px;min-width:0}
+.delivery-assignment-order-title b{font-size:14px;overflow-wrap:anywhere}
+.delivery-assignment-order-title small{font-size:11px;text-transform:capitalize;color:var(--muted)}
+.delivery-assignment-state{flex:0 0 auto;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:800}
+.delivery-assignment-state.is-assigned{background:#e8f5ec;color:#226a3c}
+.delivery-assignment-state.is-unassigned{background:#fff1dc;color:#8b5a14}
+.delivery-assignment-chevron{flex:0 0 auto;transform:rotate(0);transition:transform .18s ease;color:var(--rose)}
+.delivery-assignment-chevron.is-expanded{transform:rotate(90deg)}
+.delivery-assignment-order-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.delivery-assignment-order-details>span{display:flex;flex-direction:column;gap:4px;min-width:0}
+.delivery-assignment-order-details small{font-size:10px;color:var(--muted)}
+.delivery-assignment-order-details b{font-size:12px;text-transform:capitalize;overflow-wrap:anywhere}
+.delivery-assignment-controls{display:flex;flex-direction:column;gap:9px;width:100%;max-width:none;min-width:0}
+.delivery-assignment-select-label{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:12px;font-weight:750;color:var(--ink)}
+.delivery-assignment-controls select{box-sizing:border-box;width:100%;min-width:0;max-width:100%;min-height:52px;padding:12px 40px 12px 12px;border:1px solid var(--line);border-radius:11px;background-color:#fff;color:var(--ink);font-size:14px;line-height:1.35;white-space:normal}
+.delivery-assignment-submit{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;white-space:normal;text-align:center}
+@media(max-width:560px){
+ .delivery-assignment-heading{align-items:flex-start}
+ .delivery-assignment-heading p{font-size:12px}
+ .delivery-assignment-search{min-height:50px;padding:11px}
+ .seller-order-row.delivery-assignment-card{gap:13px;padding:13px;border-radius:13px}
+ .delivery-assignment-order-toggle{gap:8px}
+ .delivery-assignment-order-title b{font-size:13px}
+ .delivery-assignment-order-details{grid-template-columns:minmax(0,1fr);gap:9px}
+ .delivery-assignment-order-details>span{padding:2px 0}
+ .delivery-assignment-controls select{min-height:56px;font-size:15px;padding:14px 42px 14px 13px}
+ .delivery-assignment-submit{min-height:50px}
+}
+@media(max-width:360px){
+ .delivery-assignment-state{font-size:9px;padding:5px 6px}
+ .delivery-assignment-order-title b{font-size:12px}
+}
