@@ -414,12 +414,13 @@ export default function App() {
   try{await api('/categories/manage/?id='+encodeURIComponent(cat.id),{method:'DELETE',token:session.access_token});const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[]);await load();notify('Category deactivated')}
   catch(e){notify(e.message)}finally{setBusy(false)}
  }
- async function fetchAuthUsers(){
-  if(!session?.access_token)return login()
+ async function fetchAuthUsers(tokenOverride){
+  const accessToken=tokenOverride||sessionRef.current?.access_token||session?.access_token
+  if(!accessToken){notify('Your admin session is unavailable. Please sign in again, then reopen Delivery staff.');return}
   if(authUsersLoading)return
   setAuthUsersLoading(true)
   try{
-   const data=await api('/users/manage/',{token:session.access_token})
+   const data=await api('/users/manage/',{token:accessToken})
    setAuthUsers(Array.isArray(data.results)?data.results:[])
    setAuthUsersFetched(true)
    notify(`Fetched ${data.count??data.results?.length??0} website user(s).`)
@@ -434,9 +435,28 @@ export default function App() {
   catch(e){notify(e.message)}
  }
  async function openDeliveryManagement(){
-  if(!session)return login()
+  // Read the live Supabase session before opening admin tools. A stale React
+  // session state must not accidentally trigger Google OAuth and send the
+  // administrator back to the storefront homepage.
+  let activeSession=sessionRef.current||session
+  if(!activeSession?.access_token&&supabase){
+   try{
+    const {data,error}=await supabase.auth.getSession()
+    if(!error&&data?.session){
+     activeSession=data.session
+     sessionRef.current=activeSession
+     setSession(activeSession)
+    }
+   }catch(error){notify(error.message||'Could not restore your admin session.');return}
+  }
+  if(!activeSession?.access_token){
+   setMobileActive('account')
+   setDrawer('account')
+   notify('Your session has expired. Sign in again to manage delivery staff.')
+   return
+  }
   setDrawer('delivery-management')
-  if(!authUsersFetched)await fetchAuthUsers()
+  if(!authUsersFetched)await fetchAuthUsers(activeSession.access_token)
  }
  async function createVendor(e){
   e.preventDefault();if(busy)return;if(!session)return login()
