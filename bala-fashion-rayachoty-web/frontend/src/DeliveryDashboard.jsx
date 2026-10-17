@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus, FiSearch } from 'react-icons/fi'
+import { FiArrowRight, FiCheck, FiMapPin, FiPackage, FiRefreshCw, FiTruck, FiUserPlus, FiSearch } from 'react-icons/fi'
 import DeliveryOrderSummary from './DeliveryOrderSummary'
 import { api } from './api'
 
