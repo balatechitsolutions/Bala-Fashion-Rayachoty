@@ -56,6 +56,25 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     } finally { setSaving(false) }
   }
 
+  async function toggleStaffActive(person) {
+    if (!session?.access_token || saving) return
+    const nextActive = !person.is_active
+    const action = nextActive ? 'reactivate' : 'deactivate'
+    if (!window.confirm(`${action === 'deactivate' ? 'Deactivate' : 'Reactivate'} ${person.email || person.full_name || person.id}? ${nextActive ? 'They will remain Offline until they choose Go online.' : 'They will be taken offline and any undelivered assigned orders will be unassigned.'}`)) return
+    setSaving(true)
+    try {
+      await api('/delivery/staff/', {
+        method: 'PATCH',
+        token: session.access_token,
+        body: JSON.stringify({ id: person.id, is_active: nextActive }),
+      })
+      await Promise.all([loadStaff(), onRefresh?.()])
+      notify(nextActive ? 'Delivery account reactivated. The person must choose Go online.' : 'Delivery account deactivated and active assignments released.')
+    } catch (err) {
+      notify(err.message || 'Could not update delivery staff status.')
+    } finally { setSaving(false) }
+  }
+
   async function removeStaff(person) {
     if (!session?.access_token || saving) return
     if (!window.confirm('Remove delivery access for ' + (person.email || person.full_name || person.id) + '? Their account will return to customer role and active orders will be unassigned.')) return
@@ -107,9 +126,12 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
       {!staff.length ? <p className="seller-empty">No delivery people added yet.</p> : staff.map(person =>
         <article className="seller-store-row" key={person.id}>
           <span><b>{person.full_name || 'Delivery person'}</b><small>{person.email || 'No email'} · {person.phone || 'No phone'}</small><small>{person.id}</small></span>
-          <span className={'seller-status '+(person.availability_status==='available'?'approved':'suspended')}>{person.availability_status==='available'?'Online':'Offline'}</span>
+          <span className={'seller-status '+(!person.is_active?'suspended':person.availability_status==='available'?'approved':'suspended')}>{!person.is_active?'Inactive':person.availability_status==='available'?'Online':'Offline'}</span>
           {person.last_location_at && <small>Location updated {new Date(person.last_location_at).toLocaleString('en-IN')} {person.latitude != null && person.longitude != null ? '· '+Number(person.latitude).toFixed(4)+', '+Number(person.longitude).toFixed(4) : ''}</small>}
-          <span className="seller-product-actions"><button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove role</button></span>
+          <span className="seller-product-actions">
+            <button type="button" className="secondary" disabled={saving || busy} onClick={() => toggleStaffActive(person)}>{person.is_active ? 'Deactivate' : 'Reactivate'}</button>
+            <button type="button" className="secondary" disabled={saving || busy} onClick={() => removeStaff(person)}>Remove role</button>
+          </span>
         </article>
       )}
     </section>
