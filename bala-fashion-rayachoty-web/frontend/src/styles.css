@@ -1705,3 +1705,29 @@ button:disabled{cursor:not-allowed;opacity:.58}
  .delivery-assignment-state{font-size:9px;padding:5px 6px}
  .delivery-assignment-order-title b{font-size:12px}
 }
+
+
+/* Fix Android/mobile native select controls expanding to an oversized field. */
+.delivery-assignment-controls .delivery-assignment-select-label select,
+.delivery-assignment-controls select {
+  display: block;
+  box-sizing: border-box;
+  height: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  padding: 0 42px 0 13px !important;
+  line-height: normal !important;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  flex: 0 0 56px;
+}
+@media (max-width: 560px) {
+  .delivery-assignment-controls .delivery-assignment-select-label select,
+  .delivery-assignment-controls select {
+    height: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    padding: 0 40px 0 13px !important;
+  }
+}
