@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
 const BASE = (import.meta.env.VITE_API_BASE_URL || 'https://bala-fashion-api.onrender.com/api').replace(/\/$/, '')
+const REQUEST_TIMEOUT_MS = 20000
 
 async function currentAccessToken(fallback) {
   if (!supabase || !fallback) return fallback
@@ -19,7 +20,30 @@ async function request(path, options, token, retried = false) {
   const headers = new Headers(options.headers || {})
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
-  const response = await fetch(`${BASE}${path}`, { ...options, headers })
+
+  // Avoid indefinite spinners when Render is waking up or a backend/database query stalls.
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const externalSignal = options.signal
+  const abortFromExternal = () => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort()
+    else externalSignal.addEventListener('abort', abortFromExternal, { once: true })
+  }
+
+  let response
+  try {
+    response = await fetch(`${BASE}${path}`, { ...options, signal: controller.signal, headers })
+  } catch (error) {
+    if (controller.signal.aborted && !externalSignal?.aborted) {
+      throw new Error('The server took too long to respond. Please retry; if this continues, check the Render service logs.')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', abortFromExternal)
+  }
+
   const type = response.headers.get('content-type') || ''
   const data = type.includes('application/json') ? await response.json() : await response.text()
 
