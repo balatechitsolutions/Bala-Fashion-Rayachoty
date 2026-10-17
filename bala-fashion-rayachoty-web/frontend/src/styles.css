@@ -1610,3 +1610,54 @@ button:disabled{cursor:not-allowed;opacity:.58}
   }
   .product-gallery-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Delivery staff drawer: keep the header fixed and make the content area the
+   scroll container on touch devices and desktop, even when nested flex layouts
+   contain long staff/order lists. */
+.overlay:has(.seller-dashboard) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.overlay:has(.seller-dashboard) .drawer {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+.overlay:has(.seller-dashboard) .drawer-body.seller-dashboard {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+}
+.overlay:has(.seller-dashboard) .seller-dashboard-section,
+.overlay:has(.seller-dashboard) .seller-store-row,
+.overlay:has(.seller-dashboard) .seller-order-row {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .overlay:has(.seller-dashboard) {
+    align-items: stretch;
+    padding-bottom: 0;
+  }
+  .overlay:has(.seller-dashboard) .drawer {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .overlay:has(.seller-dashboard) .drawer-body.seller-dashboard {
+    padding: 15px 14px calc(28px + env(safe-area-inset-bottom));
+  }
+}
