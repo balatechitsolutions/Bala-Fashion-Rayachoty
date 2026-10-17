@@ -126,8 +126,11 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
             </span>
             <span className="delivery-assignment-controls">
               <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
-                <option value="">Choose online delivery person</option>
-                {staff.filter(person=>person.availability_status==='available').sort((a,b)=> {
+                <option value="">Choose a delivery person (offline accounts are shown but disabled)</option>
+                {[...staff].sort((a,b) => {
+                  const availableA = a.is_active && a.availability_status === 'available'
+                  const availableB = b.is_active && b.availability_status === 'available'
+                  if (availableA !== availableB) return availableA ? -1 : 1
                   const destination=order.delivery_coordinates||{}
                   const distance=person=> {
                     if(destination.latitude==null||destination.longitude==null||person.latitude==null||person.longitude==null) return Number.POSITIVE_INFINITY
@@ -140,9 +143,9 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
                   const da=distance(a), db=distance(b)
                   if(da!==db) return da-db
                   return String(a.full_name||'').localeCompare(String(b.full_name||''))
-                }).map(person => <option key={person.id} value={person.id}>{person.full_name || person.phone || person.id.slice(0, 8)}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
+                }).map(person => <option key={person.id} value={person.id} disabled={!person.is_active || person.availability_status!=='available'}>{person.full_name || person.phone || person.id.slice(0, 8)} · {person.is_active && person.availability_status==='available' ? 'Online' : person.is_active ? 'Offline' : 'Inactive'}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
               </select>
-              <button className="secondary" disabled={saving || !staff.some(person=>person.availability_status==='available')} onClick={() => assign(order)}>Assign <FiArrowRight size={14}/></button>
+              <button className="secondary" disabled={saving || !staff.some(person=>person.is_active && person.availability_status==='available')} onClick={() => assign(order)}>Assign <FiArrowRight size={14}/></button>
             </span>
           </article>
         )}
