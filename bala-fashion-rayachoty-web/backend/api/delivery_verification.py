@@ -6,8 +6,6 @@ import logging
 import hmac
 import secrets
 
-from django.conf import settings
-from django.core.mail import send_mail
 from django.db import connection, transaction
 from django.utils import timezone
 import requests
@@ -110,53 +108,21 @@ def delivery_verification(request):
                     "It expires in 15 minutes. Do not share it before the order arrives."
                 )
 
-                # Test SMTP first. If SMTP cannot send, automatically fall back to Mailjet.
-                sent = False
-                provider = ""
-                smtp_detail = ""
-                if action in {"start", "resend"}:
-                    if settings.EMAIL_HOST and settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
-                        try:
-                            sent = send_mail(
-                                subject, body, settings.DEFAULT_FROM_EMAIL, [recipient],
-                                fail_silently=False,
-                            ) == 1
-                            if sent:
-                                provider = "SMTP"
-                                logger.info("Delivery OTP sent via SMTP for order %s", order_id)
-                            else:
-                                smtp_detail = "SMTP returned zero sent messages."
-                                logger.warning("SMTP returned zero sent messages for delivery OTP order %s", order_id)
-                        except Exception as exc:
-                            smtp_detail = f"SMTP send failed ({type(exc).__name__})."
-                            logger.warning(
-                                "Delivery OTP SMTP failed for order %s (%s); trying Mailjet fallback.",
-                                order_id, type(exc).__name__,
-                            )
-                    else:
-                        smtp_detail = "SMTP is not configured (EMAIL_HOST/EMAIL_HOST_USER/EMAIL_HOST_PASSWORD missing)."
-                        logger.warning("Delivery OTP SMTP is not configured for order %s; trying Mailjet fallback.", order_id)
-
+                # Use Mailjet's HTTPS API exclusively. Render Free blocks outbound SMTP.
+                sent, mailjet_detail, provider = _send_mailjet_otp(
+                    recipient, subject, body, order_id
+                )
                 if not sent:
-                    sent, mailjet_detail, provider = _send_mailjet_otp(
-                        recipient, subject, body, order_id
+                    logger.error(
+                        "Delivery OTP failed for order %s. Mailjet: %s",
+                        order_id, mailjet_detail,
                     )
-                    if sent:
-                        logger.info(
-                            "Delivery OTP sent via Mailjet fallback for order %s; SMTP result: %s",
-                            order_id, smtp_detail or "not attempted for this action",
+                    return Response({
+                        "detail": (
+                            f"{mailjet_detail} Check MAILJET_API_KEY, MAILJET_API_SECRET, "
+                            "MAILJET_SENDER_EMAIL, and sender verification in Render/Mailjet."
                         )
-                    else:
-                        logger.error(
-                            "Delivery OTP failed for order %s. SMTP: %s Mailjet: %s",
-                            order_id, smtp_detail or "not attempted", mailjet_detail,
-                        )
-                        return Response({
-                            "detail": (
-                                f"{smtp_detail} Mailjet fallback failed: {mailjet_detail} "
-                                "Check SMTP credentials and Mailjet API/sender configuration in Render."
-                            )
-                        }, status=503)
+                    }, status=503)
 
                 cursor.execute(
                     """update public.orders set status='out_for_delivery',delivery_otp_hash=%s,
