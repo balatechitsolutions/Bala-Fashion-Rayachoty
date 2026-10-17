@@ -21,7 +21,7 @@ def _valid_uuid(value):
         return None
 
 
-@api_view(["GET", "POST", "DELETE"])
+@api_view(["GET", "POST", "PATCH", "DELETE"])
 def delivery_staff(request):
     """Admins can list delivery staff and authorize an existing Supabase user."""
     user, profile, error = _role_user(request, {"admin"})
@@ -62,6 +62,46 @@ def delivery_staff(request):
         except Exception:
             return Response({"detail": "Delivery staff could not be authorized. Apply the delivery-role SQL migration first."}, status=503)
 
+
+    if request.method == "PATCH":
+        staff_id = _valid_uuid(request.data.get("id"))
+        if not staff_id:
+            return Response({"detail": "Choose a valid delivery staff account."}, status=400)
+        if "is_active" not in request.data or not isinstance(request.data.get("is_active"), bool):
+            return Response({"detail": "Choose whether this delivery account should be active."}, status=400)
+        is_active = request.data["is_active"]
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """select id from public.profiles
+                           where id=%s and role='delivery_boy' for update""",
+                        [staff_id],
+                    )
+                    if not cursor.fetchone():
+                        return Response({"detail": "Delivery staff account not found."}, status=404)
+                    cursor.execute(
+                        """update public.profiles
+                           set is_active=%s,
+                               availability_status=case when %s then 'offline' else 'offline' end,
+                               updated_at=now()
+                           where id=%s and role='delivery_boy'
+                           returning id, full_name, phone, is_active, availability_status""",
+                        [is_active, is_active, staff_id],
+                    )
+                    row = cursor.fetchone()
+                    if not is_active:
+                        cursor.execute(
+                            """update public.orders set assigned_delivery_boy_id=NULL, updated_at=now()
+                               where assigned_delivery_boy_id=%s and status<>'delivered'""",
+                            [staff_id],
+                        )
+            return Response({
+                "id": str(row[0]), "full_name": row[1], "phone": row[2],
+                "is_active": row[3], "availability_status": row[4],
+            })
+        except Exception:
+            return Response({"detail": "Delivery staff status could not be updated. Check the delivery-role database migration and connection."}, status=503)
 
     if request.method == "DELETE":
         staff_id = _valid_uuid(request.data.get("id") or request.query_params.get("id"))
