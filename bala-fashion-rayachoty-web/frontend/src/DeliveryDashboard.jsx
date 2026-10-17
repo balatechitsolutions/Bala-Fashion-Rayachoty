@@ -175,7 +175,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
               <span><small>Current delivery person</small><b>{currentPerson?.full_name || currentPerson?.email || (order.assigned_delivery_boy_id ? 'Assigned staff account' : 'Not assigned')}</b></span>
               {order.order_total != null && <span><small>Order total</small><b>{money(order.order_total)}</b></span>}
             </div>}
-            <div className="delivery-assignment-controls">
+            {expanded && <div className="delivery-assignment-controls">
               <label className="delivery-assignment-select-label">Select delivery person
                 <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
                   <option value="">Choose an online delivery person</option>
@@ -199,7 +199,7 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
                 </select>
               </label>
               <button type="button" className="primary delivery-assignment-submit" disabled={saving || !staff.some(person=>person.is_active && person.availability_status==='available')} onClick={() => assign(order)}>{saving ? 'Saving…' : order.assigned_delivery_boy_id ? 'Update assignment' : 'Assign delivery person'} <FiArrowRight size={15}/></button>
-            </div>
+            </div>}
           </article>
         })
       })()}
