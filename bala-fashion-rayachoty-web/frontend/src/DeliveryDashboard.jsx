@@ -23,6 +23,8 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
   const [assignments, setAssignments] = useState({})
+  const [assignmentSearch, setAssignmentSearch] = useState('')
+  const [expandedAssignmentIds, setExpandedAssignmentIds] = useState({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -135,42 +137,72 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
         </article>
       )}
     </section>
-    <section className="seller-dashboard-section">
-      <h3>Assign orders</h3>
-      <p className="muted">Assign a packed order to a delivery person who is Online.</p>
-      {!orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).length
-        ? <p className="seller-empty">No orders ready to assign.</p>
-        : orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).map(order =>
-          <article className="seller-order-row" key={order.id}>
-            <span>
-              <b>{order.order_number}</b>
-              <small>{order.status.replaceAll('_', ' ')} · {order.assigned_delivery_boy_id ? 'Assigned' : 'Unassigned'}</small>
-            </span>
-            <span className="delivery-assignment-controls">
-              <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
-                <option value="">Choose a delivery person (offline accounts are shown but disabled)</option>
-                {[...staff].sort((a,b) => {
-                  const availableA = a.is_active && a.availability_status === 'available'
-                  const availableB = b.is_active && b.availability_status === 'available'
-                  if (availableA !== availableB) return availableA ? -1 : 1
-                  const destination=order.delivery_coordinates||{}
-                  const distance=person=> {
-                    if(destination.latitude==null||destination.longitude==null||person.latitude==null||person.longitude==null) return Number.POSITIVE_INFINITY
-                    const rad=value=>Number(value)*Math.PI/180
-                    const dLat=rad(Number(destination.latitude)-Number(person.latitude))
-                    const dLon=rad(Number(destination.longitude)-Number(person.longitude))
-                    const x=Math.sin(dLat/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(destination.latitude))*Math.sin(dLon/2)**2
-                    return 6371*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
-                  }
-                  const da=distance(a), db=distance(b)
-                  if(da!==db) return da-db
-                  return String(a.full_name||'').localeCompare(String(b.full_name||''))
-                }).map(person => <option key={person.id} value={person.id} disabled={!person.is_active || person.availability_status!=='available'}>{person.full_name || person.phone || person.id.slice(0, 8)} · {person.is_active && person.availability_status==='available' ? 'Online' : person.is_active ? 'Offline' : 'Inactive'}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
-              </select>
-              <button className="secondary" disabled={saving || !staff.some(person=>person.is_active && person.availability_status==='available')} onClick={() => assign(order)}>Assign <FiArrowRight size={14}/></button>
-            </span>
+    <section className="seller-dashboard-section delivery-assignment-section">
+      <div className="delivery-assignment-heading">
+        <div>
+          <h3>Assign orders</h3>
+          <p className="muted">Search orders and assign each packed order to a delivery person who is Online.</p>
+        </div>
+        <span className="delivery-assignment-count">{orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status)).length} orders</span>
+      </div>
+      <label className="order-search-field delivery-assignment-search">
+        <FiSearch size={17}/>
+        <input type="search" aria-label="Search orders to assign" placeholder="Search order number or status…" value={assignmentSearch} onChange={event => setAssignmentSearch(event.target.value)} />
+        {assignmentSearch && <button type="button" className="secondary" aria-label="Clear assignment search" onClick={() => setAssignmentSearch('')}>Clear</button>}
+      </label>
+      {(() => {
+        const eligibleOrders = orders.filter(order => ['packed', 'out_for_delivery'].includes(order.status))
+        const filteredOrders = eligibleOrders.filter(order => {
+          const query = assignmentSearch.trim().toLowerCase()
+          return !query || String(order.order_number || '').toLowerCase().includes(query) || String(order.status || '').replaceAll('_', ' ').toLowerCase().includes(query) || (order.assigned_delivery_boy_id ? 'assigned' : 'unassigned').includes(query)
+        })
+        if (!eligibleOrders.length) return <p className="seller-empty">No orders ready to assign.</p>
+        if (!filteredOrders.length) return <p className="seller-empty">No orders match “{assignmentSearch}”. Try another order number or status.</p>
+        return filteredOrders.map(order => {
+          const currentPerson = staff.find(person => person.id === (assignments[order.id] ?? order.assigned_delivery_boy_id))
+          const expanded = Boolean(expandedAssignmentIds[order.id])
+          return <article className="seller-order-row delivery-assignment-card" key={order.id}>
+            <button type="button" className="delivery-assignment-order-toggle" aria-expanded={expanded} onClick={() => setExpandedAssignmentIds(current => ({ ...current, [order.id]: !current[order.id] }))}>
+              <span className="delivery-assignment-order-title">
+                <b>{order.order_number}</b>
+                <small>{order.status.replaceAll('_', ' ')}</small>
+              </span>
+              <span className={'delivery-assignment-state ' + (order.assigned_delivery_boy_id ? 'is-assigned' : 'is-unassigned')}>{order.assigned_delivery_boy_id ? 'Assigned' : 'Unassigned'}</span>
+              <FiArrowRight className={expanded ? 'delivery-assignment-chevron is-expanded' : 'delivery-assignment-chevron'} size={17}/>
+            </button>
+            {expanded && <div className="delivery-assignment-order-details">
+              <span><small>Order status</small><b>{order.status.replaceAll('_', ' ')}</b></span>
+              <span><small>Current delivery person</small><b>{currentPerson?.full_name || currentPerson?.email || (order.assigned_delivery_boy_id ? 'Assigned staff account' : 'Not assigned')}</b></span>
+              {order.order_total != null && <span><small>Order total</small><b>{money(order.order_total)}</b></span>}
+            </div>}
+            <div className="delivery-assignment-controls">
+              <label className="delivery-assignment-select-label">Select delivery person
+                <select aria-label={`Delivery person for ${order.order_number}`} value={assignments[order.id] ?? order.assigned_delivery_boy_id ?? ''} onChange={event => setAssignments(current => ({ ...current, [order.id]: event.target.value }))}>
+                  <option value="">Choose an online delivery person</option>
+                  {[...staff].sort((a,b) => {
+                    const availableA = a.is_active && a.availability_status === 'available'
+                    const availableB = b.is_active && b.availability_status === 'available'
+                    if (availableA !== availableB) return availableA ? -1 : 1
+                    const destination=order.delivery_coordinates||{}
+                    const distance=person=> {
+                      if(destination.latitude==null||destination.longitude==null||person.latitude==null||person.longitude==null) return Number.POSITIVE_INFINITY
+                      const rad=value=>Number(value)*Math.PI/180
+                      const dLat=rad(Number(destination.latitude)-Number(person.latitude))
+                      const dLon=rad(Number(destination.longitude)-Number(person.longitude))
+                      const x=Math.sin(dLat/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(destination.latitude))*Math.sin(dLon/2)**2
+                      return 6371*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
+                    }
+                    const da=distance(a), db=distance(b)
+                    if(da!==db) return da-db
+                    return String(a.full_name||'').localeCompare(String(b.full_name||''))
+                  }).map(person => <option key={person.id} value={person.id} disabled={!person.is_active || person.availability_status!=='available'}>{person.full_name || person.phone || person.id.slice(0, 8)} · {person.is_active && person.availability_status==='available' ? 'Online' : person.is_active ? 'Offline' : 'Inactive'}{person.latitude!=null&&person.longitude!=null&&order.delivery_coordinates?.latitude!=null&&order.delivery_coordinates?.longitude!=null?' · '+(function(){const rad=x=>Number(x)*Math.PI/180;const dl=rad(Number(order.delivery_coordinates.latitude)-Number(person.latitude));const dn=rad(Number(order.delivery_coordinates.longitude)-Number(person.longitude));const h=Math.sin(dl/2)**2+Math.cos(rad(person.latitude))*Math.cos(rad(Number(order.delivery_coordinates.latitude)))*Math.sin(dn/2)**2;return (6371*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))).toFixed(1)+' km'}()):''}</option>)}
+                </select>
+              </label>
+              <button type="button" className="primary delivery-assignment-submit" disabled={saving || !staff.some(person=>person.is_active && person.availability_status==='available')} onClick={() => assign(order)}>{saving ? 'Saving…' : order.assigned_delivery_boy_id ? 'Update assignment' : 'Assign delivery person'} <FiArrowRight size={15}/></button>
+            </div>
           </article>
-        )}
+        })
+      })()}
     </section>
   </div>
 }
