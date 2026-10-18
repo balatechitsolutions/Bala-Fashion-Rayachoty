@@ -90,7 +90,11 @@ def delivery_verification(request):
                 if missing:
                     return Response({"detail": "Delivery address needs correction: " + ", ".join(missing) + "."}, status=409)
                 cursor.execute("UPDATE public.orders SET status='out_for_delivery', delivery_otp_hash=NULL, delivery_otp_expires_at=NULL, delivery_otp_attempts=0, updated_at=now() WHERE id=%s", [order_id])
-                return Response({"order_id": order_id, "status": "out_for_delivery", "detail": f"{order[1]} marked out for delivery. Send the customer OTP separately."})
+                _insert_account_notification(
+                    cursor, order[5], "out_for_delivery", "Your order is out for delivery",
+                    f"Order {order[1]} is on the way. Pickup and delivery staff details are now available in your order details.", order_id,
+                )
+                return Response({"order_id": order_id, "status": "out_for_delivery", "detail": f"{order[1]} marked out for delivery. Customer tracking details updated; send the customer OTP separately."})
 
             if action in {"send", "resend", "mailjet"}:
                 if order[2] != "out_for_delivery":
