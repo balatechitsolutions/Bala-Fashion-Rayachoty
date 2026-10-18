@@ -949,8 +949,8 @@ def manage_orders(request):
                 c.execute(
                     """select o.id,o.order_number,o.status,o.payment_method,o.payment_status,
                               o.subtotal,o.delivery_fee,o.total,
-                              coalesce(o.address_snapshot, '{}'::jsonb) as address_snapshot,
-                              o.notes,o.created_at,v.name as vendor_name,
+                              '{}'::jsonb as address_snapshot,
+                              '' as notes,o.created_at,v.name as vendor_name,
                               coalesce(json_agg(json_build_object(
                                 'product_name',oi.product_name,'image_url',oi.image_url,
                                 'quantity',oi.quantity,'size',oi.size,'color',oi.color,
