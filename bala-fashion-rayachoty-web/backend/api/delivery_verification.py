@@ -95,7 +95,7 @@ def delivery_verification(request):
             if action in {"send", "resend", "mailjet"}:
                 if order[2] != "out_for_delivery":
                     return Response({"detail": "Mark the order out for delivery before sending a verification OTP."}, status=409)
-4464                cursor.execute("select email from auth.users where id=%s", [order[5]])
+                cursor.execute("select email from auth.users where id=%s", [order[5]])
                 email_row = cursor.fetchone()
                 recipient = str(email_row[0] or "").strip() if email_row else ""
                 if not recipient:
