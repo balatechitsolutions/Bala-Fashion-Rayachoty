@@ -75,25 +75,27 @@ def delivery_verification(request):
             if not order:
                 return Response({"detail": "Order not found or not assigned to your account."}, status=404)
 
-            if action in {"start", "resend", "mailjet"}:
-                if action == "start" and order[2] != "packed":
+            if action == "start":
+                if order[2] != "packed":
                     return Response({"detail": "Only packed orders can be marked out for delivery."}, status=409)
-                if action == "resend" and order[2] != "out_for_delivery":
-                    return Response({"detail": "A verification code can only be resent for an order already out for delivery."}, status=409)
-                if action == "mailjet" and order[2] not in {"packed", "out_for_delivery"}:
-                    return Response({"detail": "Mailjet OTP is available only for packed or out-for-delivery orders."}, status=409)
+                address = order[6]
+                if isinstance(address, str):
+                    try:
+                        import json
+                        address = json.loads(address)
+                    except (TypeError, ValueError):
+                        address = {}
+                address = address if isinstance(address, dict) else {}
+                missing = _order_address_issues(address)
+                if missing:
+                    return Response({"detail": "Delivery address needs correction: " + ", ".join(missing) + "."}, status=409)
+                cursor.execute("UPDATE public.orders SET status='out_for_delivery', delivery_otp_hash=NULL, delivery_otp_expires_at=NULL, delivery_otp_attempts=0, updated_at=now() WHERE id=%s", [order_id])
+                return Response({"order_id": order_id, "status": "out_for_delivery", "detail": f"{order[1]} marked out for delivery. Send the customer OTP separately."})
 
-                if action == "start":
-                    # The order's stored address is the only delivery source of truth.
-                    # Customer address-book edits must never redirect an existing order.
-                    address = dict(order[6]) if isinstance(order[6], dict) else {}
-                    missing = _order_address_issues(address)
-                    if missing:
-                        return Response({
-                            "detail": "Delivery cannot start. Ask the administrator to correct and verify the order's saved delivery address: " + ", ".join(missing) + "."
-                        }, status=409)
-
-                cursor.execute("select email from auth.users where id=%s", [order[5]])
+            if action in {"send", "resend", "mailjet"}:
+                if order[2] != "out_for_delivery":
+                    return Response({"detail": "Mark the order out for delivery before sending a verification OTP."}, status=409)
+4464                cursor.execute("select email from auth.users where id=%s", [order[5]])
                 email_row = cursor.fetchone()
                 recipient = str(email_row[0] or "").strip() if email_row else ""
                 if not recipient:
@@ -125,7 +127,7 @@ def delivery_verification(request):
                     }, status=503)
 
                 cursor.execute(
-                    """update public.orders set status='out_for_delivery',delivery_otp_hash=%s,
+                    """update public.orders set delivery_otp_hash=%s,
                        delivery_otp_expires_at=now()+interval '15 minutes',delivery_otp_sent_at=now(),
                        delivery_otp_attempts=0,updated_at=now() where id=%s""",
                     [digest, order_id],
@@ -136,7 +138,7 @@ def delivery_verification(request):
                 })
 
             if action != "verify":
-                return Response({"detail": "Choose start or verify action."}, status=400)
+                return Response({"detail": "Choose start, send, resend, or verify action."}, status=400)
             if order[2] != "out_for_delivery":
                 return Response({"detail": "The order must be out for delivery before OTP verification."}, status=409)
             code = str(request.data.get("otp") or "").strip()
