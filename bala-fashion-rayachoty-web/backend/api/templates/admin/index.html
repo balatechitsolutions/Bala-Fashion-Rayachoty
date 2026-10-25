@@ -1,15 +1,36 @@
 {% extends "admin/index.html" %}
 
 {% block content %}
-  <div style="margin: 0 0 22px; padding: 18px 20px; background: var(--body-bg, #fff); border: 1px solid var(--border-color, #d9dfe7); border-radius: 10px;">
-    <h2 style="margin: 0 0 8px; font-size: 18px;">Supabase User UUIDs</h2>
-    <p style="margin: 0 0 14px; color: var(--body-quiet-color, #555);">
+  <div class="bf-admin-tool-card">
+    <h2>Supabase User UUIDs</h2>
+    <p>
       Find and copy the Supabase Auth UUID required for a vendor's Owner ID.
     </p>
     <a href="{% url 'admin:supabase_users' %}"
-       style="display: inline-block; padding: 10px 16px; background: #2563eb; color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600;">
-      View User UUIDs
+       class="bf-admin-tool-link">
+      Fetch all user UUIDs
     </a>
+  </div>
+  <style>
+    #content-main{width:100%;max-width:100%}
+    .bf-admin-tool-card{margin:0 0 20px;padding:clamp(14px,2.5vw,22px);background:var(--body-bg,#fff);
+      border:1px solid var(--border-color,#d9dfe7);border-radius:12px;box-sizing:border-box}
+    .bf-admin-tool-card h2{margin:0 0 8px;font-size:clamp(17px,2vw,20px)}
+    .bf-admin-tool-card p{margin:0 0 14px;color:var(--body-quiet-color,#555);line-height:1.5}
+    .bf-admin-tool-link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 16px;
+      background:#123a72;color:#fff!important;border-radius:8px;text-decoration:none;font-weight:800}
+    .bf-admin-tool-link:hover{background:#09264c}
+    .dashboard #content-main{float:none;width:100%}
+    .dashboard #content-related{float:none;width:100%;margin:20px 0}
+    .dashboard #content-main .module{width:100%;margin-bottom:16px}
+    @media(max-width:767px){#content{padding:12px!important}.bf-admin-tool-card{padding:14px}
+      .bf-admin-tool-link{width:100%}.dashboard #content-main,.dashboard #content-related{float:none;width:100%;margin:0 0 16px}
+      .dashboard .module table{width:100%}}
+  </style>
+  <div class="bf-admin-tool-card">
+    <h2>Delivery staff</h2>
+    <p>Create a delivery staff profile by selecting an existing Supabase Auth user UUID. No new Auth account is created here.</p>
+    <a class="bf-admin-tool-link" href="{% url 'admin:api_deliverystaff_add' %}">Add delivery staff</a>
   </div>
   {{ block.super }}
 {% endblock %}
