@@ -541,22 +541,43 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
         return super().get_fieldsets(request, obj)
 
     def save_model(self, request, obj, form, change):
-        # Only an existing Supabase Auth account may be promoted to delivery staff.
-        obj.role = "delivery_boy"
-        super().save_model(request, obj, form, change)
+        # Promote an existing Supabase Auth user in the existing profiles table.
+        # Updating avoids duplicate-key errors when the user already has a profile.
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE public.profiles
+                    SET full_name=%s, phone=%s, role='delivery_boy', updated_at=NOW()
+                    WHERE id=%s
+                    """,
+                    [obj.full_name or "", obj.phone or "", str(obj.id)],
+                )
+                if cursor.rowcount == 0:
+                    cursor.execute(
+                        """
+                        INSERT INTO public.profiles (id, full_name, phone, role, updated_at)
+                        VALUES (%s, %s, %s, 'delivery_boy', NOW())
+                        """,
+                        [str(obj.id), obj.full_name or "", obj.phone or ""],
+                    )
+        messages.success(request, "Delivery staff account added successfully.")
 
     def has_add_permission(self, request):
-        return request.user.is_active and request.user.is_staff
+        return request.user.is_active and request.user.is_superuser
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return request.user.is_active and request.user.is_superuser and request.method in ("GET", "HEAD")
 
     def has_delete_permission(self, request, obj=None):
         return False
 
 
 def user_uuids_admin_view(request):
-    """Show all existing Supabase Auth UUIDs in a staff-only, copyable admin page."""
+    """Show all existing Supabase Auth UUIDs in a superuser-only, copyable admin page."""
+    if not request.user.is_active or not request.user.is_superuser:
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
     with connection.cursor() as cursor:
         cursor.execute(
             """
