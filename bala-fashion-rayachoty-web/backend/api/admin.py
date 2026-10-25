@@ -1,6 +1,7 @@
 import logging
 import os
 import requests
+import uuid
 
 from django import forms
 from django.contrib import admin, messages
@@ -496,40 +497,48 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
 
 class DeliveryStaffAdminForm(forms.ModelForm):
+    # Admin enters the registered email; the UUID is resolved from Supabase Auth.
+    email = forms.EmailField(
+        label="Existing website user email",
+        help_text="Enter the email of an account that has already registered on this website. This does not create a new login.",
+    )
+
     class Meta:
         model = DeliveryStaff
-        fields = ("id", "full_name", "phone")
+        fields = ("email", "full_name", "phone")
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["id"].label = "Existing Supabase Auth User UUID"
-        self.fields["id"].help_text = (
-            "Paste the UUID of an existing account from Super Admin → Fetch All User UUIDs. "
-            "This links that login as delivery staff; it does not create a new Auth account."
-        )
-        self.fields["full_name"].help_text = "Optional display name for the delivery staff profile."
-        self.fields["phone"].help_text = "Optional contact number."
-
-    def clean_id(self):
-        user_id = self.cleaned_data["id"]
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
         try:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT id FROM auth.users WHERE id=%s LIMIT 1", [str(user_id)])
-                if not cursor.fetchone():
-                    raise ValidationError("This UUID does not exist in Supabase Authentication → Users.")
-                cursor.execute("SELECT role FROM public.profiles WHERE id=%s LIMIT 1", [str(user_id)])
+                cursor.execute(
+                    "SELECT id FROM auth.users WHERE lower(email)=lower(%s) LIMIT 1",
+                    [email],
+                )
+                auth_user = cursor.fetchone()
+                if not auth_user:
+                    raise ValidationError(
+                        "No registered website account was found for this email. Ask the person to register/sign in first."
+                    )
+                user_id = str(auth_user[0])
+                cursor.execute(
+                    "SELECT role FROM public.profiles WHERE id=%s LIMIT 1",
+                    [user_id],
+                )
                 profile = cursor.fetchone()
                 if profile and profile[0] in {"admin", "vendor"}:
                     raise ValidationError(
-                        "An admin or vendor account cannot be converted to delivery staff. "
-                        "Use an existing customer account instead."
+                        "An admin or vendor account cannot be converted to delivery staff. Use an existing customer account."
                     )
+                self.instance.id = uuid.UUID(user_id)
         except ValidationError:
             raise
         except DatabaseError as exc:
-            logger.exception("Could not validate Supabase user before adding delivery staff.")
-            raise ValidationError("Supabase user could not be verified. Check the database connection and try again.") from exc
-        return user_id
+            logger.exception("Could not resolve delivery staff email against Supabase Auth.")
+            raise ValidationError(
+                "Could not verify this email against Supabase. Check the database connection and backend logs."
+            ) from exc
+        return email
 
 
 @admin.register(DeliveryStaff)
@@ -551,39 +560,44 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
 
     def get_fieldsets(self, request, obj=None):
         if obj is None:
-            return ((None, {"fields": ("id", "full_name", "phone")}),)
+            return ((None, {"fields": ("email", "full_name", "phone")}),)
         return super().get_fieldsets(request, obj)
 
     def save_model(self, request, obj, form, change):
         # Promote an existing Supabase Auth user in the existing profiles table.
-        # Updating avoids duplicate-key errors when the user already has a profile.
-        with transaction.atomic():
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO public.profiles
-                        (id, full_name, phone, role, is_active, availability_status, updated_at)
-                    VALUES (%s, %s, %s, 'delivery_boy', TRUE, 'offline', NOW())
-                    ON CONFLICT (id) DO UPDATE SET
-                        full_name = CASE
-                            WHEN EXCLUDED.full_name <> '' THEN EXCLUDED.full_name
-                            ELSE public.profiles.full_name
-                        END,
-                        phone = CASE
-                            WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone
-                            ELSE public.profiles.phone
-                        END,
-                        role = 'delivery_boy',
-                        is_active = TRUE,
-                        availability_status = 'offline',
-                        updated_at = NOW()
-                    """,
-                    [str(obj.id), obj.full_name or "", obj.phone or ""],
-                )
+        # The email was resolved to a verified UUID in the form's clean_email().
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        INSERT INTO public.profiles
+                            (id, full_name, phone, role, is_active, availability_status, updated_at)
+                        VALUES (%s, %s, %s, 'delivery_boy', TRUE, 'offline', NOW())
+                        ON CONFLICT (id) DO UPDATE SET
+                            full_name = CASE
+                                WHEN EXCLUDED.full_name <> '' THEN EXCLUDED.full_name
+                                ELSE public.profiles.full_name
+                            END,
+                            phone = CASE
+                                WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone
+                                ELSE public.profiles.phone
+                            END,
+                            role = 'delivery_boy',
+                            is_active = TRUE,
+                            availability_status = 'offline',
+                            updated_at = NOW()
+                        """,
+                        [str(obj.id), obj.full_name or "", obj.phone or ""],
+                    )
+        except DatabaseError as exc:
+            logger.exception("Could not save delivery staff profile in Supabase.")
+            raise ValidationError(
+                "Delivery staff could not be saved to Supabase. Verify the delivery-role SQL migration and inspect Render backend logs."
+            ) from exc
         messages.success(request, "Delivery staff account added successfully.")
 
     def has_add_permission(self, request):
-        # Superusers may add delivery staff by linking an existing Supabase Auth UUID.
         return request.user.is_active and request.user.is_superuser
 
     def has_change_permission(self, request, obj=None):
