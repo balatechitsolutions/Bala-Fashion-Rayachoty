@@ -1731,3 +1731,62 @@ button:disabled{cursor:not-allowed;opacity:.58}
     padding: 0 40px 0 13px !important;
   }
 }
+
+
+/* Image-only category cards: the image fills the complete clickable card. */
+.app-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.app-category-card {
+  display: block !important;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 4 / 5;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 14px;
+  background: #f0ece4;
+  box-shadow: 0 2px 9px #20231f08;
+  cursor: pointer;
+}
+.app-category-card:hover { transform: translateY(-2px); box-shadow: 0 12px 26px #20231f16; }
+.app-category-card-image {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  margin: 0 !important;
+  aspect-ratio: auto;
+  border-radius: inherit !important;
+}
+.app-category-card-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.app-category-row { align-items: stretch; gap: 12px; }
+.app-category-shortcut {
+  min-width: 112px;
+  width: 112px;
+  height: 145px;
+  flex: 0 0 112px;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: #f0ece4;
+}
+.app-category-thumb {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+}
+.app-category-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 1180px) {
+  .app-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+@media (max-width: 560px) {
+  .app-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .app-category-card { aspect-ratio: 1 / 1.15; border-radius: 10px; }
+  .app-category-shortcut { min-width: 100px; width: 100px; height: 128px; flex-basis: 100px; border-radius: 10px; }
+}
