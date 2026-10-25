@@ -1,0 +1,17 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block content %}
+  {% if user.is_active and user.is_superuser %}
+    <div class="module" style="margin-bottom: 20px; padding: 16px;">
+      <h2>Super Admin Tools</h2>
+      <p>Manage delivery staff and securely look up existing Supabase Auth user UUIDs.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;">
+        <a class="button" href="{% url 'admin:api_deliverystaff_add' %}">Add Delivery Staff</a>
+        <a class="button" href="{% url 'admin-user-uuids' %}">Fetch All User UUIDs</a>
+        <a class="button" href="{% url 'admin:api_deliverystaff_changelist' %}">Manage Delivery Staff</a>
+      </div>
+    </div>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
