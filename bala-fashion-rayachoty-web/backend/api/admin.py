@@ -193,6 +193,12 @@ class VendorAdminForm(CloudinaryUploadFormMixin, forms.ModelForm):
         model = Vendor
         fields = "__all__"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "owner_id" in self.fields:
+            self.fields["owner_id"].label = "User UUID (Supabase Auth)"
+            self.fields["owner_id"].help_text = "Paste the existing Supabase Auth user UUID. Do not use a Django admin user ID."
+
     def clean(self):
         cleaned = super().clean()
 
@@ -358,14 +364,14 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
     upload_field = "logo_upload"
     url_field = "logo_url"
     upload_folder = "Bala_fashon_Rayachoty"
-    list_display = ("thumbnail", "name", "status", "phone", "created_at")
+    list_display = ("thumbnail", "name", "owner_uuid", "status", "phone", "created_at")
     list_display_links = ("name",)
     list_editable = ("status",)
     list_per_page = 25
     save_on_top = False
     actions = ("approve", "suspend")
     list_filter = ("status", "created_at")
-    search_fields = ("name", "slug", "phone", "address")
+    search_fields = ("name", "slug", "phone", "address", "owner_id")
     prepopulated_fields = {"slug": ("name",)}
     readonly_fields = ("created_at",)
     fieldsets = (
@@ -380,6 +386,10 @@ class VendorAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
         if not obj.owner_id:
             obj.owner_id = None
         super().save_model(request, obj, form, change)
+
+    @admin.display(description="User UUID")
+    def owner_uuid(self, obj):
+        return str(obj.owner_id) if obj.owner_id else "Not linked"
 
     @admin.display(description="Logo")
     def thumbnail(self, obj):
