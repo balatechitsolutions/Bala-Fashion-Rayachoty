@@ -8,7 +8,7 @@ from django.shortcuts import redirect
 from django.http import HttpResponse
 from django.utils.html import escape
 from django.core.exceptions import ValidationError
-from django.db import DatabaseError, IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction, connection
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.text import slugify
