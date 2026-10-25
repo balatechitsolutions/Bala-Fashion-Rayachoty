@@ -11,8 +11,14 @@
     </section>
     <section style="padding:16px 18px;background:var(--darkened-bg,#f8f8f8);border:1px solid var(--hairline-color,#ddd);border-radius:6px;">
       <h2 style="margin:0 0 8px;">Delivery staff tools</h2>
-      <p style="margin:0 0 12px;">View authorized delivery staff and copy each Supabase Auth UUID. This uses the existing profiles table; no DeliveryStaff model or table is created.</p>
-      <a href="{% url 'admin-delivery-staff-uuids' %}" class="button" style="display:inline-block;">View Delivery Staff UUIDs</a>
+      <p style="margin:0 0 12px;">Add an existing website user as delivery staff, or view delivery staff UUIDs.</p>
+      <a href="{% url 'admin:api_deliverystaff_add' %}" class="button" style="display:inline-block;margin:0 8px 8px 0;">Add Delivery Staff</a>
+      <a href="{% url 'admin-delivery-staff-uuids' %}" class="button" style="display:inline-block;margin:0 0 8px;">View Delivery Staff UUIDs</a>
+    </section>
+    <section style="padding:16px 18px;background:var(--darkened-bg,#f8f8f8);border:1px solid var(--hairline-color,#ddd);border-radius:6px;">
+      <h2 style="margin:0 0 8px;">Supabase user UUIDs</h2>
+      <p style="margin:0 0 12px;">Fetch all user UUIDs from Supabase Auth in one place, with search and copy actions.</p>
+      <a href="{% url 'admin-user-uuids' %}" class="button" style="display:inline-block;">Fetch All Users UUIDs</a>
     </section>
   </div>
 
