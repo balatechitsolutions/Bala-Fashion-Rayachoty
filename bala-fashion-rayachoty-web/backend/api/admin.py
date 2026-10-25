@@ -4,6 +4,8 @@ import os
 from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect
+from django.http import HttpResponse
+from django.utils.html import escape
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
@@ -492,30 +494,100 @@ class ProductAdmin(CloudinaryUploadAdminMixin, admin.ModelAdmin):
 
 
 
+class DeliveryStaffAdminForm(forms.ModelForm):
+    class Meta:
+        model = DeliveryStaff
+        fields = ("id", "full_name", "phone")
+
+    def clean_id(self):
+        user_id = self.cleaned_data["id"]
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id FROM auth.users WHERE id=%s LIMIT 1", [str(user_id)])
+                if not cursor.fetchone():
+                    raise ValidationError("This UUID does not exist in Supabase Authentication → Users.")
+                cursor.execute("SELECT role FROM public.profiles WHERE id=%s LIMIT 1", [str(user_id)])
+                profile = cursor.fetchone()
+                if profile and profile[0] == "admin":
+                    raise ValidationError("An administrator account cannot be converted to delivery staff.")
+        except ValidationError:
+            raise
+        except DatabaseError as exc:
+            logger.exception("Could not validate Supabase user before adding delivery staff.")
+            raise ValidationError("Supabase user could not be verified. Check the database connection and try again.") from exc
+        return user_id
+
+
 @admin.register(DeliveryStaff)
 class DeliveryStaffAdmin(admin.ModelAdmin):
-    """Read-only admin view of profiles authorized for delivery work."""
+    """Manage delivery staff profiles in the existing Supabase-owned profiles table."""
 
+    form = DeliveryStaffAdminForm
     list_display = ("full_name", "id", "phone", "updated_at")
     list_display_links = None
     list_filter = ("role",)
     search_fields = ("full_name", "phone", "id")
     ordering = ("full_name", "id")
     list_per_page = 50
-    readonly_fields = ("id", "full_name", "phone", "role", "updated_at")
+    readonly_fields = ("role", "updated_at")
     fields = ("id", "full_name", "phone", "role", "updated_at")
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(role="delivery_boy")
 
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            return ((None, {"fields": ("id", "full_name", "phone")}),)
+        return super().get_fieldsets(request, obj)
+
+    def save_model(self, request, obj, form, change):
+        # Only an existing Supabase Auth account may be promoted to delivery staff.
+        obj.role = "delivery_boy"
+        super().save_model(request, obj, form, change)
+
     def has_add_permission(self, request):
-        return False
+        return request.user.is_active and request.user.is_staff
 
     def has_change_permission(self, request, obj=None):
         return False
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+def user_uuids_admin_view(request):
+    """Show all existing Supabase Auth UUIDs in a staff-only, copyable admin page."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT u.id, COALESCE(u.email, ''),
+                   COALESCE(NULLIF(p.full_name, ''), u.raw_user_meta_data->>'full_name', ''),
+                   COALESCE(p.role, 'customer'), u.created_at
+            FROM auth.users u
+            LEFT JOIN public.profiles p ON p.id = u.id
+            ORDER BY u.created_at DESC
+            """
+        )
+        rows = cursor.fetchall()
+    body_rows = "".join(
+        "<tr><td><code>" + escape(str(row[0])) + "</code></td><td>" + escape(str(row[1])) +
+        "</td><td>" + escape(str(row[2])) + "</td><td>" + escape(str(row[3])) +
+        "</td></tr>" for row in rows
+    )
+    all_ids = "\\n".join(str(row[0]) for row in rows)
+    html = (
+        "<!doctype html><html><head><meta charset='utf-8'><title>All User UUIDs</title>"
+        "<style>body{font:14px system-ui;margin:24px;color:#202124}table{border-collapse:collapse;width:100%}"
+        "th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left;overflow-wrap:anywhere}"
+        "button,a{padding:9px 13px;margin:0 8px 14px 0;cursor:pointer}</style></head><body>"
+        "<h1>All Supabase User UUIDs</h1><p>Fetched " + str(len(rows)) +
+        " accounts directly from Supabase Auth. UUIDs are read-only identifiers.</p>"
+        "<button type='button' onclick='navigator.clipboard.writeText(document.getElementById(\"all-ids\").value)'>Copy all UUIDs</button>"
+        "<a href='/admin/'>Back to admin</a><textarea id='all-ids' style='position:absolute;left:-9999px'>"
+        + escape(all_ids) + "</textarea><table><thead><tr><th>User UUID</th><th>Email</th><th>Name</th><th>Role</th></tr></thead><tbody>"
+        + body_rows + "</tbody></table></body></html>"
+    )
+    return HttpResponse(html)
 
 
 @admin.register(CustomerAddress)
