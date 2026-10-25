@@ -509,8 +509,11 @@ class DeliveryStaffAdminForm(forms.ModelForm):
                     raise ValidationError("This UUID does not exist in Supabase Authentication → Users.")
                 cursor.execute("SELECT role FROM public.profiles WHERE id=%s LIMIT 1", [str(user_id)])
                 profile = cursor.fetchone()
-                if profile and profile[0] == "admin":
-                    raise ValidationError("An administrator account cannot be converted to delivery staff.")
+                if profile and profile[0] in {"admin", "vendor"}:
+                    raise ValidationError(
+                        "An admin or vendor account cannot be converted to delivery staff. "
+                        "Use an existing customer account instead."
+                    )
         except ValidationError:
             raise
         except DatabaseError as exc:
@@ -548,20 +551,25 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    UPDATE public.profiles
-                    SET full_name=%s, phone=%s, role='delivery_boy', updated_at=NOW()
-                    WHERE id=%s
+                    INSERT INTO public.profiles
+                        (id, full_name, phone, role, is_active, availability_status, updated_at)
+                    VALUES (%s, %s, %s, 'delivery_boy', TRUE, 'offline', NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        full_name = CASE
+                            WHEN EXCLUDED.full_name <> '' THEN EXCLUDED.full_name
+                            ELSE public.profiles.full_name
+                        END,
+                        phone = CASE
+                            WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone
+                            ELSE public.profiles.phone
+                        END,
+                        role = 'delivery_boy',
+                        is_active = TRUE,
+                        availability_status = 'offline',
+                        updated_at = NOW()
                     """,
-                    [obj.full_name or "", obj.phone or "", str(obj.id)],
+                    [str(obj.id), obj.full_name or "", obj.phone or ""],
                 )
-                if cursor.rowcount == 0:
-                    cursor.execute(
-                        """
-                        INSERT INTO public.profiles (id, full_name, phone, role, updated_at)
-                        VALUES (%s, %s, %s, 'delivery_boy', NOW())
-                        """,
-                        [str(obj.id), obj.full_name or "", obj.phone or ""],
-                    )
         messages.success(request, "Delivery staff account added successfully.")
 
     def has_add_permission(self, request):
