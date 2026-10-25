@@ -1,5 +1,6 @@
 import logging
 import os
+import requests
 
 from django import forms
 from django.contrib import admin, messages
@@ -564,7 +565,9 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
         messages.success(request, "Delivery staff account added successfully.")
 
     def has_add_permission(self, request):
-        return request.user.is_active and request.user.is_superuser
+        # Do not expose a custom "Add delivery staff" button in Django Admin.
+        # Delivery staff must be linked to an existing Supabase Auth user.
+        return False
 
     def has_change_permission(self, request, obj=None):
         return request.user.is_active and request.user.is_superuser and request.method in ("GET", "HEAD")
@@ -574,39 +577,96 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
 
 
 def user_uuids_admin_view(request):
-    """Show all existing Supabase Auth UUIDs in a superuser-only, copyable admin page."""
+    """Fetch every Supabase Auth UUID through the Supabase Admin API."""
+    from django.core.exceptions import PermissionDenied
+    from django.utils.html import escape
+
     if not request.user.is_active or not request.user.is_superuser:
-        from django.core.exceptions import PermissionDenied
         raise PermissionDenied
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT u.id, COALESCE(u.email, ''),
-                   COALESCE(NULLIF(p.full_name, ''), u.raw_user_meta_data->>'full_name', ''),
-                   COALESCE(p.role, 'customer'), u.created_at
-            FROM auth.users u
-            LEFT JOIN public.profiles p ON p.id = u.id
-            ORDER BY u.created_at DESC
-            """
+
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not supabase_url or not service_key:
+        message = (
+            "Supabase UUID fetch is not configured. Add SUPABASE_URL and "
+            "SUPABASE_SERVICE_ROLE_KEY to the Render backend environment."
         )
-        rows = cursor.fetchall()
-    body_rows = "".join(
-        "<tr><td><code>" + escape(str(row[0])) + "</code></td><td>" + escape(str(row[1])) +
-        "</td><td>" + escape(str(row[2])) + "</td><td>" + escape(str(row[3])) +
-        "</td></tr>" for row in rows
-    )
-    all_ids = "\\n".join(str(row[0]) for row in rows)
+        return HttpResponse(
+            "<!doctype html><html><head><meta charset='utf-8'><title>User UUIDs</title></head>"
+            "<body style='font:15px system-ui;margin:28px'><h1>All Supabase User UUIDs</h1><p>"
+            + escape(message) + "</p><p><a href='/admin/'>Back to admin</a></p></body></html>",
+            status=503,
+        )
+
+    users = []
+    page = 1
+    per_page = 1000
+    try:
+        while True:
+            response = requests.get(
+                f"{supabase_url}/auth/v1/admin/users",
+                headers={
+                    "apikey": service_key,
+                    "Authorization": f"Bearer {service_key}",
+                },
+                params={"page": page, "per_page": per_page},
+                timeout=20,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            batch = payload.get("users", []) if isinstance(payload, dict) else []
+            users.extend(batch)
+            if len(batch) < per_page:
+                break
+            page += 1
+            if page > 1000:
+                raise RuntimeError("Supabase returned an unexpectedly large number of pages.")
+    except (requests.RequestException, ValueError, RuntimeError) as exc:
+        logger.exception("Supabase Auth UUID fetch failed.")
+        detail = (
+            "Supabase could not return the user directory. Check the Render "
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY values and the latest "
+            "Render logs. The service-role key must be kept secret."
+        )
+        return HttpResponse(
+            "<!doctype html><html><head><meta charset='utf-8'><title>User UUIDs</title></head>"
+            "<body style='font:15px system-ui;margin:28px'><h1>All Supabase User UUIDs</h1><p>"
+            + escape(detail) + "</p><p><a href='/admin/'>Back to admin</a></p></body></html>",
+            status=503,
+        )
+
+    body_rows = []
+    all_ids = []
+    for user in users:
+        user_id = str(user.get("id") or "")
+        if not user_id:
+            continue
+        email = str(user.get("email") or "")
+        metadata = user.get("user_metadata") or {}
+        name = str(metadata.get("full_name") or metadata.get("name") or "")
+        role = str(metadata.get("role") or "customer")
+        body_rows.append(
+            "<tr><td><code>" + escape(user_id) + "</code></td><td>" + escape(email) +
+            "</td><td>" + escape(name) + "</td><td>" + escape(role) + "</td></tr>"
+        )
+        all_ids.append(user_id)
+
     html = (
         "<!doctype html><html><head><meta charset='utf-8'><title>All User UUIDs</title>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         "<style>body{font:14px system-ui;margin:24px;color:#202124}table{border-collapse:collapse;width:100%}"
         "th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left;overflow-wrap:anywhere}"
-        "button,a{padding:9px 13px;margin:0 8px 14px 0;cursor:pointer}</style></head><body>"
-        "<h1>All Supabase User UUIDs</h1><p>Fetched " + str(len(rows)) +
-        " accounts directly from Supabase Auth. UUIDs are read-only identifiers.</p>"
-        "<button type='button' onclick='navigator.clipboard.writeText(document.getElementById(\"all-ids\").value)'>Copy all UUIDs</button>"
-        "<a href='/admin/'>Back to admin</a><textarea id='all-ids' style='position:absolute;left:-9999px'>"
-        + escape(all_ids) + "</textarea><table><thead><tr><th>User UUID</th><th>Email</th><th>Name</th><th>Role</th></tr></thead><tbody>"
-        + body_rows + "</tbody></table></body></html>"
+        "button,a{padding:9px 13px;margin:0 8px 14px 0;cursor:pointer}textarea{width:100%;min-height:90px}</style>"
+        "</head><body><h1>All Supabase User UUIDs</h1><p>Fetched " + str(len(all_ids)) +
+        " accounts directly from Supabase Auth.</p>"
+        "<button type='button' id='copy-ids'>Copy all UUIDs</button><a href='/admin/'>Back to admin</a>"
+        "<textarea id='all-ids' readonly>" + escape("\\n".join(all_ids)) + "</textarea>"
+        "<table><thead><tr><th>User UUID</th><th>Email</th><th>Name</th><th>Role metadata</th></tr></thead><tbody>"
+        + "".join(body_rows) + "</tbody></table>"
+        "<script>document.getElementById('copy-ids').addEventListener('click',async()=>{"
+        "const field=document.getElementById('all-ids');field.select();"
+        "try{await navigator.clipboard.writeText(field.value)}catch(e){document.execCommand('copy')}"
+        "});</script></body></html>"
     )
     return HttpResponse(html)
 
