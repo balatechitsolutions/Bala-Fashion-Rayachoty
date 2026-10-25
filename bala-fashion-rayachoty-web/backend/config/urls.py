@@ -4,6 +4,10 @@ from django.urls import include, path
 from api.admin import user_uuids_admin_view
 
 
+# Keep the normal Django admin dashboard while adding super-admin-only shortcuts.
+admin.site.index_template = "admin/custom_index.html"
+
+
 def vendor_uuid_admin_view(request):
     return redirect("admin:api_vendor_changelist")
 
