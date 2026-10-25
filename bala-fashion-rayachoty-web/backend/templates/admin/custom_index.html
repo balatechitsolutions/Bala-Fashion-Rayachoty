@@ -7,9 +7,8 @@
       <h2 id="bf-super-admin-heading">Super Admin Tools</h2>
       <p>Assign delivery staff using an existing Supabase Auth user UUID, or fetch the complete user directory to find the right UUID.</p>
       <div class="bf-super-admin-actions">
-        <a class="button bf-primary" href="{% url 'admin:api_deliverystaff_add' %}">Add Delivery Staff</a>
         <a class="button" href="{% url 'admin-user-uuids' %}">Fetch All User UUIDs</a>
-        <a class="button" href="{% url 'admin:api_deliverystaff_changelist' %}">Manage Delivery Staff</a>
+        <a class="button bf-primary" href="{% url 'admin:api_deliverystaff_add' %}">Add Delivery Staff</a>
       </div>
       <p class="bf-super-admin-note">Adding staff links an existing Supabase Auth account; it does not create a new login or change the database schema.</p>
     </section>
