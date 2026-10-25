@@ -565,9 +565,8 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
         messages.success(request, "Delivery staff account added successfully.")
 
     def has_add_permission(self, request):
-        # Do not expose a custom "Add delivery staff" button in Django Admin.
-        # Delivery staff must be linked to an existing Supabase Auth user.
-        return False
+        # Superusers may add delivery staff by linking an existing Supabase Auth UUID.
+        return request.user.is_active and request.user.is_superuser
 
     def has_change_permission(self, request, obj=None):
         return request.user.is_active and request.user.is_superuser and request.method in ("GET", "HEAD")
@@ -636,7 +635,6 @@ def user_uuids_admin_view(request):
         )
 
     body_rows = []
-    all_ids = []
     for user in users:
         user_id = str(user.get("id") or "")
         if not user_id:
@@ -646,27 +644,61 @@ def user_uuids_admin_view(request):
         name = str(metadata.get("full_name") or metadata.get("name") or "")
         role = str(metadata.get("role") or "customer")
         body_rows.append(
-            "<tr><td><code>" + escape(user_id) + "</code></td><td>" + escape(email) +
-            "</td><td>" + escape(name) + "</td><td>" + escape(role) + "</td></tr>"
+            "<tr data-search=\"" + escape(" ".join((user_id, email, name, role)).lower()) + "\">"
+            "<td><code class='user-uuid'>" + escape(user_id) + "</code></td><td>" + escape(email) +
+            "</td><td>" + escape(name) + "</td><td>" + escape(role) +
+            "</td><td><button type='button' class='copy-one' data-uuid='" + escape(user_id) +
+            "' aria-label='Copy UUID for " + escape(email or user_id) + "'>Copy UUID</button></td></tr>"
         )
-        all_ids.append(user_id)
 
     html = (
-        "<!doctype html><html><head><meta charset='utf-8'><title>All User UUIDs</title>"
+        "<!doctype html><html lang='en'><head><meta charset='utf-8'><title>All User UUIDs</title>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<style>body{font:14px system-ui;margin:24px;color:#202124}table{border-collapse:collapse;width:100%}"
-        "th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left;overflow-wrap:anywhere}"
-        "button,a{padding:9px 13px;margin:0 8px 14px 0;cursor:pointer}textarea{width:100%;min-height:90px}</style>"
-        "</head><body><h1>All Supabase User UUIDs</h1><p>Fetched " + str(len(all_ids)) +
-        " accounts directly from Supabase Auth.</p>"
-        "<button type='button' id='copy-ids'>Copy all UUIDs</button><a href='/admin/'>Back to admin</a>"
-        "<textarea id='all-ids' readonly>" + escape("\\n".join(all_ids)) + "</textarea>"
-        "<table><thead><tr><th>User UUID</th><th>Email</th><th>Name</th><th>Role metadata</th></tr></thead><tbody>"
-        + "".join(body_rows) + "</tbody></table>"
-        "<script>document.getElementById('copy-ids').addEventListener('click',async()=>{"
-        "const field=document.getElementById('all-ids');field.select();"
-        "try{await navigator.clipboard.writeText(field.value)}catch(e){document.execCommand('copy')}"
-        "});</script></body></html>"
+        "<style>"
+        ":root{color-scheme:light}*{box-sizing:border-box}body{font:15px/1.5 system-ui,-apple-system,sans-serif;"
+        "margin:0;background:#f2f5fa;color:#172033}.page{max-width:1200px;margin:auto;padding:clamp(14px,3vw,30px)}"
+        ".top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}"
+        "h1{font-size:clamp(23px,4vw,32px);margin:0;color:#102b50}.muted{color:#526078}"
+        ".panel{background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:clamp(14px,2.5vw,22px);"
+        "box-shadow:0 3px 12px #0f172a0b}.tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;"
+        "align-items:center;margin:18px 0}.search{width:100%;min-width:0;padding:12px 14px;border:1px solid #9aa9bd;"
+        "border-radius:8px;font:inherit;color:#172033;background:#fff}.btn{border:0;border-radius:8px;padding:11px 15px;"
+        "background:#123a72;color:#fff;font:700 14px system-ui;cursor:pointer;text-decoration:none;display:inline-flex;"
+        "align-items:center;justify-content:center;min-height:42px}.btn:focus-visible,.search:focus-visible{outline:3px solid #91bfff;"
+        "outline-offset:2px}.count{font-weight:700;color:#102b50;margin:0 0 12px}.table-wrap{overflow-x:auto;"
+        "border:1px solid #d8e0eb;border-radius:10px}table{border-collapse:collapse;width:100%;min-width:680px;background:#fff}"
+        "th,td{padding:12px 13px;border-bottom:1px solid #e1e7f0;text-align:left;vertical-align:middle}"
+        "th{background:#e9eff8;color:#102b50;font-size:13px;position:sticky;top:0}tbody tr:nth-child(even){background:#f8faff}"
+        "code{overflow-wrap:anywhere;word-break:break-word;font-size:12px}.copy-one{border:1px solid #123a72;"
+        "background:#fff;color:#123a72;border-radius:7px;padding:8px 11px;font-weight:800;cursor:pointer;white-space:nowrap}"
+        ".copy-one:hover{background:#e9eff8}.empty{display:none;padding:18px;text-align:center;color:#526078}"
+        "@media(max-width:640px){.page{padding:12px}.tools{grid-template-columns:1fr}.top .btn{width:100%}"
+        ".panel{padding:12px}th,td{padding:10px}}"
+        "</style></head><body><main class='page'><div class='top'><div><h1>Supabase User UUIDs</h1>"
+        "<p class='muted'>Search the fetched Supabase Auth directory, then copy only the UUID you need.</p></div>"
+        "<a class='btn' href='/admin/'>Back to admin</a></div><section class='panel'>"
+        "<p class='count'>Fetched " + str(len(body_rows)) + " accounts from Supabase Auth.</p>"
+        "<div class='tools'><input id='user-search' class='search' type='search' placeholder='Search email, name, role or UUID…' "
+        "aria-label='Search fetched users' autocomplete='off'><span id='shown-count' class='muted'></span></div>"
+        "<div class='table-wrap'><table><thead><tr><th>User UUID</th><th>Email</th><th>Name</th><th>Role metadata</th><th>Action</th>"
+        "</tr></thead><tbody id='user-rows'>" + "".join(body_rows) + "</tbody></table>"
+        "<div id='empty-state' class='empty'>No users match your search.</div></div>"
+        "<p id='copy-status' class='muted' role='status' aria-live='polite'></p></section></main>"
+        "<script>(function(){const input=document.getElementById('user-search');"
+        "const rows=Array.from(document.querySelectorAll('#user-rows tr'));const count=document.getElementById('shown-count');"
+        "const empty=document.getElementById('empty-state');const status=document.getElementById('copy-status');"
+        "function filterRows(){const q=input.value.trim().toLowerCase();let shown=0;rows.forEach(row=>{"
+        "const match=(row.dataset.search||'').includes(q);row.hidden=!match;if(match)shown++;});"
+        "count.textContent=shown+' of '+rows.length+' users';empty.style.display=shown?'none':'block';}"
+        "input.addEventListener('input',filterRows);filterRows();"
+        "async function copyText(value){if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);return;}"
+        "const field=document.createElement('textarea');field.value=value;field.style.position='fixed';field.style.opacity='0';"
+        "document.body.appendChild(field);field.select();const ok=document.execCommand('copy');field.remove();"
+        "if(!ok)throw new Error('Copy failed');}"
+        "document.querySelectorAll('.copy-one').forEach(button=>button.addEventListener('click',async()=>{"
+        "const value=button.dataset.uuid;try{await copyText(value);button.textContent='Copied ✓';status.textContent='UUID copied: '+value;"
+        "setTimeout(()=>{button.textContent='Copy UUID';},1500);}catch(e){status.textContent='Copy was blocked. Select the UUID text and copy it manually.';}}));"
+        "})();</script></body></html>"
     )
     return HttpResponse(html)
 
