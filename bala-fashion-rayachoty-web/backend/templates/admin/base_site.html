@@ -1,0 +1,8 @@
+{% extends "admin/base.html" %}
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">Bala Fashion Admin</a></div>
+<div style="display:flex;gap:14px;align-items:center;padding:4px 0 10px">
+  <a href="/admin/user-uuids/" style="font-weight:600">Fetch all user UUIDs</a>
+  <a href="/admin/api_deliverystaff/add/" style="font-weight:600">Add delivery staff</a>
+</div>
+{% endblock %}
