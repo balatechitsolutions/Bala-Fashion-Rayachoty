@@ -29,18 +29,31 @@ def delivery_staff(request):
         return error
 
     if request.method == "POST":
-        staff_id = str(request.data.get("user_id") or "").strip()
-        try:
-            staff_id = str(uuid.UUID(staff_id))
-        except (ValueError, TypeError, AttributeError):
-            return Response({"detail": "Search for and select a valid existing website user."}, status=400)
+        # The admin UI selects a registered account by email, just like vendor
+        # creation. Resolve its Supabase Auth UUID only on the server; keep the
+        # previous user_id payload working for already deployed clients.
+        email = str(request.data.get("email") or "").strip().lower()
+        staff_id = ""
+        if email:
+            if "@" not in email or len(email) > 320:
+                return Response({"detail": "Enter or select a valid registered account email."}, status=400)
+        else:
+            raw_user_id = str(request.data.get("user_id") or "").strip()
+            try:
+                staff_id = str(uuid.UUID(raw_user_id))
+            except (ValueError, TypeError, AttributeError):
+                return Response({"detail": "Search for and select a registered website account by email."}, status=400)
         try:
             with transaction.atomic():
                 with connection.cursor() as cursor:
-                    cursor.execute("select id from auth.users where id=%s limit 1", [staff_id])
+                    if email:
+                        cursor.execute("select id from auth.users where lower(email)=lower(%s) limit 1", [email])
+                    else:
+                        cursor.execute("select id from auth.users where id=%s limit 1", [staff_id])
                     auth_user = cursor.fetchone()
                     if not auth_user:
-                        return Response({"detail": "No website account exists for this UUID. The person must register/sign in first."}, status=404)
+                        message = "No website account exists for that email. The person must register/sign in first." if email else "No website account exists for this UUID. The person must register/sign in first."
+                        return Response({"detail": message}, status=404)
                     staff_id = str(auth_user[0])
                     cursor.execute("select role from public.profiles where id=%s for update", [staff_id])
                     existing_profile = cursor.fetchone()
