@@ -597,6 +597,14 @@ class DeliveryStaffAdmin(admin.ModelAdmin):
             ) from exc
         messages.success(request, "Delivery staff account added successfully.")
 
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        try:
+            return super().changeform_view(request, object_id, form_url, extra_context)
+        except ValidationError as exc:
+            logger.warning("Delivery staff admin save was rejected: %s", exc)
+            messages.error(request, "Delivery staff was not saved: " + " ".join(exc.messages))
+            return redirect(request.path)
+
     def has_add_permission(self, request):
         return request.user.is_active and request.user.is_superuser
 
