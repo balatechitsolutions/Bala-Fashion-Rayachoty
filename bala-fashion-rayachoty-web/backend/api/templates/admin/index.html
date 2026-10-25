@@ -27,10 +27,5 @@
       .bf-admin-tool-link{width:100%}.dashboard #content-main,.dashboard #content-related{float:none;width:100%;margin:0 0 16px}
       .dashboard .module table{width:100%}}
   </style>
-  <div class="bf-admin-tool-card">
-    <h2>Delivery staff</h2>
-    <p>Create a delivery staff profile by selecting an existing Supabase Auth user UUID. No new Auth account is created here.</p>
-    <a class="bf-admin-tool-link" href="{% url 'admin:api_deliverystaff_add' %}">Add delivery staff</a>
-  </div>
   {{ block.super }}
 {% endblock %}
