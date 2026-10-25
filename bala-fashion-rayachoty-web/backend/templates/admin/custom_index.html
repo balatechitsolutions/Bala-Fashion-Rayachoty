@@ -3,15 +3,27 @@
 
 {% block content %}
   {% if user.is_active and user.is_superuser %}
-    <div class="module" style="margin-bottom: 20px; padding: 16px;">
-      <h2>Super Admin Tools</h2>
-      <p>Manage delivery staff and securely look up existing Supabase Auth user UUIDs.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;">
-        <a class="button" href="{% url 'admin:api_deliverystaff_add' %}">Add Delivery Staff</a>
+    <section class="bf-super-admin-tools" aria-labelledby="bf-super-admin-heading">
+      <h2 id="bf-super-admin-heading">Super Admin Tools</h2>
+      <p>Assign delivery staff using an existing Supabase Auth user UUID, or fetch the complete user directory to find the right UUID.</p>
+      <div class="bf-super-admin-actions">
+        <a class="button bf-primary" href="{% url 'admin:api_deliverystaff_add' %}">Add Delivery Staff</a>
         <a class="button" href="{% url 'admin-user-uuids' %}">Fetch All User UUIDs</a>
         <a class="button" href="{% url 'admin:api_deliverystaff_changelist' %}">Manage Delivery Staff</a>
       </div>
-    </div>
+      <p class="bf-super-admin-note">Adding staff links an existing Supabase Auth account; it does not create a new login or change the database schema.</p>
+    </section>
+    <style>
+      .bf-super-admin-tools{margin:0 0 22px;padding:clamp(16px,2.5vw,24px);background:var(--darkened-bg,#f8f8f8);
+        border:1px solid var(--hairline-color,#d9dfe7);border-radius:12px;box-sizing:border-box}
+      .bf-super-admin-tools h2{margin:0 0 8px;font-size:clamp(18px,2.2vw,22px)}
+      .bf-super-admin-tools p{line-height:1.55;margin:0 0 14px}
+      .bf-super-admin-actions{display:flex;flex-wrap:wrap;gap:10px}
+      .bf-super-admin-actions .button{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 16px}
+      .bf-super-admin-actions .bf-primary{background:var(--button-bg,#417690);color:var(--button-fg,#fff)}
+      .bf-super-admin-note{margin:14px 0 0!important;color:var(--body-quiet-color,#666);font-size:13px}
+      @media(max-width:600px){.bf-super-admin-actions{display:grid;grid-template-columns:1fr}.bf-super-admin-actions .button{width:100%;box-sizing:border-box}}
+    </style>
   {% endif %}
   {{ block.super }}
 {% endblock %}
