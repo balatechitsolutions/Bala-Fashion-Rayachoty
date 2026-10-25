@@ -18,7 +18,7 @@ const normalizeOrderAddress = value => {
 
 export function DeliveryManagement({ session, orders = [], busy, onRefresh, notify, authUsers = [] }) {
   const [staff, setStaff] = useState([])
-  const [userId, setUserId] = useState('')
+  const [userEmail, setUserEmail] = useState('')
   const [userSearch, setUserSearch] = useState('')
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -48,9 +48,9 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     try {
       await api('/delivery/staff/', {
         method: 'POST', token: session.access_token,
-        body: JSON.stringify({ user_id: userId, full_name: fullName.trim(), phone: phone.trim() }),
+        body: JSON.stringify({ email: userEmail.trim(), full_name: fullName.trim(), phone: phone.trim() }),
       })
-      setUserId(''); setUserSearch(''); setFullName(''); setPhone('')
+      setUserEmail(''); setUserSearch(''); setFullName(''); setPhone('')
       await loadStaff()
       notify('Delivery account created. The delivery person can now choose Online or Offline.')
     } catch (err) {
@@ -113,9 +113,9 @@ export function DeliveryManagement({ session, orders = [], busy, onRefresh, noti
     <form className="form admin-vendor-create" onSubmit={addStaff}>
       <h3><FiUserPlus size={17}/> Add delivery person</h3>
       <label>Find an account<input type="search" value={userSearch} onChange={event=>setUserSearch(event.target.value)} placeholder="Search registered email…" autoComplete="off"/></label>
-      <label>Delivery staff account<select required value={userId} onChange={event=>setUserId(event.target.value)}>
+      <label>Delivery staff account<select required value={userEmail} onChange={event=>{const email=event.target.value;setUserEmail(email);const selected=authUsers.find(person=>person.email===email);if(selected&&!fullName.trim())setFullName(selected.full_name||'')}}>
         <option value="">Choose an existing customer account</option>
-        {authUsers.filter(person=>person.email&&(!person.role||person.role==='customer')&&person.email.toLowerCase().includes(userSearch.trim().toLowerCase())).map(person=><option key={person.id} value={person.id}>{person.email}{person.full_name?' — '+person.full_name:''}</option>)}
+        {authUsers.filter(person=>person.email&&(!person.role||person.role==='customer')&&person.email.toLowerCase().includes(userSearch.trim().toLowerCase())).map(person=><option key={person.id} value={person.email}>{person.email}{person.full_name?' — '+person.full_name:''}</option>)}
       </select></label>
       <small>Choose an existing customer account.</small>
       <label>Display name (optional)<input value={fullName} onChange={event => setFullName(event.target.value)} maxLength={120}/></label>
