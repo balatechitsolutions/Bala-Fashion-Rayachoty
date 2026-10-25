@@ -500,6 +500,16 @@ class DeliveryStaffAdminForm(forms.ModelForm):
         model = DeliveryStaff
         fields = ("id", "full_name", "phone")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["id"].label = "Existing Supabase Auth User UUID"
+        self.fields["id"].help_text = (
+            "Paste the UUID of an existing account from Super Admin → Fetch All User UUIDs. "
+            "This links that login as delivery staff; it does not create a new Auth account."
+        )
+        self.fields["full_name"].help_text = "Optional display name for the delivery staff profile."
+        self.fields["phone"].help_text = "Optional contact number."
+
     def clean_id(self):
         user_id = self.cleaned_data["id"]
         try:
