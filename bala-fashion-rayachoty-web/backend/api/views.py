@@ -603,7 +603,16 @@ def products(request):
         where.append("(p.name ilike %s or p.description ilike %s or v.name ilike %s)")
         params += [f"%{search}%"] * 3
     if category:
-        where.append("c.slug=%s")
+        # Selecting a parent category includes all of its descendants; selecting a
+        # subcategory naturally restricts results to that subcategory and its children.
+        where.append("""p.category_id in (
+            with recursive category_tree(id) as (
+                select id from public.categories where slug=%s and is_active=true
+                union all
+                select child.id from public.categories child join category_tree parent on child.parent_id=parent.id
+                where child.is_active=true
+            ) select id from category_tree
+        )""")
         params.append(category)
     params.extend([limit + 1, offset])
     try:
