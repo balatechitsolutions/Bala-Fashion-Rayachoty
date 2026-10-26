@@ -1143,7 +1143,7 @@ def seller_dashboard(request):
                 })
             c.execute(
                 """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
-                          p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                          p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.size_prices,
                           p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
                           c.name as category_name,v.name as vendor_name,
                           coalesce((select json_agg(json_build_object(
@@ -1228,7 +1228,7 @@ def manage_product(request):
                 if prof["role"] == "vendor":
                     c.execute(
                         """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
-                                  p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                                  p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.size_prices,
                                   p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
                                   c.name as category_name,v.name as vendor_name,
                                   coalesce((select json_agg(json_build_object(
@@ -1246,7 +1246,7 @@ def manage_product(request):
                 else:
                     c.execute(
                         """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
-                                  p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                                  p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.size_prices,
                                   p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
                                   c.name as category_name,v.name as vendor_name,
                                   coalesce((select json_agg(json_build_object(
