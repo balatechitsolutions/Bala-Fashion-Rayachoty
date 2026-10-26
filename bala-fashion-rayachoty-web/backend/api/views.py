@@ -1127,44 +1127,64 @@ def seller_dashboard(request):
     user, prof, error = _role_user(request, {"vendor", "admin"})
     if error:
         return error
+    search = request.query_params.get("search", "").strip()[:100]
+    category = request.query_params.get("category", "").strip()[:80]
+    raw_limit = request.query_params.get("limit", "30")
+    raw_offset = request.query_params.get("offset", "0")
+    limit = min(max(int(raw_limit), 1), 30) if raw_limit.isdigit() else 30
+    offset = min(max(int(raw_offset), 0), 1_000_000) if raw_offset.isdigit() else 0
     try:
         with connection.cursor() as c:
             if prof["role"] == "vendor":
-                c.execute(
-                    "select id,name,slug,status,logo_url from public.vendors where owner_id=%s order by name",
-                    [user["id"]],
-                )
+                c.execute("select id,name,slug,status,logo_url from public.vendors where owner_id=%s order by name", [user["id"]])
             else:
-                c.execute(
-                    "select id,name,slug,status,logo_url from public.vendors order by name"
-                )
+                c.execute("select id,name,slug,status,logo_url from public.vendors order by name")
             stores = _rows(c)
             if prof["role"] == "vendor":
                 stores = [store for store in stores if store["status"] == "approved"]
             store_ids = [store["id"] for store in stores]
             if not store_ids:
-                return Response({
-                    "role": prof["role"], "stores": [], "products": [],
-                    "orders": [], "stats": {"products": 0, "active_products": 0, "low_stock": 0, "orders": 0},
-                })
-            c.execute(
-                """select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
-                          p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.size_prices,
-                          p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
-                          c.name as category_name,v.name as vendor_name,
-                          coalesce((select json_agg(json_build_object(
-                            'id',pi.id,'image_url',pi.image_url,'image_public_id',pi.image_public_id,
-                            'alt_text',pi.alt_text,'sort_order',pi.sort_order
-                          ) order by pi.sort_order,pi.created_at) from public.product_images pi
-                            where pi.product_id=p.id), '[]'::json) as extra_images
-                   from public.products p
-                   left join public.categories c on c.id=p.category_id
-                   join public.vendors v on v.id=p.vendor_id
-                   where p.vendor_id = any(%s) and v.status='approved'
-                   order by p.created_at desc limit 200""",
-                [store_ids],
-            )
+                return Response({"role": prof["role"], "stores": [], "products": [], "product_count": 0,
+                    "product_limit": limit, "product_offset": offset, "product_has_more": False,
+                    "orders": [], "stats": {"products": 0, "active_products": 0, "low_stock": 0, "orders": 0}})
+            product_where = ["p.vendor_id = any(%s)", "v.status='approved'"]
+            product_params = [store_ids]
+            if search:
+                product_where.append("(p.name ilike %s or coalesce(v.name,'') ilike %s or coalesce(c.name,'') ilike %s or p.id::text ilike %s)")
+                product_params.extend([f"%{search}%"] * 4)
+            if category:
+                product_where.append("""p.category_id in (
+                    with recursive category_tree(id) as (
+                        select id from public.categories where slug=%s
+                        union all
+                        select child.id from public.categories child join category_tree parent on child.parent_id=parent.id
+                    ) select id from category_tree
+                )""")
+                product_params.append(category)
+            where_sql = " and ".join(product_where)
+            c.execute(f"""select count(*) as total,
+                count(*) filter (where p.is_active) as active_total,
+                count(*) filter (where coalesce(p.stock_quantity,0) <= 5) as low_stock_total
+                from public.products p left join public.categories c on c.id=p.category_id
+                join public.vendors v on v.id=p.vendor_id where {where_sql}""", product_params)
+            product_totals = _rows(c)[0]
+            product_count = int(product_totals["total"] or 0)
+            c.execute(f"""select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
+                p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.size_prices,
+                p.additional_description,p.category_id,p.vendor_id,p.is_active,p.created_at,
+                c.name as category_name,c.slug as category_slug,v.name as vendor_name,
+                coalesce((select json_agg(json_build_object(
+                    'id',pi.id,'image_url',pi.image_url,'image_public_id',pi.image_public_id,
+                    'alt_text',pi.alt_text,'sort_order',pi.sort_order
+                ) order by pi.sort_order,pi.created_at) from public.product_images pi
+                    where pi.product_id=p.id), '[]'::json) as extra_images
+                from public.products p left join public.categories c on c.id=p.category_id
+                join public.vendors v on v.id=p.vendor_id where {where_sql}
+                order by p.created_at desc,p.id desc limit %s offset %s""",
+                product_params + [limit + 1, offset])
             managed_products = _rows(c)
+            product_has_more = len(managed_products) > limit
+            managed_products = managed_products[:limit]
             c.execute(
                 """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
                           o.assigned_delivery_boy_id,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
@@ -1196,11 +1216,13 @@ def seller_dashboard(request):
             managed_orders = _rows(c)
         return Response({
             "role": prof["role"], "stores": stores, "products": managed_products,
+            "product_count": product_count, "product_limit": limit, "product_offset": offset,
+            "product_has_more": product_has_more,
             "orders": managed_orders,
             "stats": {
-                "products": len(managed_products),
-                "active_products": sum(1 for p in managed_products if p["is_active"]),
-                "low_stock": sum(1 for p in managed_products if int(p["stock_quantity"] or 0) <= 5),
+                "products": product_count,
+                "active_products": int(product_totals["active_total"] or 0),
+                "low_stock": int(product_totals["low_stock_total"] or 0),
                 "orders": len(managed_orders),
             },
         })
