@@ -602,11 +602,11 @@ export default function App() {
  }
  function startNewProduct(){
   const firstStore=sellerDashboard?.stores?.find(s=>s.status==='approved')
-  setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+  setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:profile?.role==='admin'?'':(firstStore?.id||''),image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',size_prices:'',colors:'Black,Blue',stock_quantity:'1'})
   setDrawer('manage')
  }
  function startEditProduct(product){
-  setProductForm({id:product.id,name:product.name||'',description:product.description||'',additional_description:product.additional_description||'',price:String(product.price??''),compare_at_price:product.compare_at_price==null?'':String(product.compare_at_price),category_id:product.category_id||'',vendor_id:product.vendor_id||'',image_url:product.image_url||'',image_public_id:product.image_public_id||'',extra_images:Array.isArray(product.extra_images)?product.extra_images:[],sizes:(product.sizes||[]).join(','),size_prices:(product.sizes||[]).map(s=>product.size_prices?.[s]??'').filter(v=>v!=='').join(','),colors:(product.colors||[]).join(','),stock_quantity:String(product.stock_quantity??0)})
+  setProductForm({id:product.id,name:product.name||'',description:product.description||'',additional_description:product.additional_description||'',price:String(product.price??''),compare_at_price:product.compare_at_price==null?'':String(product.compare_at_price),category_id:product.category_id||'',vendor_id:product.vendor_id||'',image_url:product.image_url||'',image_public_id:product.image_public_id||'',extra_images:Array.isArray(product.extra_images)?product.extra_images:[],sizes:(product.sizes||[]).join(','),size_prices:(product.sizes||[]).map(s=>product.size_prices?.[s]??'').join(','),colors:(product.colors||[]).join(','),stock_quantity:String(product.stock_quantity??0)})
   setDrawer('manage')
  }
  async function hideProduct(product){
@@ -630,7 +630,7 @@ export default function App() {
   try{
    const payload={...productForm,additional_description:productForm.additional_description||'',extra_images:productForm.extra_images.map((image,index)=>({...image,sort_order:index,alt_text:image.alt_text||productForm.name})),price:Number(productForm.price),compare_at_price:productForm.compare_at_price?Number(productForm.compare_at_price):null,stock_quantity:Number(productForm.stock_quantity),sizes:productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean),size_prices:(()=>{const sizes=productForm.sizes.split(',').map(x=>x.trim()).filter(Boolean);const values=productForm.size_prices.split(',').map(x=>x.trim()).filter(x=>x!=='');if(!values.length)return {};if(values.length!==1&&values.length!==sizes.length)throw new Error('Enter one size price for all sizes, or one price per size in the same order.');const prices=values.length===1?sizes.map(()=>values[0]):values;return Object.fromEntries(sizes.map((s,i)=>[s,Number(prices[i])]))})(),colors:productForm.colors.split(',').map(x=>x.trim()).filter(Boolean)}
    await api('/products/manage/',{method:productForm.id?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
-   setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
+   setProductForm({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',size_prices:'',colors:'Black,Blue',stock_quantity:'1'})
    await load();await refreshSellerDashboard();setDrawer('seller-dashboard');notify(productForm.id?'Product updated':'Product created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
