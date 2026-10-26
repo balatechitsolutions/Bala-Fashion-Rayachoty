@@ -127,10 +127,6 @@ export default function App() {
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
  const [installPrompt,setInstallPrompt]=useState(null),[pushEnabled,setPushEnabled]=useState(false),[soundEnabled,setSoundEnabled]=useState(false),[alertsBusy,setAlertsBusy]=useState(false)
  const seenNotificationIds=useRef(null)
- useEffect(()=>{
-  window.scrollTo({top:0,left:0,behavior:'auto'})
-  document.querySelector('.app-main')?.scrollTo({top:0,left:0,behavior:'auto'})
- },[mobileActive])
  const selectedOrderAddress = normalizeAddressSnapshot(selectedOrder?.address_snapshot)
  const selectedImages = selected ? [
   ...(selected.image_url ? [{id:'primary',image_url:selected.image_url,alt_text:selected.name||'Product image'}] : []),
@@ -138,6 +134,10 @@ export default function App() {
  ] : []
  const selectedHeroImage = selectedImages[selectedImageIndex] || selectedImages[0] || null
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),[sellerOrderSearch,setSellerOrderSearch]=useState(''),searchInputRef=useRef(null),[addressReturnDrawer,setAddressReturnDrawer]=useState('account'),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:'',id:''}),[orderNotes,setOrderNotes]=useState(''),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
+ useEffect(()=>{
+  window.scrollTo({top:0,left:0,behavior:'auto'})
+  document.querySelector('.app-main')?.scrollTo({top:0,left:0,behavior:'auto'})
+ },[mobileActive])
  const [productForm,setProductForm]=useState({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
