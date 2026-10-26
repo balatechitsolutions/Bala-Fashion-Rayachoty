@@ -402,8 +402,8 @@ export default function App() {
   try{
    const editing=Boolean(categoryForm.category_id)
    const payload=editing
-    ? {id:categoryForm.category_id,name:categoryForm.name.trim(),image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
-    : {name:categoryForm.name.trim(),image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
+    ? {id:categoryForm.category_id,name:categoryForm.name.trim(),parent_id:categoryForm.parent_id||null,image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
+    : {name:categoryForm.name.trim(),parent_id:categoryForm.parent_id||null,image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
    await api('/categories/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[])
    await load();setCategoryForm({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'});notify(editing?'Category updated':'Category created')
