@@ -820,10 +820,10 @@ def orders(request):
                 if vendor is None:vendor=vendor_id
                 elif vendor!=vendor_id:return Response({"detail":"Please check out one seller at a time."},status=400)
                 size=str(raw.get("size",""))[:30];color=str(raw.get("color",""))[:50]
-                 if size_prices and size in size_prices:
-                     try: price=Decimal(str(size_prices[size]))
-                     except (InvalidOperation,TypeError,ValueError): return Response({"detail":f"Invalid configured price for size {size}."},status=409)
-                     if not price.is_finite() or price < 0: return Response({"detail":f"Invalid configured price for size {size}."},status=409)
+                if size_prices and size in size_prices:
+                    try: price=Decimal(str(size_prices[size]))
+                    except (InvalidOperation,TypeError,ValueError): return Response({"detail":f"Invalid configured price for size {size}."},status=409)
+                    if not price.is_finite() or price < 0: return Response({"detail":f"Invalid configured price for size {size}."},status=409)
                 if sizes and size and size not in sizes:return Response({"detail":f"Size is unavailable for {name}."},status=409)
                 if colors and color and color not in colors:return Response({"detail":f"Colour is unavailable for {name}."},status=409)
                 line=(price*qty).quantize(Decimal("0.01"));subtotal+=line
