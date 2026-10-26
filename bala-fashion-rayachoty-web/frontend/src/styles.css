@@ -1856,3 +1856,12 @@ button:disabled{cursor:not-allowed;opacity:.58}
 @media(max-width:900px){.subcategory-image-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}}
 @media(max-width:600px){.home-main-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px 8px}.home-main-category-link{min-width:0;width:100%;max-width:none;flex-basis:auto;gap:7px}.home-main-category-image{width:clamp(54px,16vw,76px);height:clamp(54px,16vw,76px)}.home-main-category-name{font-size:10px;line-height:1.25;padding:0 2px}.subcategory-image-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.subcategory-image-card{border-radius:11px}.subcategory-image-title{padding:10px 9px 4px;font-size:12px}.subcategory-image-action{padding:4px 9px 10px;font-size:10px}.category-screen-heading{gap:10px}.category-screen-heading button{font-size:11px;white-space:nowrap}}
 @media(max-width:360px){.home-main-category-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 8px}.subcategory-image-grid{gap:8px}.subcategory-image-title{font-size:11px}}
+
+/* Personalized home recommendations */
+.home-recommendations-section{margin-top:28px}
+.recommendation-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.recommendation-product{min-width:0}
+.recommendation-product .photo{width:100%}
+.recommendation-loading{padding:18px 0;color:#777168;font-size:13px}
+@media(max-width:900px){.recommendation-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}}
+@media(max-width:600px){.home-recommendations-section{margin-top:22px}.recommendation-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.recommendation-product .product-info{padding:10px}.recommendation-product .product-name{font-size:12px;line-height:1.35}.recommendation-product .price b{font-size:13px}}
