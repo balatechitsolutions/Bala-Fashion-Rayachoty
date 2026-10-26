@@ -72,12 +72,14 @@ class EndpointTests(SimpleTestCase):
         self.assertEqual(distance, 1250.5)
         self.assertIn("/route/v1/driving/78.75,14.05;78.76,14.06", get.call_args.args[0])
 
-    def test_health_without_database_is_ok_but_not_configured(self):
+    def test_health_without_database_does_not_disclose_configuration(self):
         req=self.factory.get("/api/health/")
         with patch.object(views.os,"getenv",side_effect=lambda k,d=None:"" if k=="DATABASE_URL" else d):
             res=views.health(req)
         self.assertEqual(res.status_code,200)
-        self.assertEqual(res.data["database"],"not_configured")
+        self.assertEqual(res.data, {"status": "ok"})
+        self.assertNotIn("database", res.data)
+        self.assertNotIn("service", res.data)
     def test_health_database_failure_is_503(self):
         req=self.factory.get("/api/health/")
         with patch.object(views.os,"getenv",return_value="postgresql://example"):
