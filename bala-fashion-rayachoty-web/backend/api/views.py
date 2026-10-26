@@ -812,10 +812,12 @@ def orders(request):
                 if pid in seen:return Response({"detail":"Combine duplicate cart lines before checkout."},status=400)
                 seen.add(pid)
                 with connection.cursor() as c:
-                    c.execute("""select p.id,p.name,p.price,p.image_url,p.stock_quantity,p.sizes,p.colors,p.vendor_id from public.products p join public.vendors v on v.id=p.vendor_id where p.id=%s and p.is_active=true and v.status='approved' for update of p""",[pid])
+                    c.execute("""select p.id,p.name,p.price,p.image_url,p.stock_quantity,p.sizes,p.colors,p.vendor_id,p.sku from public.products p join public.vendors v on v.id=p.vendor_id where p.id=%s and p.is_active=true and v.status='approved' for update of p""",[pid])
                     row=c.fetchone()
                 if not row:return Response({"detail":"A product is no longer available."},status=409)
-                prod_id,name,price,image,stock,sizes,colors,vendor_id=row
+                prod_id,name,price,image,stock,sizes,colors,vendor_id,sku=row
+                if str(sku or "").startswith("SAMPLE-"):
+                    return Response({"detail":"This is a sample catalog item for testing only and cannot be purchased."},status=409)
                 if stock<qty:return Response({"detail":f"Only {stock} left for {name}."},status=409)
                 if vendor is None:vendor=vendor_id
                 elif vendor!=vendor_id:return Response({"detail":"Please check out one seller at a time."},status=400)
