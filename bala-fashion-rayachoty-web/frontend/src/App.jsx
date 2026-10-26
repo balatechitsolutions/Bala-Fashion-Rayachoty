@@ -606,8 +606,9 @@ export default function App() {
    setCart([]);setAddress({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:'',id:''});setOrderNotes('');setOrders(o=>[createdOrder,...o.filter(item=>String(item.id)!==String(createdOrder.id))]);setSelectedOrder(createdOrder);setOrderReturnDrawer('orders');setDeliveryQuote(null);setDrawer('order-details');notify(`Order ${r.order_number} placed successfully`)
   }catch(err){notify(err.message)}finally{setBusy(false)}
  }
- const topLevelCategories = categories.filter(c=>c.slug!=='all'&&!c.parent_id)
- const getChildren = parentId => categories.filter(c=>String(c.parent_id||'')===String(parentId||''))
+ const byCatalogOrder = (a,b) => (Number(a.sort_order??0)-Number(b.sort_order??0)) || (String(a.created_at||'').localeCompare(String(b.created_at||''))) || String(a.name||'').localeCompare(String(b.name||''),'en',{sensitivity:'base'})
+ const topLevelCategories = categories.filter(c=>c.slug!=='all'&&!c.parent_id).sort(byCatalogOrder)
+ const getChildren = parentId => categories.filter(c=>String(c.parent_id||'')===String(parentId||'')).sort(byCatalogOrder)
  const chooseCategory = cat => { setCategory(cat.slug); setMobileActive('shop') }
  const catalogContent = <>
   {error&&<div className="notice">{error}<button onClick={()=>load(new AbortController().signal)}>Retry</button></div>}
