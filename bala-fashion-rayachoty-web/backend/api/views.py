@@ -228,12 +228,18 @@ def _role_user(request,roles):
 
 @api_view(["GET"])
 def health(request):
+    """Minimal platform health check; never disclose database configuration or state."""
     try:
-        if not os.getenv("DATABASE_URL"): return Response({"status":"ok","database":"not_configured"})
-        with connection.cursor() as c:c.execute("select 1");c.fetchone()
-        return Response({"status":"ok","service":"bala-fashion-api","database":"connected"})
+        if not os.getenv("DATABASE_URL"):
+            return Response({"status": "ok"})
+        with connection.cursor() as cursor:
+            cursor.execute("select 1")
+            cursor.fetchone()
+        return Response({"status": "ok"})
     except Exception:
-        return Response({"status":"degraded","database":"unavailable"},status=503)
+        # Keep the response generic; infrastructure details belong in server logs.
+        logging.exception("Health check failed")
+        return Response({"status": "unavailable"}, status=503)
 
 @api_view(["GET"])
 def manage_auth_users(request):
