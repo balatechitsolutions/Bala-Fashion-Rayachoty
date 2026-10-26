@@ -1833,3 +1833,5 @@ button:disabled{cursor:not-allowed;opacity:.58}
 .shop-results-heading{align-items:flex-end;margin:0 0 17px}
 .shop-results-heading h2{font-size:19px}
 @media(max-width:760px){.category-page-search{margin-bottom:21px;padding:11px 12px}.category-screen-heading h2{font-size:18px}.shop-filter-panel{margin-bottom:22px;padding:13px;border-radius:12px}.shop-filter-heading h2{font-size:13px}.shop-filter-panel .app-filter-row{gap:7px}.shop-filter-panel .app-filter-row button{padding:8px 11px;font-size:11px}.shop-results-heading h2{font-size:17px}}
+
+.category-loading-note{margin:0 0 14px;padding:10px 12px;border-radius:9px;background:#faf6f1;color:#756d64;font-size:12px}
