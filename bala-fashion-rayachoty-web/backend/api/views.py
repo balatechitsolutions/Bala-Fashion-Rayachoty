@@ -1129,10 +1129,13 @@ def seller_dashboard(request):
         return error
     search = request.query_params.get("search", "").strip()[:100]
     category = request.query_params.get("category", "").strip()[:80]
+    order_search = request.query_params.get("order_search", "").strip()[:100]
     raw_limit = request.query_params.get("limit", "30")
     raw_offset = request.query_params.get("offset", "0")
+    raw_order_offset = request.query_params.get("order_offset", "0")
     limit = min(max(int(raw_limit), 1), 30) if raw_limit.isdigit() else 30
     offset = min(max(int(raw_offset), 0), 1_000_000) if raw_offset.isdigit() else 0
+    order_offset = min(max(int(raw_order_offset), 0), 1_000_000) if raw_order_offset.isdigit() else 0
     try:
         with connection.cursor() as c:
             if prof["role"] == "vendor":
@@ -1146,7 +1149,8 @@ def seller_dashboard(request):
             if not store_ids:
                 return Response({"role": prof["role"], "stores": [], "products": [], "product_count": 0,
                     "product_limit": limit, "product_offset": offset, "product_has_more": False,
-                    "orders": [], "stats": {"products": 0, "active_products": 0, "low_stock": 0, "orders": 0}})
+                    "orders": [], "order_count": 0, "order_limit": limit, "order_offset": order_offset, "order_has_more": False,
+                    "stats": {"products": 0, "active_products": 0, "low_stock": 0, "orders": 0}})
             product_where = ["p.vendor_id = any(%s)", "v.status='approved'"]
             product_params = [store_ids]
             if search:
@@ -1185,8 +1189,26 @@ def seller_dashboard(request):
             managed_products = _rows(c)
             product_has_more = len(managed_products) > limit
             managed_products = managed_products[:limit]
+            order_where = ["o.vendor_id = any(%s)"]
+            order_params = [store_ids]
+            if order_search:
+                order_where.append("""(
+                    o.order_number::text ilike %s or o.status ilike %s
+                    or coalesce(o.payment_status,'') ilike %s
+                    or coalesce(o.payment_method,'') ilike %s
+                    or coalesce(o.vendor_name_snapshot,'') ilike %s
+                    or coalesce(cu.email,'') ilike %s
+                    or o.id::text ilike %s
+                )""")
+                order_params.extend([f"%{order_search}%"] * 7)
+            order_where_sql = " and ".join(order_where)
+            c.execute(f"""select count(*) as total
+                from public.orders o
+                left join auth.users cu on cu.id=o.customer_id
+                where {order_where_sql}""", order_params)
+            order_count = int(_rows(c)[0]["total"] or 0)
             c.execute(
-                """select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
+                f"""select o.id,o.order_number,o.status,o.payment_status,o.total,o.created_at,
                           o.assigned_delivery_boy_id,o.vendor_name_snapshot as vendor_name,o.vendor_address_snapshot as vendor_address,o.vendor_phone_snapshot as vendor_phone,o.payment_method,o.subtotal,o.delivery_fee,
                           o.notes,
                           case when %s in ('admin','vendor') then jsonb_build_object(
@@ -1194,7 +1216,7 @@ def seller_dashboard(request):
                             'longitude',o.address_snapshot->>'longitude'
                           ) else null end as delivery_coordinates,
                           case when %s in ('admin','vendor') then (
-                            coalesce(o.address_snapshot, '{}'::jsonb)
+                            coalesce(o.address_snapshot, '{{}}'::jsonb)
                           ) else null end as address_snapshot,
                           cu.email as customer_email,
                           dp.full_name as delivery_person_name,dp.phone as delivery_person_phone,
@@ -1208,22 +1230,25 @@ def seller_dashboard(request):
                    left join auth.users cu on cu.id=o.customer_id
                    left join public.profiles dp on dp.id=o.assigned_delivery_boy_id
                    left join public.order_items oi on oi.order_id=o.id
-                   where o.vendor_id = any(%s)
+                   where {order_where_sql}
                    group by o.id,v.name,v.address,v.phone,cu.email,dp.full_name,dp.phone
-                   order by o.created_at desc limit 50""",
-                [prof["role"], prof["role"], store_ids],
+                   order by o.created_at desc,o.id desc limit %s offset %s""",
+                [prof["role"], prof["role"]] + order_params + [limit + 1, order_offset],
             )
             managed_orders = _rows(c)
+            order_has_more = len(managed_orders) > limit
+            managed_orders = managed_orders[:limit]
         return Response({
             "role": prof["role"], "stores": stores, "products": managed_products,
             "product_count": product_count, "product_limit": limit, "product_offset": offset,
             "product_has_more": product_has_more,
-            "orders": managed_orders,
+            "orders": managed_orders, "order_count": order_count, "order_limit": limit,
+            "order_offset": order_offset, "order_has_more": order_has_more,
             "stats": {
                 "products": product_count,
                 "active_products": int(product_totals["active_total"] or 0),
                 "low_stock": int(product_totals["low_stock_total"] or 0),
-                "orders": len(managed_orders),
+                "orders": order_count,
             },
         })
     except Exception:
