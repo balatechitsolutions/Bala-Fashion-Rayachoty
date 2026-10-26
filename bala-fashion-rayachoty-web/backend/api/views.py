@@ -323,6 +323,7 @@ def manage_category(request):
                     row = c.fetchone()
                 if not row:
                     return Response({"detail": "Category not found."}, status=404)
+                cache.delete("catalog:categories:v2")
                 return Response({"id": str(row[0]), "name": row[1], "is_active": row[2]})
             except Exception:
                 return Response({"detail": "Category could not be deactivated."}, status=503)
