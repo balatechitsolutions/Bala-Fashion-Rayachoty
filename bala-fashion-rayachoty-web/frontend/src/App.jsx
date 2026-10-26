@@ -218,7 +218,7 @@ export default function App() {
   })
  }
  useEffect(()=>{
-  if(mobileActive!=='home'||recommendationCatalog.length||recommendationLoading)return
+  if(mobileActive!=='home'||recommendationCatalog.length)return
   const controller=new AbortController()
   let active=true
   setRecommendationLoading(true)
