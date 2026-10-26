@@ -268,7 +268,7 @@ def manage_auth_users(request):
 
 @api_view(["GET"])
 def categories(request):
-    cache_key = "catalog:categories:v2"
+    cache_key = "catalog:categories:v3"
     cached = cache.get(cache_key)
     if cached is not None:
         return Response(cached)
@@ -323,7 +323,7 @@ def manage_category(request):
                     row = c.fetchone()
                 if not row:
                     return Response({"detail": "Category not found."}, status=404)
-                cache.delete("catalog:categories:v2")
+                cache.delete("catalog:categories:v3")
                 return Response({"id": str(row[0]), "name": row[1], "is_active": row[2]})
             except Exception:
                 return Response({"detail": "Category could not be deactivated."}, status=503)
@@ -421,7 +421,7 @@ def manage_category(request):
         result = {"id": str(row[0]), "name": row[1], "slug": row[2], "image_url": row[3], "sort_order": row[4], "is_active": row[5]}
         if len(row) > 6:
             result["parent_id"] = str(row[6]) if row[6] else None
-        cache.delete("catalog:categories:v2")
+        cache.delete("catalog:categories:v3")
         return Response(result, status=201 if request.method == "POST" else 200)
     except Exception:
         return Response({"detail": "Category could not be saved. Check for duplicate category names or slugs and retry."}, status=503)
