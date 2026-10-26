@@ -192,3 +192,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
  .seller-inventory-search { margin-top: 12px; }
  .seller-inventory-scroll { max-height: min(390px, 48vh); }
 }
+
+.seller-inventory-category-filter{display:flex;align-items:center;gap:12px;margin:0 0 10px;color:var(--muted);font-size:12px}.seller-inventory-category-filter select{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--stroke);border-radius:10px;background:#fff;color:var(--text)}.seller-inventory-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:12px;color:var(--muted);font-size:12px}.seller-inventory-pagination>div{display:flex;gap:8px}.seller-inventory-pagination button{padding:8px 12px}.seller-inventory-pagination button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:560px){.seller-inventory-category-filter{align-items:stretch;flex-direction:column;gap:6px}.seller-inventory-pagination{align-items:flex-start;flex-direction:column}}
