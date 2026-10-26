@@ -170,3 +170,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
+
+/* Product inventory: keep controls visible while the product list scrolls independently. */
+.seller-inventory-section { display: flex; flex-direction: column; min-height: 0; }
+.seller-inventory-header { flex: 0 0 auto; align-items: center; }
+.seller-inventory-header h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0; }
+.seller-inventory-count { color: var(--muted); font-size: 11px; font-weight: 650; }
+.seller-inventory-search { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; margin: 14px 0 10px; padding: 0 12px; border: 1px solid var(--stroke); border-radius: 12px; background: #fff; color: var(--muted); }
+.seller-inventory-search:focus-within { border-color: var(--brand-strong); box-shadow: 0 0 0 3px #8b36520f; }
+.seller-inventory-search input { flex: 1; min-width: 0; width: 100%; padding: 12px 0; border: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; }
+.seller-inventory-search input:focus { outline: 0; box-shadow: none; }
+.seller-inventory-search button { flex: 0 0 auto; padding: 6px; }
+.seller-inventory-scroll { max-height: min(440px, 52vh); min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 2px 5px 2px 0; }
+.seller-inventory-scroll:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; border-radius: 10px; }
+.seller-inventory-scroll .seller-product-row:first-child { margin-top: 0; }
+.seller-inventory-no-results { padding: 18px 8px; text-align: center; }
+@media (max-width: 600px) {
+ .seller-inventory-section { padding: 14px; }
+ .seller-inventory-header { align-items: flex-start; }
+ .seller-inventory-header > button { flex: 0 0 auto; }
+ .seller-inventory-search { margin-top: 12px; }
+ .seller-inventory-scroll { max-height: min(390px, 48vh); }
+}
