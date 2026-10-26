@@ -135,7 +135,7 @@ export default function App() {
  const selectedHeroImage = selectedImages[selectedImageIndex] || selectedImages[0] || null
  const [busy,setBusy]=useState(false),[mobileActive,setMobileActive]=useState('home'),[sellerOrderSearch,setSellerOrderSearch]=useState(''),searchInputRef=useRef(null),[addressReturnDrawer,setAddressReturnDrawer]=useState('account'),[address,setAddress]=useState({recipient_name:'',phone:'',line1:'',line2:'',landmark:'',city:'Rayachoty',state:'Andhra Pradesh',postal_code:'',latitude:'',longitude:'',notes:'',id:''}),[orderNotes,setOrderNotes]=useState(''),[deliveryQuote,setDeliveryQuote]=useState(null),[deliveryQuoteLoading,setDeliveryQuoteLoading]=useState(false),[deliveryQuoteError,setDeliveryQuoteError]=useState('')
  const [productForm,setProductForm]=useState({name:'',description:'',additional_description:'',price:'',compare_at_price:'',category_id:'',vendor_id:'',image_url:'',image_public_id:'',extra_images:[],sizes:'S,M,L,XL',colors:'Black,Blue',stock_quantity:'1'})
- const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',image_url:'',sort_order:'0'})
+ const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([])
  const [authUsers,setAuthUsers]=useState([]),[authUsersLoading,setAuthUsersLoading]=useState(false),[authUsersFetched,setAuthUsersFetched]=useState(false)
  const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
@@ -390,7 +390,7 @@ export default function App() {
  }
  async function openCategoryManagement(){
   if(!session)return login()
-  setDrawer('categories-manage');setCategoryForm({category_id:'',name:'',image_url:'',sort_order:'0'})
+  setDrawer('categories-manage');setCategoryForm({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'})
   try{const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[])}
   catch(e){notify(e.message)}
  }
@@ -406,7 +406,7 @@ export default function App() {
     : {name:categoryForm.name.trim(),image_url:categoryForm.image_url,sort_order:Number(categoryForm.sort_order||0)}
    await api('/categories/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const rows=await api('/categories/manage/',{token:session.access_token});setAdminCategories(Array.isArray(rows)?rows:rows.results||[])
-   await load();setCategoryForm({category_id:'',name:'',image_url:'',sort_order:'0'});notify(editing?'Category updated':'Category created')
+   await load();setCategoryForm({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'});notify(editing?'Category updated':'Category created')
   }catch(e){notify(e.message)}finally{setBusy(false)}
  }
  async function deactivateCategory(cat){
@@ -716,17 +716,18 @@ export default function App() {
    {drawer==='delivery-management'&&profile?.role==='admin'&&<div className="drawer-body seller-dashboard"><DeliveryManagement session={session} orders={sellerDashboard?.orders||[]} busy={busy} onRefresh={refreshSellerDashboard} notify={notify} authUsers={authUsers}/></div>}
    {drawer==='delivery-dashboard'&&profile?.role==='delivery_boy'&&<DeliveryDashboard session={session} notify={notify} onSignOut={logout} onOrderDetails={order=>openOrderDetails(order,'delivery-dashboard')}/>}
    {drawer==='categories-manage'&&<div className="drawer-body form">
-    <p>Create categories, edit their names and sort order, update category images, or deactivate categories. Existing product references are preserved.</p>
-    <form className="form" onSubmit={saveCategoryImage}>
-     <h3>{categoryForm.category_id?'Edit category':'Add category'}</h3>
-     <label>Category name<input required value={categoryForm.name} onChange={e=>setCategoryForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Western Wear"/></label>
-     <label>Sort order<input type="number" step="1" value={categoryForm.sort_order} onChange={e=>setCategoryForm(p=>({...p,sort_order:e.target.value}))}/></label>
-     <label>Category image (optional, Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadCategoryImage(e.target.files?.[0])}/></label>
-     {categoryForm.image_url&&<img className="upload-preview" src={categoryForm.image_url} alt="Category image preview"/>}
-     <div className="form-two"><button className="primary full" disabled={busy||!categoryForm.name.trim()}>{busy?'Saving…':categoryForm.category_id?'Save category':'Create category'}</button><button type="button" className="secondary full" onClick={()=>setCategoryForm({category_id:'',name:'',image_url:'',sort_order:'0'})}>Clear</button></div>
-    </form>
-    <section className="seller-dashboard-section"><h3>All categories</h3>{!adminCategories.length?<p className="seller-empty">No categories found.</p>:adminCategories.map(cat=><article className="seller-store-row" key={cat.id}><span><b>{cat.name}</b><small>{cat.slug} · sort {cat.sort_order} · {cat.is_active?'Active':'Inactive'}</small></span><span className="seller-product-actions"><button className="secondary" onClick={()=>setCategoryForm({category_id:cat.id,name:cat.name,image_url:cat.image_url||'',sort_order:String(cat.sort_order??0)})}><FiEdit2 size={15}/></button>{cat.is_active&&<button className="secondary" disabled={busy} onClick={()=>deactivateCategory(cat)}>Deactivate</button>}</span></article>)}</section>
-   </div>}
+     <p>Create and organize main categories and subcategories. Existing product references are preserved.</p>
+     <form className="form" onSubmit={saveCategoryImage}>
+      <h3>{categoryForm.category_id?'Edit category':'Add category'}</h3>
+      <label>Category name<input required value={categoryForm.name} onChange={e=>setCategoryForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Western Wear"/></label>
+      <label>Parent category<select value={categoryForm.parent_id} onChange={e=>setCategoryForm(p=>({...p,parent_id:e.target.value}))}><option value="">None — main category</option>{adminCategories.filter(c=>c.id!==categoryForm.category_id&&c.is_active!==false).map(c=><option key={c.id} value={c.id}>{c.parent_id?'↳ ':''}{c.name}</option>)}</select><small>Choose None for a main category; choose a parent to create a subcategory.</small></label>
+      <label>Sort order<input type="number" step="1" value={categoryForm.sort_order} onChange={e=>setCategoryForm(p=>({...p,sort_order:e.target.value}))}/></label>
+      <label>Category image (optional, Cloudinary)<input type="file" accept="image/*" onChange={e=>uploadCategoryImage(e.target.files?.[0])}/></label>
+      {categoryForm.image_url&&<img className="upload-preview" src={categoryForm.image_url} alt="Category image preview"/>}
+      <div className="form-two"><button className="primary full" disabled={busy||!categoryForm.name.trim()}>{busy?'Saving…':categoryForm.category_id?'Save category':'Create category'}</button><button type="button" className="secondary full" onClick={()=>setCategoryForm({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'})}>Clear</button></div>
+     </form>
+     <section className="seller-dashboard-section"><h3>All categories</h3>{!adminCategories.length?<p className="seller-empty">No categories found.</p>:adminCategories.map(cat=><article className={'seller-store-row'+(cat.parent_id?' category-child-row':'')} key={cat.id}><span><b>{cat.parent_id?'↳ ':''}{cat.name}</b><small>{cat.parent_name?'Under '+cat.parent_name+' · ':''}{cat.slug} · sort {cat.sort_order} · {cat.is_active?'Active':'Inactive'}</small></span><span className="seller-product-actions"><button className="secondary" onClick={()=>setCategoryForm({category_id:cat.id,name:cat.name,parent_id:cat.parent_id||'',image_url:cat.image_url||'',sort_order:String(cat.sort_order??0)})}><FiEdit2 size={15}/></button>{cat.is_active&&<button className="secondary" disabled={busy} onClick={()=>deactivateCategory(cat)}>Deactivate</button>}</span></article>)}</section>
+    </div>}
    {drawer==='vendors-manage'&&<div className="drawer-body seller-dashboard"><div className="seller-section-title"><h3>Vendor management</h3><button className="secondary" onClick={openVendorManagement}>Refresh</button></div>
     <p>Select the existing website user by email. The selected account's Supabase UUID is verified by the backend before the vendor is created.</p>
     <form className="form admin-vendor-create" onSubmit={createVendor}>
