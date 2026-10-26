@@ -816,8 +816,6 @@ def orders(request):
                     row=c.fetchone()
                 if not row:return Response({"detail":"A product is no longer available."},status=409)
                 prod_id,name,price,image,stock,sizes,colors,vendor_id,sku=row
-                if str(sku or "").startswith("SAMPLE-"):
-                    return Response({"detail":"This is a sample catalog item for testing only and cannot be purchased."},status=409)
                 if stock<qty:return Response({"detail":f"Only {stock} left for {name}."},status=409)
                 if vendor is None:vendor=vendor_id
                 elif vendor!=vendor_id:return Response({"detail":"Please check out one seller at a time."},status=400)
