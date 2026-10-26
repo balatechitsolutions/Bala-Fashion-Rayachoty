@@ -121,6 +121,8 @@ function SearchableUserSelect({users,value,onChange,label,placeholder,excludeRol
 export default function App() {
  const [session,setSession]=useState(null),[profile,setProfile]=useState(null),[authEmail,setAuthEmail]=useState(''),[authPassword,setAuthPassword]=useState(''),[authMode,setAuthMode]=useState('signin'),[authSubmitting,setAuthSubmitting]=useState(false);const sessionRef=useRef(null)
  const [products,setProducts]=useState([]),[categories,setCategories]=useState(defaultCats),[nextOffset,setNextOffset]=useState(null),[hasMore,setHasMore]=useState(false),[loadingMore,setLoadingMore]=useState(false)
+ const [recommendationCatalog,setRecommendationCatalog]=useState([]),[recommendationLoading,setRecommendationLoading]=useState(false)
+ const [interestSignals,setInterestSignals]=useState(()=>{try{const saved=window.localStorage.getItem('bala-fashion-interest-signals-v1');const parsed=saved?JSON.parse(saved):[];return Array.isArray(parsed)?parsed:[]}catch{return []}})
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[search,setSearch]=useState(''),[category,setCategory]=useState('all'),[categorySearch,setCategorySearch]=useState(''),[focusedMainCategory,setFocusedMainCategory]=useState(''),[categoriesLoading,setCategoriesLoading]=useState(true),[categoriesError,setCategoriesError]=useState('')
  const [cart,setCart]=useState([]),[selected,setSelected]=useState(null),[size,setSize]=useState(''),[color,setColor]=useState(''),[selectedImageIndex,setSelectedImageIndex]=useState(0),[detailLoading,setDetailLoading]=useState(false)
  const [drawer,setDrawer]=useState(''),[menu,setMenu]=useState(false),[toast,setToast]=useState(''),[orders,setOrders]=useState([]),[selectedOrder,setSelectedOrder]=useState(null),[orderReturnDrawer,setOrderReturnDrawer]=useState('orders')
@@ -206,6 +208,60 @@ export default function App() {
  },[session?.user?.id,session?.access_token])
  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>load(controller.signal),180);return()=>{window.clearTimeout(timer);controller.abort()}},[category,search])
  useEffect(()=>{const controller=new AbortController();let active=true;setCategoriesLoading(true);api('/categories/',{signal:controller.signal}).then(rows=>{if(!active)return;if(!Array.isArray(rows))throw new Error('The category service returned an invalid response.');setCategories([defaultCats[0],...rows.filter(c=>c&&c.id&&c.slug&&c.is_active!==false)]);setCategoriesError('')}).catch(e=>{if(active&&e.name!=='AbortError'){setCategoriesError('Categories could not be loaded from the live catalog. Check the connection and retry.')}}).finally(()=>{if(active)setCategoriesLoading(false)});return()=>{active=false;controller.abort()}},[])
+ function recordInterest(item,action='view'){
+  if(!item)return
+  const signal={productId:String(item.id||''),categorySlug:String(item.category_slug||item.slug||''),name:String(item.name||''),action,at:Date.now()}
+  setInterestSignals(current=>{
+   const next=[...current,signal].slice(-100)
+   try{window.localStorage.setItem('bala-fashion-interest-signals-v1',JSON.stringify(next))}catch{}
+   return next
+  })
+ }
+ useEffect(()=>{
+  if(mobileActive!=='home'||recommendationCatalog.length||recommendationLoading)return
+  const controller=new AbortController()
+  let active=true
+  setRecommendationLoading(true)
+  ;(async()=>{
+   try{
+    const all=[]
+    let offset=0
+    for(let page=0;page<3;page++){
+     const result=await api('/products/?limit=60&offset='+offset,{signal:controller.signal})
+     const rows=Array.isArray(result.results)?result.results:Array.isArray(result)?result:[]
+     all.push(...rows)
+     if(!result.has_more||result.next_offset==null||!rows.length)break
+     offset=result.next_offset
+    }
+    if(active)setRecommendationCatalog(all)
+   }catch(error){if(active&&error.name!=='AbortError')console.warn('Personalized product recommendations unavailable:',error.message)}
+   finally{if(active)setRecommendationLoading(false)}
+  })()
+  return()=>{active=false;controller.abort()}
+ },[mobileActive,recommendationCatalog.length,recommendationLoading])
+ const recommendedProducts=(()=>{
+  const weights={view:1,open:1.5,cart:4,category:2}
+  const categoryScores=new Map()
+  const productSeen=new Map()
+  const now=Date.now()
+  interestSignals.forEach(signal=>{
+   const ageDays=Math.max(0,(now-Number(signal.at||now))/86400000)
+   const recency=Math.exp(-ageDays/21)
+   const weight=(weights[signal.action]||1)*recency
+   if(signal.categorySlug)categoryScores.set(signal.categorySlug,(categoryScores.get(signal.categorySlug)||0)+weight)
+   if(signal.productId)productSeen.set(signal.productId,(productSeen.get(signal.productId)||0)+weight)
+  })
+  return recommendationCatalog.filter(p=>Number(p.stock_quantity??p.stock??0)>0).map((p,index)=>{
+   const categorySlug=String(p.category_slug||'')
+   const interest=categoryScores.get(categorySlug)||0
+   const seen=productSeen.get(String(p.id))||0
+   const nameTokens=String(p.name||'').toLowerCase().split(/[^a-z0-9]+/).filter(t=>t.length>2)
+   const likedTokens=new Set(interestSignals.filter(s=>s.action!=='category').flatMap(s=>String(s.name||'').toLowerCase().split(/[^a-z0-9]+/).filter(t=>t.length>2)))
+   const textMatch=nameTokens.reduce((sum,token)=>sum+(likedTokens.has(token)?0.35:0),0)
+   const freshness=Math.max(0,1-index/Math.max(recommendationCatalog.length,1))*0.15
+   return {...p,__recommendationScore:interest+textMatch-seen*1.25+freshness}
+  }).sort((a,b)=>b.__recommendationScore-a.__recommendationScore).slice(0,8)
+ })()
  async function load(signal,offset=0,append=false){if(append)setLoadingMore(true);else setLoading(true);try{const q=new URLSearchParams();if(category!=='all')q.set('category',category);if(search.trim())q.set('search',search.trim());q.set('limit','30');q.set('offset',String(offset));const p=await api(`/products/?${q}`,{signal});const page=Array.isArray(p.results)?p.results:Array.isArray(p)?p:[];setProducts(current=>append?[...current,...page]:page);setHasMore(Boolean(p.has_more));setNextOffset(p.next_offset??null);setError('')}catch(e){if(e.name!=='AbortError'){if(!append)setProducts([]);setError('We could not load the live catalog. Check your connection and try again.')}}finally{if(!signal?.aborted){if(append)setLoadingMore(false);else setLoading(false)}}}
  function navigateMobilePage(page){
   setDrawer('')
@@ -326,10 +382,11 @@ export default function App() {
  async function logout(){await supabase?.auth.signOut();setAuthUsers([]);setAuthUsersFetched(false);setDrawer('');notify('Signed out')}
  const count=cart.reduce((n,p)=>n+p.quantity,0),subtotal=cart.reduce((n,p)=>n+Number(p.price)*p.quantity,0)
  const vendors=[...new Set(cart.map(p=>p.vendor_id||p.vendor_name))]
- function add(p,s=p.sizes?.[0]||'',c=p.colors?.[0]||''){const stock=Number(p.stock_quantity??p.stock??0);if(!Number.isFinite(stock)||stock<1){notify('This item is currently unavailable.');return}const key=`${p.id}:${s}:${c}`;setCart(old=>old.some(i=>i.key===key)?old.map(i=>i.key===key?{...i,quantity:Math.min(i.quantity+1,stock)}:i):[...old,{...p,key,quantity:1,size:s,color:c}]);setSelected(null);setDrawer('cart');notify('Added to your bag')}
+ function add(p,s=p.sizes?.[0]||'',c=p.colors?.[0]||''){recordInterest(p,'cart');const stock=Number(p.stock_quantity??p.stock??0);if(!Number.isFinite(stock)||stock<1){notify('This item is currently unavailable.');return}const key=`${p.id}:${s}:${c}`;setCart(old=>old.some(i=>i.key===key)?old.map(i=>i.key===key?{...i,quantity:Math.min(i.quantity+1,stock)}:i):[...old,{...p,key,quantity:1,size:s,color:c}]);setSelected(null);setDrawer('cart');notify('Added to your bag')}
  async function getOrders(){if(!session)return login();try{const r=await api('/orders/',{token:session.access_token});setOrders(r.results||r);setSelectedOrder(null);setNotificationOpen(false);setDrawer('orders')}catch(e){notify(e.message)}}
  function openOrderDetails(order,returnTo='orders'){setSelectedOrder(order);setOrderReturnDrawer(returnTo);setNotificationOpen(false);setDrawer('order-details')}
  async function openProductDetails(product){
+  recordInterest(product,'view')
   setSelected(product);setSelectedImageIndex(0);setSize(product.sizes?.[0]||'');setColor(product.colors?.[0]||'');setDetailLoading(true)
   try{
    const details=await api('/products/'+encodeURIComponent(product.id)+'/')
@@ -613,7 +670,7 @@ export default function App() {
  const byCatalogOrder = (a,b) => (Number(a.sort_order??0)-Number(b.sort_order??0)) || (String(a.created_at||'').localeCompare(String(b.created_at||''))) || String(a.name||'').localeCompare(String(b.name||''),'en',{sensitivity:'base'})
  const topLevelCategories = categories.filter(c=>c.slug!=='all'&&!c.parent_id).sort(byCatalogOrder)
  const getChildren = parentId => categories.filter(c=>String(c.parent_id||'')===String(parentId||'')).sort(byCatalogOrder)
- const chooseCategory = cat => { setCategory(cat.slug); setMobileActive('shop') }
+ const chooseCategory = cat => { recordInterest(cat,'category'); setCategory(cat.slug); setMobileActive('shop') }
  const catalogContent = <>
   {error&&<div className="notice">{error}<button onClick={()=>load(new AbortController().signal)}>Retry</button></div>}
   <div className="grid">{loading?Array.from({length:6},(_,i)=><div className="skeleton" key={i}><div/></div>):products.map((p,i)=><article className="product" key={p.id}><button className="photo" onClick={()=>openProductDetails(p)}>{p.image_url?<img src={p.image_url} alt={p.name} loading={i>2?'lazy':'eager'} onError={e=>{e.currentTarget.style.display='none';e.currentTarget.parentElement.classList.add('image-failed')}}/>:<span className="placeholder">BF</span>}{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<small className="sale">SPECIAL PRICE</small>}<span className="quick">Quick view <FiArrowRight size={13}/></span></button><div className="product-info"><div className="meta"><span>{p.category_name||'Curated style'}</span></div><button className="product-name" onClick={()=>openProductDetails(p)}>{p.name}</button><div className="price"><b>{money(p.price)}</b>{p.compare_at_price&&Number(p.compare_at_price)>Number(p.price)&&<del>{money(p.compare_at_price)}</del>}<button onClick={()=>openProductDetails(p)} aria-label={'Choose options for '+p.name}><FiPlus size={18}/></button></div></div></article>)}</div>
@@ -663,6 +720,7 @@ export default function App() {
         <span className="home-main-category-name">{c.name}</span>
       </button>)}</div>
      </section>
+     <section className="app-section home-recommendations-section"><div className="app-section-head"><div><h2>Picked for you</h2><p>{interestSignals.length?'Based on the styles and categories you explore':'Explore products to personalize your picks'}</p></div><button type="button" onClick={()=>{setCategory('all');setSearch('');setFocusedMainCategory('');setMobileActive('shop')}}>View all <FiArrowRight size={15}/></button></div>{recommendationLoading&&!recommendationCatalog.length?<div className="recommendation-loading">Finding styles for you…</div>:recommendedProducts.length?<div className="recommendation-grid">{recommendedProducts.map((p,i)=><article className="product recommendation-product" key={p.id}><button type="button" className="photo" onClick={()=>openProductDetails(p)} aria-label={'View '+p.name}>{p.image_url?<img src={p.image_url} alt={p.name} loading="lazy"/>:<span className="placeholder">BF</span>}</button><div className="product-info"><div className="meta"><span>{p.category_name||'Curated style'}</span></div><button type="button" className="product-name" onClick={()=>openProductDetails(p)}>{p.name}</button><div className="price"><b>{money(p.price)}</b><button type="button" onClick={()=>openProductDetails(p)} aria-label={'Choose options for '+p.name}><FiPlus size={18}/></button></div></div></article>)}</div>:<p className="recommendation-loading">More recommendations will appear as products become available.</p>}</section>
      <section className="app-section home-products-section"><div className="app-section-head"><div><h2>Explore styles</h2><p>Live products from local sellers</p></div><button onClick={()=>{setCategory('all');setSearch('');setFocusedMainCategory('');setMobileActive('shop')}}>View all <FiArrowRight size={15}/></button></div>{catalogContent}</section>
     </div>}
     {mobileActive==='categories'&&<div className="app-page"><section className="page-intro"><div className="eyebrow muted">DISCOVER LOCAL SHOPPING</div><h1>{topLevelCategories.find(c=>String(c.id)===focusedMainCategory)?.name||'Categories'}</h1><p>{focusedMainCategory?'Choose a subcategory image to open its products and filters.':'Choose a main category to browse its subcategory images.'}</p></section>
