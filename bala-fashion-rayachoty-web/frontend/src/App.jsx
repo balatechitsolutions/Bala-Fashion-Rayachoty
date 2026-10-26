@@ -127,6 +127,10 @@ export default function App() {
  const [notifications,setNotifications]=useState([]),[notificationOpen,setNotificationOpen]=useState(false)
  const [installPrompt,setInstallPrompt]=useState(null),[pushEnabled,setPushEnabled]=useState(false),[soundEnabled,setSoundEnabled]=useState(false),[alertsBusy,setAlertsBusy]=useState(false)
  const seenNotificationIds=useRef(null)
+ useEffect(()=>{
+  window.scrollTo({top:0,left:0,behavior:'auto'})
+  document.querySelector('.app-main')?.scrollTo({top:0,left:0,behavior:'auto'})
+ },[mobileActive])
  const selectedOrderAddress = normalizeAddressSnapshot(selectedOrder?.address_snapshot)
  const selectedImages = selected ? [
   ...(selected.image_url ? [{id:'primary',image_url:selected.image_url,alt_text:selected.name||'Product image'}] : []),
