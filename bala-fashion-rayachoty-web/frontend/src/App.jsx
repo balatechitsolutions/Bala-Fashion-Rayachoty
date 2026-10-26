@@ -238,7 +238,7 @@ export default function App() {
    finally{if(active)setRecommendationLoading(false)}
   })()
   return()=>{active=false;controller.abort()}
- },[mobileActive,recommendationCatalog.length,recommendationLoading])
+ },[mobileActive,recommendationCatalog.length])
  const recommendedProducts=(()=>{
   const weights={view:1,open:1.5,cart:4,category:2}
   const categoryScores=new Map()
