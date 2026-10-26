@@ -1790,3 +1790,18 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .app-category-card { aspect-ratio: 1 / 1.15; border-radius: 10px; }
   .app-category-shortcut { min-width: 100px; width: 100px; height: 128px; flex-basis: 100px; border-radius: 10px; }
 }
+
+
+/* Homepage category refresh: clear image-led main categories with their own subcategory groups. */
+.home-main-category-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.home-main-category-card{min-width:0;overflow:hidden;border:1px solid #eee3d9;border-radius:15px;background:#fff;box-shadow:0 4px 14px #39251c08}
+.home-main-category-link{display:flex;width:100%;flex-direction:column;gap:0;padding:0;border:0;background:#fff;color:#29251f;text-align:left}
+.home-main-category-image{display:grid;place-items:center;aspect-ratio:4/2.8;overflow:hidden;background:#f0e4e6;color:#702b38;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:750;text-align:center}
+.home-main-category-image img{display:block;width:100%;height:100%;object-fit:cover;transition:transform .25s}
+.home-main-category-link:hover .home-main-category-image img{transform:scale(1.04)}
+.home-main-category-name{padding:12px 13px 11px;font-size:14px;font-weight:750;line-height:1.3}
+.home-subcategory-links{display:flex;flex-wrap:wrap;gap:7px;padding:0 12px 13px}
+.home-subcategory-links button{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:7px 9px;border:1px solid #eee3d9;border-radius:999px;background:#faf6f1;color:#5a4a42;font-size:11px;font-weight:650;text-align:left}
+.home-subcategory-links button:hover{border-color:#c7a5a1;background:#f7eceb;color:#702b38}
+@media(max-width:760px){.home-main-category-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.home-main-category-card{border-radius:12px}.home-main-category-image{aspect-ratio:4/3}.home-main-category-name{padding:10px 10px 9px;font-size:12px}.home-subcategory-links{gap:6px;padding:0 9px 10px}.home-subcategory-links button{padding:6px 8px;font-size:10px}}
+@media(max-width:360px){.home-main-category-grid{gap:8px}.home-main-category-name{font-size:11px}.home-subcategory-links button{font-size:9px}}
