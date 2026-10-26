@@ -620,7 +620,7 @@ def products(request):
         with connection.cursor() as c:
             c.execute(
                 f"""select p.id,p.name,p.slug,p.description,p.price,p.compare_at_price,
-                           p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,
+                           p.image_url,p.image_public_id,p.sizes,p.colors,p.stock_quantity,p.size_prices,
                            p.category_id,c.name as category_name,c.slug as category_slug,
                            p.vendor_id,v.slug as vendor_slug
                     from public.products p
@@ -656,7 +656,7 @@ def product_detail(request, product_id):
             c.execute(
                 """select p.id,p.name,p.slug,p.description,p.additional_description,
                           p.price,p.compare_at_price,p.image_url,p.image_public_id,
-                          p.sizes,p.colors,p.stock_quantity,p.category_id,
+                          p.sizes,p.colors,p.stock_quantity,p.size_prices,p.category_id,
                           cat.name as category_name,cat.slug as category_slug,
                           p.vendor_id,v.slug as vendor_slug,
                           coalesce((
@@ -812,14 +812,18 @@ def orders(request):
                 if pid in seen:return Response({"detail":"Combine duplicate cart lines before checkout."},status=400)
                 seen.add(pid)
                 with connection.cursor() as c:
-                    c.execute("""select p.id,p.name,p.price,p.image_url,p.stock_quantity,p.sizes,p.colors,p.vendor_id,p.sku from public.products p join public.vendors v on v.id=p.vendor_id where p.id=%s and p.is_active=true and v.status='approved' for update of p""",[pid])
+                    c.execute("""select p.id,p.name,p.price,p.image_url,p.stock_quantity,p.sizes,p.colors,p.vendor_id,p.sku,p.size_prices from public.products p join public.vendors v on v.id=p.vendor_id where p.id=%s and p.is_active=true and v.status='approved' for update of p""",[pid])
                     row=c.fetchone()
                 if not row:return Response({"detail":"A product is no longer available."},status=409)
-                prod_id,name,price,image,stock,sizes,colors,vendor_id,sku=row
+                prod_id,name,price,image,stock,sizes,colors,vendor_id,sku,size_prices=row
                 if stock<qty:return Response({"detail":f"Only {stock} left for {name}."},status=409)
                 if vendor is None:vendor=vendor_id
                 elif vendor!=vendor_id:return Response({"detail":"Please check out one seller at a time."},status=400)
                 size=str(raw.get("size",""))[:30];color=str(raw.get("color",""))[:50]
+                 if size_prices and size in size_prices:
+                     try: price=Decimal(str(size_prices[size]))
+                     except (InvalidOperation,TypeError,ValueError): return Response({"detail":f"Invalid configured price for size {size}."},status=409)
+                     if not price.is_finite() or price < 0: return Response({"detail":f"Invalid configured price for size {size}."},status=409)
                 if sizes and size and size not in sizes:return Response({"detail":f"Size is unavailable for {name}."},status=409)
                 if colors and color and color not in colors:return Response({"detail":f"Colour is unavailable for {name}."},status=409)
                 line=(price*qty).quantize(Decimal("0.01"));subtotal+=line
@@ -1383,6 +1387,20 @@ def manage_product(request):
     colors = data.get("colors", [])
     if not isinstance(sizes, list) or not isinstance(colors, list):
         return Response({"detail": "Sizes and colours must be arrays."}, status=400)
+    raw_size_prices = data.get("size_prices", {})
+    if raw_size_prices is None: raw_size_prices = {}
+    if not isinstance(raw_size_prices, dict):
+        return Response({"detail": "Size prices must be a map of size to price."}, status=400)
+    size_prices = {}
+    try:
+        for size_key, size_value in raw_size_prices.items():
+            normalized_size = str(size_key)[:30]
+            if normalized_size not in [str(x)[:30] for x in sizes]: continue
+            normalized_price = Decimal(str(size_value))
+            if not normalized_price.is_finite() or normalized_price < 0: raise ValueError()
+            size_prices[normalized_size] = str(normalized_price.quantize(Decimal("0.01")))
+    except (ValueError, InvalidOperation, TypeError):
+        return Response({"detail": "Enter valid non-negative prices for each size."}, status=400)
     image_url = str(data.get("image_url", "")).strip()
     image_public_id = str(data.get("image_public_id", "")).strip()
     additional_description = str(data.get("additional_description", ""))[:12000]
@@ -1430,23 +1448,23 @@ def manage_product(request):
                     c.execute(
                         """update public.products set vendor_id=%s,category_id=%s,name=%s,
                            description=%s,additional_description=%s,price=%s,compare_at_price=%s,
-                           image_url=%s,image_public_id=%s,sizes=%s,colors=%s,stock_quantity=%s,updated_at=now()
+                           image_url=%s,image_public_id=%s,sizes=%s,colors=%s,stock_quantity=%s,size_prices=%s::jsonb,updated_at=now()
                            where id=%s returning id,name,slug,price,stock_quantity,image_url,is_active,vendor_id""",
                         [vendor, category, name, str(data.get("description", ""))[:4000],
                          additional_description, price, compare_price, image_url, image_public_id,
-                         [str(x)[:30] for x in sizes], [str(x)[:50] for x in colors], stock, product_id],
+                         [str(x)[:30] for x in sizes], [str(x)[:50] for x in colors], stock, json.dumps(size_prices), product_id],
                     )
                 else:
                     slug = slugify(name)[:150] + "-" + uuid.uuid4().hex[:8]
                     c.execute(
                         """insert into public.products(vendor_id,category_id,name,slug,description,
                            additional_description,price,compare_at_price,image_url,image_public_id,
-                           sizes,colors,stock_quantity,is_active)
-                           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
+                           sizes,colors,stock_quantity,size_prices,is_active)
+                           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,true)
                            returning id,name,slug,price,stock_quantity,image_url,is_active,vendor_id""",
                         [vendor, category, name, slug, str(data.get("description", ""))[:4000],
                          additional_description, price, compare_price, image_url, image_public_id,
-                         [str(x)[:30] for x in sizes], [str(x)[:50] for x in colors], stock],
+                         [str(x)[:30] for x in sizes], [str(x)[:50] for x in colors], stock, json.dumps(size_prices)],
                     )
                 row = c.fetchone()
                 saved_product_id = str(row[0])
