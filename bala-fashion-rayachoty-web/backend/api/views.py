@@ -268,13 +268,20 @@ def manage_auth_users(request):
 
 @api_view(["GET"])
 def categories(request):
-    cache_key = "catalog:categories:v1"
+    cache_key = "catalog:categories:v2"
     cached = cache.get(cache_key)
     if cached is not None:
         return Response(cached)
     try:
         with connection.cursor() as c:
-            c.execute("select id,name,slug,image_url,sort_order from public.categories where is_active=true order by sort_order,name")
+            c.execute("""
+                select c.id,c.name,c.slug,c.image_url,c.sort_order,c.parent_id,
+                       p.name as parent_name,p.slug as parent_slug
+                from public.categories c
+                left join public.categories p on p.id=c.parent_id
+                where c.is_active=true
+                order by coalesce(p.sort_order,c.sort_order),p.name,c.sort_order,c.name
+            """)
             rows = _rows(c)
         cache.set(cache_key, rows, 60)
         return Response(rows)
@@ -292,7 +299,13 @@ def manage_category(request):
     if request.method == "GET":
         try:
             with connection.cursor() as c:
-                c.execute("select id,name,slug,image_url,sort_order,is_active from public.categories order by sort_order,name")
+                c.execute("""
+                    select c.id,c.name,c.slug,c.image_url,c.sort_order,c.is_active,c.parent_id,
+                           p.name as parent_name
+                    from public.categories c
+                    left join public.categories p on p.id=c.parent_id
+                    order by coalesce(p.sort_order,c.sort_order),p.name,c.sort_order,c.name
+                """)
                 return Response(_rows(c))
         except Exception:
             return Response({"detail": "Categories could not be loaded."}, status=503)
@@ -339,9 +352,18 @@ def manage_category(request):
                         break
                     slug = f"{base_slug[:245]}-{suffix}"
                     suffix += 1
+                parent_id = str(data.get("parent_id") or "").strip() or None
+                if parent_id:
+                    try:
+                        uuid.UUID(parent_id)
+                    except (ValueError, TypeError, AttributeError):
+                        return Response({"detail": "Choose a valid parent category."}, status=400)
+                    c.execute("select id from public.categories where id=%s and is_active=true", [parent_id])
+                    if not c.fetchone():
+                        return Response({"detail": "The selected parent category is unavailable."}, status=400)
                 c.execute(
-                    "insert into public.categories(name,slug,image_url,sort_order,is_active) values(%s,%s,%s,%s,true) returning id,name,slug,image_url,sort_order,is_active",
-                    [name, slug, image_url, sort_order],
+                    "insert into public.categories(name,slug,image_url,sort_order,is_active,parent_id) values(%s,%s,%s,%s,true,%s) returning id,name,slug,image_url,sort_order,is_active,parent_id",
+                    [name, slug, image_url, sort_order, parent_id],
                 )
             else:
                 try:
@@ -359,6 +381,28 @@ def manage_category(request):
                     fields.append("image_url=%s"); params.append(image_url)
                 if "sort_order" in data:
                     fields.append("sort_order=%s"); params.append(sort_order)
+                if "parent_id" in data:
+                    parent_id = str(data.get("parent_id") or "").strip() or None
+                    if parent_id == category_id:
+                        return Response({"detail": "A category cannot be its own parent."}, status=400)
+                    if parent_id:
+                        try:
+                            uuid.UUID(parent_id)
+                        except (ValueError, TypeError, AttributeError):
+                            return Response({"detail": "Choose a valid parent category."}, status=400)
+                        c.execute("""
+                            with recursive descendants(id) as (
+                                select id from public.categories where parent_id=%s
+                                union all
+                                select child.id from public.categories child join descendants d on child.parent_id=d.id
+                            ) select 1 from descendants where id=%s limit 1
+                        """, [category_id, parent_id])
+                        if c.fetchone():
+                            return Response({"detail": "A category cannot be moved under one of its descendants."}, status=400)
+                        c.execute("select id from public.categories where id=%s and is_active=true", [parent_id])
+                        if not c.fetchone():
+                            return Response({"detail": "The selected parent category is unavailable."}, status=400)
+                    fields.append("parent_id=%s"); params.append(parent_id)
                 if "is_active" in data:
                     if not isinstance(data["is_active"], bool):
                         return Response({"detail": "is_active must be true or false."}, status=400)
@@ -367,13 +411,17 @@ def manage_category(request):
                     return Response({"detail": "Provide category fields to update."}, status=400)
                 params.append(category_id)
                 c.execute(
-                    f"update public.categories set {', '.join(fields)} where id=%s returning id,name,slug,image_url,sort_order,is_active",
+                    f"update public.categories set {', '.join(fields)} where id=%s returning id,name,slug,image_url,sort_order,is_active,parent_id",
                     params,
                 )
             row = c.fetchone()
         if not row:
             return Response({"detail": "Category not found."}, status=404)
-        return Response({"id": str(row[0]), "name": row[1], "slug": row[2], "image_url": row[3], "sort_order": row[4], "is_active": row[5]}, status=201 if request.method == "POST" else 200)
+        result = {"id": str(row[0]), "name": row[1], "slug": row[2], "image_url": row[3], "sort_order": row[4], "is_active": row[5]}
+        if len(row) > 6:
+            result["parent_id"] = str(row[6]) if row[6] else None
+        cache.delete("catalog:categories:v2")
+        return Response(result, status=201 if request.method == "POST" else 200)
     except Exception:
         return Response({"detail": "Category could not be saved. Check for duplicate category names or slugs and retry."}, status=503)
 
