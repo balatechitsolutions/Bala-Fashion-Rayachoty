@@ -2069,3 +2069,187 @@ button:disabled{cursor:not-allowed;opacity:.58}
     opacity: 1;
   }
 }
+
+
+/* Bala Fashion Mart marketplace homepage: retain existing components, refine hierarchy and responsiveness. */
+.app-home-page {
+  width: 100%;
+  max-width: 1480px;
+  margin-inline: auto;
+}
+.app-home-page .home-greeting {
+  padding: 2px 0 0;
+}
+.app-home-page .home-location {
+  color: #702b38;
+}
+.app-home-page .home-greeting h1 {
+  color: #28232a;
+  letter-spacing: -.045em;
+}
+.app-home-page .home-greeting h1 em {
+  color: #702b38;
+}
+.app-home-page .home-greeting p {
+  color: #6f6870;
+}
+.app-home-page .home-promo {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid #8b5260;
+  border-radius: 22px;
+  background: linear-gradient(112deg, #4c202e 0%, #702b38 56%, #986270 100%);
+  box-shadow: 0 12px 28px rgba(65, 28, 39, .12);
+}
+.app-home-page .home-promo .app-promo-copy {
+  position: relative;
+  z-index: 1;
+  padding: clamp(20px, 3vw, 34px);
+}
+.app-home-page .home-promo .app-promo-copy small {
+  color: #f5dfe5;
+  letter-spacing: .14em;
+}
+.app-home-page .home-promo .app-promo-copy > b {
+  color: #fff;
+  font-size: clamp(29px, 3.2vw, 43px);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+}
+.app-home-page .home-promo .app-promo-copy > span {
+  color: #fff;
+  font-weight: 700;
+}
+.app-home-page .home-promo .app-promo-image {
+  overflow: hidden;
+  background: rgba(255,255,255,.08);
+}
+.app-home-page .home-promo .app-promo-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.app-home-page .home-quick-actions > button {
+  border-color: #eee5e7;
+  border-radius: 16px;
+  box-shadow: 0 5px 16px rgba(48, 31, 36, .035);
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.app-home-page .home-quick-actions > button:hover {
+  border-color: #d8b9c1;
+  box-shadow: 0 8px 22px rgba(48, 31, 36, .08);
+  transform: translateY(-1px);
+}
+.app-home-page .home-action-icon {
+  background: #f6eaed;
+  color: #702b38;
+}
+.app-home-page .home-categories-section,
+.app-home-page .home-recommendations-section,
+.app-home-page .home-products-section {
+  margin-top: clamp(24px, 3vw, 38px);
+}
+.app-home-page .app-section-head h2 {
+  color: #28232a;
+  letter-spacing: -.025em;
+}
+.app-home-page .app-section-head p {
+  color: #777079;
+}
+.app-home-page .app-section-head > button {
+  color: #702b38;
+  font-weight: 750;
+}
+.app-home-page .home-main-category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.app-home-page .home-main-category-link {
+  overflow: hidden;
+  border: 1px solid #eee5e7;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(48, 31, 36, .035);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.app-home-page .home-main-category-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(48, 31, 36, .08);
+}
+.app-home-page .home-main-category-image {
+  aspect-ratio: 4 / 2.8;
+  background: #f5edef;
+}
+.app-home-page .home-main-category-name {
+  padding: 12px 13px;
+  color: #30262b;
+}
+.app-home-page .recommendation-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.app-home-page .recommendation-product,
+.app-home-page .home-products-section .product {
+  overflow: hidden;
+  border: 1px solid #eee8e8;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(48, 31, 36, .035);
+}
+.app-home-page .recommendation-product .photo,
+.app-home-page .home-products-section .product .photo {
+  overflow: hidden;
+  background: #f7f3f2;
+}
+.app-home-page .recommendation-product .photo img,
+.app-home-page .home-products-section .product .photo img {
+  transition: transform .25s ease;
+}
+.app-home-page .recommendation-product .photo:hover img,
+.app-home-page .home-products-section .product .photo:hover img {
+  transform: scale(1.035);
+}
+.app-home-page .recommendation-product .product-info,
+.app-home-page .home-products-section .product .product-info {
+  padding: 12px;
+}
+.app-home-page .recommendation-product .product-name,
+.app-home-page .home-products-section .product .product-name {
+  color: #30262b;
+  line-height: 1.4;
+}
+.app-home-page .recommendation-product .price b,
+.app-home-page .home-products-section .product .price b {
+  color: #702b38;
+}
+@media (min-width: 1181px) {
+  .app-home-page { padding-bottom: 36px; }
+  .app-home-page .home-greeting { margin-bottom: 22px; }
+  .app-home-page .home-quick-actions { gap: 16px; margin-top: 18px; }
+  .app-home-page .home-main-category-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .app-home-page .recommendation-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .app-home-page .home-main-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+  .app-home-page .recommendation-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+}
+@media (max-width: 600px) {
+  .app-home-page .home-greeting { margin-bottom: 15px; }
+  .app-home-page .home-greeting h1 { font-size: clamp(24px, 7vw, 29px); }
+  .app-home-page .home-promo { min-height: 168px; border-radius: 18px; }
+  .app-home-page .home-promo .app-promo-copy { padding: 17px 15px; }
+  .app-home-page .home-promo .app-promo-copy > b { font-size: clamp(24px, 7vw, 29px); }
+  .app-home-page .home-quick-actions { gap: 9px; }
+  .app-home-page .home-categories-section,
+  .app-home-page .home-recommendations-section,
+  .app-home-page .home-products-section { margin-top: 25px; }
+  .app-home-page .home-main-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; }
+  .app-home-page .home-main-category-link { border-radius: 12px; }
+  .app-home-page .home-main-category-name { padding: 9px 8px; font-size: 12px; }
+  .app-home-page .recommendation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+  .app-home-page .recommendation-product,
+  .app-home-page .home-products-section .product { border-radius: 12px; }
+  .app-home-page .recommendation-product .product-info,
+  .app-home-page .home-products-section .product .product-info { padding: 9px; }
+}
