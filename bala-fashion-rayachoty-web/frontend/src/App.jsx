@@ -696,7 +696,6 @@ export default function App() {
    <header className="app-topbar">
     <div className="app-mobile-brand"><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></div>
     <div className="app-breadcrumb"><span>Store</span><FiArrowRight size={14}/><b>{({home:'Overview',categories:'Categories',shop:'All products',search:'Search results',bag:'Your bag',account:'Account'})[mobileActive]||'Overview'}</b></div>
-    <label className="app-search"><FiSearch size={18}/><input ref={searchInputRef} aria-label="Search clothing" placeholder="Search products, styles..." value={search} onFocus={()=>{setDrawer('');setMobileActive('search')}} onChange={e=>{setDrawer('');setSearch(e.target.value);setMobileActive('search')}}/><kbd>⌕</kbd></label>
     <div className="notification-area">
       <button className={'notification-bell'+(notificationOpen?' is-open':'')} type="button" onClick={openNotifications} aria-label={unreadNotificationCount?'Notifications, '+unreadNotificationCount+' unread':'Notifications'} aria-expanded={notificationOpen} title="Notifications">
        <FiBell size={19}/>{unreadNotificationCount>0&&<span className="notification-count">{unreadNotificationCount>99?'99+':unreadNotificationCount}</span>}
