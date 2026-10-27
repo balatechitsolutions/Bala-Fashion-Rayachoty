@@ -1954,3 +1954,38 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .app-category-card { aspect-ratio: 1 / 1.15; }
 }
 
+/* Final desktop category image fit: let the image fill the card's exact box. */
+@media (min-width: 761px) {
+  .app-category-card {
+    display: block !important;
+    position: relative !important;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 0 !important;
+    overflow: hidden;
+    aspect-ratio: 4 / 5;
+  }
+  .app-category-card > .app-category-card-image {
+    position: absolute !important;
+    inset: 0 !important;
+    display: block !important;
+    box-sizing: border-box;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  .app-category-card > .app-category-card-image img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center center;
+  }
+}
+
