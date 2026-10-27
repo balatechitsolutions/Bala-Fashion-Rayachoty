@@ -681,7 +681,7 @@ export default function App() {
 
  return <div className="site app-shell">
   <aside className="app-sidebar">
-   <button className="brand app-brand" onClick={()=>{setCategory('all');setSearch('');setMobileActive('home')}}><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></button>
+   <button className="brand app-brand" onClick={()=>{setCategory('all');setSearch('');setMobileActive('home')}}><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION MART</b><small>RAYACHOTY</small></span></button>
    <div className="sidebar-caption">YOUR STORE</div>
    <nav className="sidebar-nav" aria-label="App navigation">
     <button className={mobileActive==='home'?'active':''} onClick={()=>{setDrawer('');setMobileActive('home');setCategory('all');setSearch('')}}><FiHome size={19}/><span>Home</span></button>
@@ -694,7 +694,7 @@ export default function App() {
   </aside>
   <div className="app-workspace">
    <header className="app-topbar">
-    <div className="app-mobile-brand"><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION</b><small>RAYACHOTY</small></span></div>
+    <div className="app-mobile-brand"><img className="logo-image" src="/b-tech-logo.png" alt="B Tech logo" /><span><b>BALA FASHION MART</b><small>RAYACHOTY</small></span></div>
     <div className="app-breadcrumb"><span>Store</span><FiArrowRight size={14}/><b>{({home:'Overview',categories:'Categories',shop:'All products',search:'Search results',bag:'Your bag',account:'Account'})[mobileActive]||'Overview'}</b></div>
     <div className="notification-area">
       <button className={'notification-bell'+(notificationOpen?' is-open':'')} type="button" onClick={openNotifications} aria-label={unreadNotificationCount?'Notifications, '+unreadNotificationCount+' unread':'Notifications'} aria-expanded={notificationOpen} title="Notifications">
