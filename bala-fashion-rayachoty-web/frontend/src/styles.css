@@ -2270,3 +2270,67 @@ button:disabled{cursor:not-allowed;opacity:.58}
   background: transparent;
   box-shadow: none;
 }
+
+
+/* Homepage category shortcuts: icon and label only, no card surfaces. */
+.app-home-page .home-main-category-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+}
+.app-home-page .home-main-category-link:hover,
+.app-home-page .home-main-category-link:focus-visible {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+.app-home-page .home-main-category-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+.app-home-page .home-main-category-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+.app-home-page .home-main-category-image > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  background: transparent;
+  text-align: center;
+}
+.app-home-page .home-main-category-name {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+}
+@media (max-width: 600px) {
+  .app-home-page .home-main-category-link { padding: 6px 2px; gap: 7px; }
+  .app-home-page .home-main-category-image { width: 54px; height: 54px; }
+}
