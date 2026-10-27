@@ -2253,3 +2253,20 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .app-home-page .recommendation-product .product-info,
   .app-home-page .home-products-section .product .product-info { padding: 9px; }
 }
+
+
+/* Homepage categories: keep the icons and labels, remove the surrounding cards. */
+.app-home-page .home-main-category-link,
+.app-home-page .home-main-category-link:hover {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+.app-home-page .home-main-category-image,
+.app-home-page .home-main-category-link:hover .home-main-category-image {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
