@@ -2043,3 +2043,30 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .app-shell .auth-secure { margin-top: 14px; padding-top: 10px; }
 }
 
+/* Improve desktop store branding contrast in the sidebar. */
+@media (min-width: 1181px) {
+  .app-shell .app-sidebar .app-brand > span {
+    min-width: 0;
+    color: #702b38;
+  }
+  .app-shell .app-sidebar .app-brand b {
+    display: block;
+    color: #702b38 !important;
+    font-size: 13px;
+    font-weight: 850;
+    letter-spacing: .055em;
+    line-height: 1.35;
+    white-space: nowrap;
+    opacity: 1;
+  }
+  .app-shell .app-sidebar .app-brand small {
+    display: block;
+    color: #5f5149 !important;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    line-height: 1.5;
+    opacity: 1;
+  }
+}
+
