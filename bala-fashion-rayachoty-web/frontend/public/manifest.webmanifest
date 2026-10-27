@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Bala Fashion Rayachoty",
-  "short_name": "Bala Fashion",
-  "description": "Shop local fashion from Bala Fashion Rayachoty.",
+  "name": "Bala Mart",
+  "short_name": "Bala Mart",
+  "description": "Shop local fashion from Bala Mart, Rayachoty.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
