@@ -1921,3 +1921,36 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .app-breadcrumb { overflow: hidden; text-overflow: ellipsis; }
 }
 
+/* Final category image fit fix: use the full card box and avoid image distortion. */
+.app-category-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+}
+.app-category-card-image {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  margin: 0 !important;
+  overflow: hidden;
+}
+.app-category-card-image img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  object-fit: cover !important;
+  object-position: center;
+}
+@media (max-width: 760px) {
+  .app-category-card { aspect-ratio: 1 / 1.15; }
+}
+
