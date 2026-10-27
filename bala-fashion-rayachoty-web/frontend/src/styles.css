@@ -2043,15 +2043,15 @@ button:disabled{cursor:not-allowed;opacity:.58}
   .app-shell .auth-secure { margin-top: 14px; padding-top: 10px; }
 }
 
-/* High-contrast desktop store branding for clear readability. */
+/* White desktop store branding for clear contrast on the sidebar. */
 @media (min-width: 1181px) {
   .app-shell .app-sidebar .app-brand > span {
     min-width: 0;
-    color: #111827 !important;
+    color: #ffffff !important;
   }
   .app-shell .app-sidebar .app-brand b {
     display: block;
-    color: #111827 !important;
+    color: #ffffff !important;
     font-size: 13px;
     font-weight: 900;
     letter-spacing: .035em;
@@ -2061,7 +2061,7 @@ button:disabled{cursor:not-allowed;opacity:.58}
   }
   .app-shell .app-sidebar .app-brand small {
     display: block;
-    color: #374151 !important;
+    color: #ffffff !important;
     font-size: 9px;
     font-weight: 850;
     letter-spacing: .12em;
