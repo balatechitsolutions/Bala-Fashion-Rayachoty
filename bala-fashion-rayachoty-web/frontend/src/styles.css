@@ -1820,6 +1820,12 @@ button:disabled{cursor:not-allowed;opacity:.58}
 .category-subcategory-heading{display:block;width:100%;padding:2px 2px 4px;color:#756d64;font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
 .category-filter-empty{margin-top:20px}
 .shop-filter-panel{margin:0 0 26px;padding:17px;border:1px solid #eee3d9;border-radius:15px;background:#fff}
+.shop-product-search{display:flex;align-items:center;gap:10px;margin:0 0 18px;padding:12px 14px;border:1px solid #e7d9c9;border-radius:12px;background:#fcfaf7;color:#7c3343}
+.shop-product-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#29251f;font:inherit;font-size:14px}
+.shop-product-search input::placeholder{color:#958b83}
+.shop-product-search button{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:#7c3343;cursor:pointer}
+.shop-filter-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:#756d64;font-size:12px}
+.shop-filter-actions button{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:#7c3343;font:inherit;font-weight:750;cursor:pointer}
 .shop-filter-heading{margin-bottom:12px}
 .shop-filter-heading h2{font-size:14px}
 .shop-filter-heading h3{margin:0;color:#51443d;font-size:12px;font-weight:800}
