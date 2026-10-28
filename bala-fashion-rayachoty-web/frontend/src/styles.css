@@ -2354,3 +2354,11 @@ button:disabled{cursor:not-allowed;opacity:.58}
 .vendor-document-uploaded{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;font-size:11px}
 .vendor-document-uploaded span{overflow-wrap:anywhere;color:#267045}
 @media(max-width:560px){.vendor-category-checklist,.vendor-document-grid{grid-template-columns:1fr}.vendor-legal-documents{padding:10px}}
+
+.vendor-admin-documents{display:flex;flex-direction:column;gap:7px;padding:10px;margin-top:8px;border:1px solid #e2ddd6;border-radius:10px;background:#fbfaf8}
+.vendor-admin-documents>b{font-size:12px;color:#56504a}
+.vendor-admin-documents>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:6px;border-top:1px solid #eee9e2;font-size:11px}
+.vendor-admin-documents>div>span{flex:1;min-width:0;overflow-wrap:anywhere;color:#615b55}
+.vendor-admin-documents button,.vendor-admin-documents a{font-size:11px;font-weight:700;white-space:nowrap}
+.vendor-admin-documents a{color:#2457d6;text-decoration:underline}
+.vendor-required-label{display:inline-block;margin-left:5px;padding:2px 5px;border-radius:4px;background:#fef0ed;color:#a33222;font-size:9px;vertical-align:middle;text-transform:uppercase}
