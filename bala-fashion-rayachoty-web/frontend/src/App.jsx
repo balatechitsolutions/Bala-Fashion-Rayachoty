@@ -144,7 +144,8 @@ export default function App() {
  const [categoryForm,setCategoryForm]=useState({category_id:'',name:'',parent_id:'',image_url:'',sort_order:'0'})
  const [adminCategories,setAdminCategories]=useState([]),[adminVendors,setAdminVendors]=useState([]),[adminCategorySearch,setAdminCategorySearch]=useState(''),[adminCategoryType,setAdminCategoryType]=useState('all'),[adminCategoryParent,setAdminCategoryParent]=useState('all')
  const [authUsers,setAuthUsers]=useState([]),[authUsersLoading,setAuthUsersLoading]=useState(false),[authUsersFetched,setAuthUsersFetched]=useState(false)
- const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
+ const [vendorForm,setVendorForm]=useState({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending',category_ids:[],legal_documents:[]})
+ const [vendorUploadBusy,setVendorUploadBusy]=useState(false)
  const [sellerDashboard,setSellerDashboard]=useState(null),[dashboardLoading,setDashboardLoading]=useState(false)
  useEffect(()=>{if(!supabase){sessionRef.current=null;setSession(null);return}let active=true,initialEventSeen=false;const applySession=nextSession=>{if(!active)return;const value=nextSession||null;sessionRef.current=value;setSession(value);if(!value)setProfile(null)};const restoreSession=async()=>{try{const {data,error}=await supabase.auth.getSession();if(!active)return;if(error){if(!initialEventSeen&&!sessionRef.current)applySession(null);return}if(data?.session)applySession(data.session);else if(!initialEventSeen&&!sessionRef.current)applySession(null)}catch{if(active&&!initialEventSeen&&!sessionRef.current)applySession(null)}};const {data:{subscription}}=supabase.auth.onAuthStateChange((event,nextSession)=>{if(!active)return;if(event==='INITIAL_SESSION'){initialEventSeen=true;if(nextSession||!sessionRef.current)applySession(nextSession);return}if(event==='PASSWORD_RECOVERY'){setAuthMode('reset');setDrawer('account')}if(event==='SIGNED_IN'){applySession(nextSession);setDrawer('');return}if(event==='SIGNED_OUT'){applySession(null);setAuthUsers([]);setAuthUsersFetched(false);setDrawer('');return}if(nextSession)applySession(nextSession)});restoreSession();const onVisibility=()=>{if(document.visibilityState==='visible')restoreSession()};window.addEventListener('focus',restoreSession);document.addEventListener('visibilitychange',onVisibility);return()=>{active=false;subscription.unsubscribe();window.removeEventListener('focus',restoreSession);document.removeEventListener('visibilitychange',onVisibility)}},[])
  useEffect(()=>{
@@ -434,6 +435,25 @@ export default function App() {
   }catch(error){notify(error.message||'Could not upload gallery images.')}
   finally{setBusy(false)}
  }
+ async function uploadVendorLegalDocument(file, documentType){
+  if(!file||!session)return notify('Sign in with an admin account first.')
+  const allowedTypes=['application/pdf','image/jpeg','image/png','image/webp']
+  if(!allowedTypes.includes(file.type))return notify('Upload a PDF, JPG, PNG or WEBP document.')
+  if(file.size>10*1024*1024)return notify('Each legal document must be 10 MB or smaller.')
+  setVendorUploadBusy(true)
+  try{
+   const sign=await api('/uploads/signature/',{method:'POST',token:session.access_token,body:JSON.stringify({folder:'bala-mart/vendor-documents',resource_type:'raw'})})
+   const form=new FormData()
+   Object.entries(sign.params).forEach(([k,v])=>form.append(k,v))
+   form.append('api_key',sign.api_key);form.append('signature',sign.signature);form.append('file',file)
+   const resourceType=file.type==='application/pdf'?'raw':'image'
+   const response=await fetch(`https://api.cloudinary.com/v1_1/${sign.cloud_name}/${resourceType}/upload`,{method:'POST',body:form})
+   const data=await response.json()
+   if(!response.ok)throw new Error(data.error?.message||'Legal document upload failed')
+   setVendorForm(p=>({...p,legal_documents:[...(p.legal_documents||[]),{document_type:documentType,file_name:file.name,file_url:data.secure_url,public_id:data.public_id,mime_type:file.type,file_size:file.size}]}))
+   notify('Legal document uploaded')
+  }catch(e){notify(e.message||'Could not upload legal document.')}finally{setVendorUploadBusy(false)}
+ }
  async function uploadCategoryImage(file){
   if(!file||!session)return notify('Sign in with an admin account first.')
   if(!file.type.startsWith('image/'))return notify('Choose an image file.')
@@ -530,11 +550,11 @@ export default function App() {
   if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
-   const payload={...vendorForm,owner_user_id:ownerUserId,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude)}
+   const payload={...vendorForm,owner_user_id:ownerUserId,name:vendorForm.name.trim(),latitude:Number(vendorForm.latitude),longitude:Number(vendorForm.longitude),category_ids:vendorForm.category_ids||[],legal_documents:vendorForm.legal_documents||[]}
    await api('/vendors/manage/',{method:editing?'PATCH':'POST',token:session.access_token,body:JSON.stringify(payload)})
    const data=await api('/vendors/manage/',{token:session.access_token})
    setAdminVendors(data.results||[])
-   setVendorForm({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})
+   setVendorForm({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending',category_ids:[],legal_documents:[]})
    await refreshSellerDashboard()
    notify(editing?'Vendor delivery location updated':'Vendor created with delivery location')
   }catch(e){notify(e.message)}finally{setBusy(false)}
@@ -824,11 +844,39 @@ export default function App() {
      <label>Vendor / store name<input required maxLength="180" value={vendorForm.name} onChange={e=>setVendorForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Bala Fashion Store" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Contact phone<input value={vendorForm.phone} onChange={e=>setVendorForm(p=>({...p,phone:e.target.value}))} placeholder="Mobile number" readOnly={Boolean(vendorForm.id)}/></label>
      <label>Store address<textarea rows="2" value={vendorForm.address} onChange={e=>setVendorForm(p=>({...p,address:e.target.value}))} placeholder="Store address"/></label>
-     {!vendorForm.id&&<><label>Description<textarea rows="2" value={vendorForm.description} onChange={e=>setVendorForm(p=>({...p,description:e.target.value}))} placeholder="Optional store description"/></label>
-     <label>Initial status<select value={vendorForm.status} onChange={e=>setVendorForm(p=>({...p,status:e.target.value}))}><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></>}
+     {!vendorForm.id&&<>
+      <label>Description<textarea rows="2" value={vendorForm.description} onChange={e=>setVendorForm(p=>({...p,description:e.target.value}))} placeholder="Optional store description"/></label>
+      <label>Product categories for this store <small>Select all categories the seller intends to list products in. You can select more than one.</small>
+       <div className="vendor-category-checklist">
+        {categories.filter(c=>c.slug!=='all').map(c=><label className="vendor-category-option" key={c.id}>
+         <input type="checkbox" checked={(vendorForm.category_ids||[]).includes(c.id)} onChange={e=>setVendorForm(p=>({...p,category_ids:e.target.checked?[...(p.category_ids||[]),c.id]:(p.category_ids||[]).filter(id=>id!==c.id)}))}/>
+         <span>{c.parent_name?c.parent_name+' / ':''}{c.name}</span>
+        </label>)}
+       </div>
+      </label>
+      <section className="vendor-legal-documents">
+       <h4>Business &amp; legal documents</h4>
+       <p>Upload documents relevant to the business and selected product categories. These are for admin review; applicability should be confirmed for each seller and product type.</p>
+       <div className="vendor-document-grid">
+        {[
+         {type:'identity_proof',label:'Owner identity proof',hint:'Accepted identity proof for the proprietor/owner'},
+         {type:'business_proof',label:'Business / address proof',hint:'Shop proof, municipal trade licence or address proof'},
+         {type:'gst_certificate',label:'GST registration certificate',hint:'For GST-registered sellers or when applicable'},
+         {type:'fssai_license',label:'FSSAI registration/licence',hint:'For food and beverage sellers, as applicable'},
+         {type:'drug_license',label:'Drug / pharmacy licence',hint:'Only for medicine/pharmacy categories'},
+         {type:'other_license',label:'Other category-specific licence',hint:'Other permits required for particular products'}
+        ].map(doc=><div className="vendor-document-field" key={doc.type}>
+         <div><b>{doc.label}</b><small>{doc.hint}</small></div>
+         <label className="secondary upload-document-button">Upload file<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" disabled={vendorUploadBusy||busy} onChange={e=>{uploadVendorLegalDocument(e.target.files?.[0],doc.type);e.target.value=''}}/></label>
+         {(vendorForm.legal_documents||[]).filter(file=>file.document_type===doc.type).map(file=><div className="vendor-document-uploaded" key={file.public_id}><span>{file.file_name}</span><button type="button" className="text" onClick={()=>setVendorForm(p=>({...p,legal_documents:p.legal_documents.filter(item=>item.public_id!==file.public_id)}))}>Remove</button></div>)}
+        </div>)}
+       </div>
+      </section>
+      <label>Initial status<select value={vendorForm.status} onChange={e=>setVendorForm(p=>({...p,status:e.target.value}))}><option value="pending">Pending approval</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
+     </>}
      <LocationPicker label="Vendor store location" latitude={vendorForm.latitude} longitude={vendorForm.longitude} onChange={({latitude,longitude})=>setVendorForm(p=>({...p,latitude,longitude}))}/>
      <button className="primary full" disabled={busy}>{busy?'Saving…':vendorForm.id?'Save vendor location':'Create vendor with map location'}</button>
-     {vendorForm.id&&<button type="button" className="secondary full" onClick={()=>setVendorForm({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending'})}>Cancel location edit</button>}
+     {vendorForm.id&&<button type="button" className="secondary full" onClick={()=>setVendorForm({id:'',owner_id:'',owner_email:'',owner_user_id:'',name:'',phone:'',address:'',description:'',latitude:'',longitude:'',status:'pending',category_ids:[],legal_documents:[]})}>Cancel location edit</button>}
     </form>
     {!adminVendors.length?<p className="seller-empty">No vendor records found.</p>:adminVendors.map(v=><article className="seller-store-row" key={v.id}><span><b>{v.name}</b><small>{v.owner_name||v.owner_id||'No owner'} · {v.phone||v.owner_phone||'No phone'}</small><small>{v.slug} · {v.latitude!=null&&v.longitude!=null?'Map pin set':'Map pin required'}</small></span><span className={'seller-status '+v.status}>{v.status}</span><div className="seller-vendor-actions"><button type="button" className="secondary" disabled={busy} onClick={()=>{setVendorForm({id:v.id,owner_id:v.owner_id||'',owner_email:v.owner_email||'',owner_user_id:'',name:v.name||'',phone:v.phone||'',address:v.address||'',description:v.description||'',latitude:v.latitude==null?'':String(v.latitude),longitude:v.longitude==null?'':String(v.longitude),status:v.status||'pending'});document.querySelector('.admin-vendor-create')?.scrollIntoView({behavior:'smooth',block:'start'})}}>Set map pin</button>{['pending','approved','rejected','suspended'].map(st=><button key={st} className={v.status===st?'primary':'secondary'} disabled={busy||v.status===st} onClick={()=>updateVendorStatus(v,st)}>{st[0].toUpperCase()+st.slice(1)}</button>)}<button type="button" className="secondary" disabled={busy} onClick={()=>deleteVendor(v)}><FiTrash2 size={15}/><span>Delete vendor</span></button></div></article>)}
    </div>}
