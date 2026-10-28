@@ -9,7 +9,7 @@ from django.utils.text import slugify
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from cloudinary.utils import api_sign_request
+from cloudinary.utils import api_sign_request, private_download_url
 
 SUPABASE_URL=os.getenv("SUPABASE_URL","").rstrip("/")
 SUPABASE_KEY=os.getenv("SUPABASE_PUBLISHABLE_KEY","")
@@ -1171,6 +1171,52 @@ def account_notifications(request):
 
 
 @api_view(["POST"])
+
+@api_view(["POST"])
+def vendor_legal_document_download(request):
+    """Return a short-lived Cloudinary URL only after validating an administrator."""
+    user, prof, error = _role_user(request, {"admin"})
+    if error:
+        return error
+    document_id = str(request.data.get("id") or "").strip()
+    try:
+        document_id = str(uuid.UUID(document_id))
+    except (ValueError, TypeError, AttributeError):
+        return Response({"detail": "Choose a valid legal document."}, status=400)
+    try:
+        with connection.cursor() as c:
+            c.execute(
+                """select public_id,file_name,mime_type
+                   from public.vendor_legal_documents where id=%s""",
+                [document_id],
+            )
+            document = c.fetchone()
+        if not document:
+            return Response({"detail": "Legal document not found."}, status=404)
+        public_id, file_name, mime_type = document
+        resource_type = "raw" if mime_type == "application/pdf" else "image"
+        extension = os.path.splitext(str(file_name or ""))[1].lstrip(".").lower()
+        if not public_id or not extension:
+            return Response({"detail": "This document has incomplete file metadata."}, status=409)
+        import time
+        expires_at = int(time.time()) + 300
+        download_url = private_download_url(
+            str(public_id),
+            extension,
+            resource_type=resource_type,
+            type="authenticated",
+            expires_at=expires_at,
+            attachment=True,
+            secure=True,
+            cloud_name=CLOUD_NAME,
+            api_key=CLOUD_KEY,
+            api_secret=CLOUD_SECRET,
+        )
+        return Response({"download_url": download_url, "expires_in": 300})
+    except Exception:
+        logging.getLogger(__name__).exception("Could not prepare a vendor legal document download")
+        return Response({"detail": "A secure document link could not be generated."}, status=503)
+
 def upload_signature(request):
     user,prof,error=_role_user(request,{"vendor","admin"})
     if error:return error
@@ -1184,8 +1230,10 @@ def upload_signature(request):
     import time
     params={"timestamp":int(time.time()),"folder":folder}
     if folder == "bala-mart/vendor-documents":
-        params["resource_type"] = str(request.data.get("resource_type") or "raw")[:10]
-        if params["resource_type"] not in {"raw", "image"}:
+        # resource_type belongs in the upload endpoint URL and is excluded from
+        # Cloudinary's upload signature parameters. The browser selects raw/image.
+        resource_type = str(request.data.get("resource_type") or "raw")[:10]
+        if resource_type not in {"raw", "image"}:
             return Response({"detail":"Invalid legal document resource type."},status=400)
         params["type"] = "authenticated"
     return Response({"cloud_name":CLOUD_NAME,"api_key":CLOUD_KEY,"params":params,"signature":api_sign_request(params,CLOUD_SECRET)})
