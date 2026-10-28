@@ -451,7 +451,23 @@ def manage_vendors(request):
                        order by case v.status when 'pending' then 0 when 'approved' then 1 else 2 end, v.created_at desc
                        limit 500"""
                 )
-                return Response({"results": _rows(c)})
+                rows = _rows(c)
+                for row in rows:
+                    c.execute(
+                        """select vc.category_id, cat.name, cat.parent_id
+                           from public.vendor_categories vc
+                           join public.categories cat on cat.id=vc.category_id
+                           where vc.vendor_id=%s order by cat.sort_order, cat.name""",
+                        [row["id"]],
+                    )
+                    row["categories"] = _rows(c)
+                    c.execute(
+                        """select id,document_type,file_name,file_url,public_id,mime_type,file_size,uploaded_at
+                           from public.vendor_legal_documents where vendor_id=%s order by uploaded_at desc""",
+                        [row["id"]],
+                    )
+                    row["legal_documents"] = _rows(c)
+                return Response({"results": rows})
         except Exception:
             return Response({"detail": "Vendor list could not be loaded."}, status=503)
 
@@ -471,6 +487,26 @@ def manage_vendors(request):
         requested_status = str(data.get("status", "pending")).strip().lower()
         if requested_status not in {"pending", "approved", "rejected", "suspended"}:
             return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
+        category_ids = data.get("category_ids") or []
+        legal_documents = data.get("legal_documents") or []
+        if not isinstance(category_ids, list) or not all(isinstance(item, str) for item in category_ids):
+            return Response({"detail": "Select valid product categories for the store."}, status=400)
+        if not isinstance(legal_documents, list) or not all(isinstance(item, dict) for item in legal_documents):
+            return Response({"detail": "Provide valid legal document uploads."}, status=400)
+        allowed_document_types = {"identity_proof", "business_proof", "gst_certificate", "fssai_license", "drug_license", "other_license"}
+        for document in legal_documents:
+            try:
+                mime = str(document.get("mime_type") or "")
+                size = int(document.get("file_size") or 0)
+            except (TypeError, ValueError):
+                return Response({"detail": "Legal document metadata is invalid."}, status=400)
+            if (document.get("document_type") not in allowed_document_types
+                or not str(document.get("file_name") or "").strip()
+                or not str(document.get("file_url") or "").startswith("https://res.cloudinary.com/")
+                or not str(document.get("public_id") or "").strip()
+                or mime not in {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+                or size <= 0 or size > 10 * 1024 * 1024):
+                return Response({"detail": "A legal document has an invalid type, URL or file size."}, status=400)
         try:
             latitude = _coordinate(data.get("latitude"), "latitude")
             longitude = _coordinate(data.get("longitude"), "longitude")
@@ -520,6 +556,29 @@ def manage_vendors(request):
                         [str(owner_uuid), name, slug, description, phone, address, latitude, longitude, requested_status],
                     )
                     row = c.fetchone()
+                    vendor_id = str(row[0])
+                    category_ids = list(dict.fromkeys(category_ids))
+                    for category_id in category_ids:
+                        try:
+                            category_uuid = str(uuid.UUID(category_id))
+                        except (ValueError, TypeError, AttributeError):
+                            raise ValueError("Choose valid product categories.")
+                        c.execute("select id from public.categories where id=%s and is_active=true", [category_uuid])
+                        if not c.fetchone():
+                            raise ValueError("One selected category is no longer active.")
+                        c.execute(
+                            "insert into public.vendor_categories(vendor_id,category_id) values(%s,%s) on conflict do nothing",
+                            [vendor_id, category_uuid],
+                        )
+                    for document in legal_documents:
+                        c.execute(
+                            """insert into public.vendor_legal_documents
+                               (vendor_id,document_type,file_name,file_url,public_id,mime_type,file_size,uploaded_by)
+                               values(%s,%s,%s,%s,%s,%s,%s,%s)""",
+                            [vendor_id, document["document_type"], str(document["file_name"])[:255],
+                             document["file_url"], str(document["public_id"])[:500],
+                             document["mime_type"], int(document["file_size"]), str(user["id"])],
+                        )
             result = {key: value for key, value in zip(
                 ["id","owner_id","name","slug","description","logo_url","phone","address","latitude","longitude","status","created_at"], row
             )}
@@ -1113,12 +1172,17 @@ def upload_signature(request):
     if error:return error
     if not all([CLOUD_NAME,CLOUD_KEY,CLOUD_SECRET]):return Response({"detail":"Cloudinary credentials are not configured on the backend."},status=503)
     folder=str(request.data.get("folder","bala-fashion/products"))[:100]
-    if folder not in {"bala-fashion/products","bala-fashion/products/gallery","bala-fashion/categories"}:
+    allowed_folders={"bala-fashion/products","bala-fashion/products/gallery","bala-fashion/categories","bala-mart/vendor-documents"}
+    if folder not in allowed_folders:
         return Response({"detail":"Invalid upload folder."},status=400)
     if prof["role"] == "vendor" and folder not in {"bala-fashion/products","bala-fashion/products/gallery"}:
-        return Response({"detail":"Sellers can upload product images only."},status=403)
+        return Response({"detail":"Only administrators can upload vendor legal documents."},status=403)
     import time
     params={"timestamp":int(time.time()),"folder":folder}
+    if folder == "bala-mart/vendor-documents":
+        params["resource_type"] = str(request.data.get("resource_type") or "raw")[:10]
+        if params["resource_type"] not in {"raw", "image"}:
+            return Response({"detail":"Invalid legal document resource type."},status=400)
     return Response({"cloud_name":CLOUD_NAME,"api_key":CLOUD_KEY,"params":params,"signature":api_sign_request(params,CLOUD_SECRET)})
 
 @api_view(["GET"])
