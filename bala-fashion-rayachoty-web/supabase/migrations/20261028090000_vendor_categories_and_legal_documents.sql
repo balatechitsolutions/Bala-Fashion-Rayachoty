@@ -27,3 +27,6 @@ alter table public.vendor_categories enable row level security;
 alter table public.vendor_legal_documents enable row level security;
 revoke all on public.vendor_categories from anon, authenticated;
 revoke all on public.vendor_legal_documents from anon, authenticated;
+-- Document and category metadata are accessed via the authenticated Django API,
+-- which uses the server-side database connection after validating the Supabase role.
+-- Deliberately do not grant direct client table access or create client-facing policies.
