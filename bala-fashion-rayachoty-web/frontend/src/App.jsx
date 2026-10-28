@@ -14,6 +14,20 @@ import { api } from './api'
 import { enableFirebaseNotifications, firebaseConfigured, subscribeToFirebaseMessages } from './firebase'
 
 const defaultCats = [{id:'all',name:'All styles',slug:'all'},...['Women','Men','Kids','Ethnic Wear','Accessories'].map((name,i)=>({id:name.toLowerCase(),name,slug:['women','men','kids','ethnic-wear','accessories'][i]}))]
+const getVendorDocumentRequirements = (allCategories, selectedCategoryIds) => {
+ const selected = (allCategories || []).filter(category => (selectedCategoryIds || []).includes(category.id))
+ const categoryText = selected.map(category => [category.name, category.slug, category.parent_name, category.parent_slug].filter(Boolean).join(' ')).join(' ').toLowerCase()
+ const foodCategory = /food|grocery|groceries|dairy|bakery|meat|fish|seafood|beverage|snack|sweet|vegetable|fruit|organic|staple|poultry|restaurant|catering|milk/.test(categoryText)
+ const pharmacyCategory = /medicine|medical|pharmacy|pharma|drug|medication|prescription/.test(categoryText)
+ return [
+  {type:'identity_proof',label:'Owner identity proof',hint:'Required by Bala Mart for seller verification',required:true},
+  {type:'business_proof',label:'Business / address proof',hint:'Required by Bala Mart to verify the store location',required:true},
+  {type:'gst_certificate',label:'GST registration certificate',hint:'Upload if GST-registered or applicable',required:false},
+  ...(foodCategory ? [{type:'fssai_license',label:'FSSAI registration/licence',hint:'Required for food-business categories; verify the appropriate licence/registration',required:true}] : []),
+  ...(pharmacyCategory ? [{type:'drug_license',label:'Drug / pharmacy licence',hint:'Required for medicine/pharmacy categories where applicable',required:true}] : []),
+  {type:'other_license',label:'Other category-specific licence',hint:'Upload any additional permit required for the selected products',required:false}
+ ]
+}
 const money = n => `₹${Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}`
 const deliveryAddressComplete = address => { const phone=String(address?.phone||''); const digits=phone.replace(/[^0-9]/g,'').length; const lat=Number(address?.latitude),lng=Number(address?.longitude); return Boolean(String(address?.recipient_name||'').trim()&&/^[0-9+() -]{10,16}$/.test(phone)&&digits>=10&&digits<=15&&String(address?.line1||'').trim()&&address?.latitude!=null&&address?.longitude!=null&&Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180) }
 const normalizeAddressSnapshot = value => { if (typeof value === 'string') { try { const parsed = JSON.parse(value); return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null } catch { return null } } return value && typeof value === 'object' && !Array.isArray(value) ? value : null }
@@ -547,6 +561,12 @@ export default function App() {
   const ownerUserId=vendorForm.owner_user_id.trim()
   if(!editing&&!ownerUserId)return notify('Search for and select an existing website user by email.')
   if(!vendorForm.name.trim())return notify('Enter the vendor/store name.')
+  if(!editing){
+   if(!(vendorForm.category_ids||[]).length)return notify('Select at least one product category for this store.')
+   const requiredDocuments=getVendorDocumentRequirements(categories,vendorForm.category_ids).filter(doc=>doc.required)
+   const missingDocuments=requiredDocuments.filter(doc=>!(vendorForm.legal_documents||[]).some(file=>file.document_type===doc.type))
+   if(missingDocuments.length)return notify('Upload required documents: '+missingDocuments.map(doc=>doc.label).join(', ')+'.')
+  }
   if(vendorForm.latitude===''||vendorForm.longitude==='')return notify('Select the vendor location on the map or use the current location.')
   setBusy(true)
   try{
@@ -858,15 +878,8 @@ export default function App() {
        <h4>Business &amp; legal documents</h4>
        <p>Upload documents relevant to the business and selected product categories. These are for admin review; applicability should be confirmed for each seller and product type.</p>
        <div className="vendor-document-grid">
-        {[
-         {type:'identity_proof',label:'Owner identity proof',hint:'Accepted identity proof for the proprietor/owner'},
-         {type:'business_proof',label:'Business / address proof',hint:'Shop proof, municipal trade licence or address proof'},
-         {type:'gst_certificate',label:'GST registration certificate',hint:'For GST-registered sellers or when applicable'},
-         {type:'fssai_license',label:'FSSAI registration/licence',hint:'For food and beverage sellers, as applicable'},
-         {type:'drug_license',label:'Drug / pharmacy licence',hint:'Only for medicine/pharmacy categories'},
-         {type:'other_license',label:'Other category-specific licence',hint:'Other permits required for particular products'}
-        ].map(doc=><div className="vendor-document-field" key={doc.type}>
-         <div><b>{doc.label}</b><small>{doc.hint}</small></div>
+        {getVendorDocumentRequirements(categories,vendorForm.category_ids).map(doc=><div className="vendor-document-field" key={doc.type}>
+         <div><b>{doc.label} {doc.required&&<span className="vendor-required-label">Required</span>}</b><small>{doc.hint}</small></div>
          <label className="secondary upload-document-button">Upload file<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" disabled={vendorUploadBusy||busy} onChange={e=>{uploadVendorLegalDocument(e.target.files?.[0],doc.type);e.target.value=''}}/></label>
          {(vendorForm.legal_documents||[]).filter(file=>file.document_type===doc.type).map(file=><div className="vendor-document-uploaded" key={file.public_id}><span>{file.file_name}</span><button type="button" className="text" onClick={()=>setVendorForm(p=>({...p,legal_documents:p.legal_documents.filter(item=>item.public_id!==file.public_id)}))}>Remove</button></div>)}
         </div>)}
