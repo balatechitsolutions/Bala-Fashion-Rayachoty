@@ -1,0 +1,3 @@
+-- Additional note: vendor category and legal-document metadata are server-only.
+-- RLS is enabled with no client-facing policies; direct anon/authenticated access stays revoked.
+-- The backend must authenticate and authorize admin users before accessing these tables.
