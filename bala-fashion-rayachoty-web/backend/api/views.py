@@ -489,6 +489,8 @@ def manage_vendors(request):
             return Response({"detail": "Status must be pending, approved, rejected or suspended."}, status=400)
         category_ids = data.get("category_ids") or []
         legal_documents = data.get("legal_documents") or []
+        if len(category_ids) > 100 or len(legal_documents) > 100:
+            return Response({"detail": "Too many categories or legal documents were submitted."}, status=400)
         if not isinstance(category_ids, list) or not all(isinstance(item, str) for item in category_ids):
             return Response({"detail": "Select valid product categories for the store."}, status=400)
         if not isinstance(legal_documents, list) or not all(isinstance(item, dict) for item in legal_documents):
@@ -589,6 +591,8 @@ def manage_vendors(request):
             if hasattr(result["created_at"], "isoformat"):
                 result["created_at"] = result["created_at"].isoformat()
             return Response(result, status=201)
+        except ValueError as exc:
+            return Response({"detail": str(exc) or "Invalid vendor category."}, status=400)
         except Exception:
             return Response({"detail": "Vendor could not be created. Confirm the selected user exists in Supabase Auth and that the database schema is up to date."}, status=503)
 
