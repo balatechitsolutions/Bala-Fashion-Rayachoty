@@ -1187,6 +1187,7 @@ def upload_signature(request):
         params["resource_type"] = str(request.data.get("resource_type") or "raw")[:10]
         if params["resource_type"] not in {"raw", "image"}:
             return Response({"detail":"Invalid legal document resource type."},status=400)
+        params["type"] = "authenticated"
     return Response({"cloud_name":CLOUD_NAME,"api_key":CLOUD_KEY,"params":params,"signature":api_sign_request(params,CLOUD_SECRET)})
 
 @api_view(["GET"])
